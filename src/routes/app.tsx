@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LogOut, User as UserIcon } from "lucide-react";
 import {
@@ -27,6 +27,7 @@ export const Route = createFileRoute("/app")({
 
 function AppLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading, signOut } = useAuth();
   const { loading: companyLoading, memberships } = useCompany();
 
@@ -42,8 +43,10 @@ function AppLayout() {
     );
   }
 
-  // No companies yet → force them to create one
-  if (!companyLoading && memberships.length === 0) {
+  const onCompaniesPage = location.pathname.startsWith("/app/companies");
+
+  // No companies yet → force them to create one (unless already on companies page)
+  if (!companyLoading && memberships.length === 0 && !onCompaniesPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xl">
