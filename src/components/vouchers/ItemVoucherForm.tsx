@@ -405,23 +405,33 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <TableBody>
               {lines.map((l, i) => (
                 <TableRow key={i}>
-                  <TableCell>
-                    <Select value={l.item_id} onValueChange={(v) => onPickItem(i, v)}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {items.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">No items yet.</div>
-                        ) : (
-                          items.map((it) => (
-                            <SelectItem key={it.id} value={it.id}>
-                              {it.name} ({it.unit})
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                  <TableCell onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
+                    <div className="flex gap-1">
+                      <Select value={l.item_id} onValueChange={(v) => { setFocusedLine(i); onPickItem(i, v); }}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select item" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {items.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">No items yet — press F4.</div>
+                          ) : (
+                            items.map((it) => (
+                              <SelectItem key={it.id} value={it.id}>
+                                {it.name} ({it.unit})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
+                        <PackagePlus className="h-4 w-4" />
+                      </Button>
+                      {l.item_id && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit item (Shift+F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: l.item_id, lineIdx: i }); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input
