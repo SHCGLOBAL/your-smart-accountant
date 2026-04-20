@@ -328,7 +328,9 @@ function LedgersPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="gstin">GSTIN</Label>
+                    <Label htmlFor="gstin" className="flex items-center gap-2">
+                      GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
+                    </Label>
                     <Input
                       id="gstin"
                       value={form.gstin}
