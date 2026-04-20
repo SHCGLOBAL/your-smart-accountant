@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Loader2, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { lookupGstin } from "@/lib/gstin-lookup.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,6 +118,38 @@ function LedgersPage() {
   const [editing, setEditing] = useState<Ledger | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [gstinLooking, setGstinLooking] = useState(false);
+  const lookedRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!open) return;
+    const g = form.gstin.trim().toUpperCase();
+    if (g.length !== 15 || !GSTIN_REGEX.test(g) || g === lookedRef.current) return;
+    lookedRef.current = g;
+    setGstinLooking(true);
+    lookupGstin({ data: { gstin: g } })
+      .then((res) => {
+        if (!res.ok || !res.data) {
+          toast.error(res.error || "GSTIN lookup failed");
+          return;
+        }
+        const d = res.data;
+        setForm((f) => {
+          const stateMatch = INDIAN_STATES.find((s) => s.code === d.stateCode);
+          return {
+            ...f,
+            name: f.name.trim() ? f.name : d.tradeName || d.legalName,
+            address: f.address.trim() ? f.address : d.address,
+            state_code: f.state_code || d.stateCode || "",
+            state: f.state || stateMatch?.name || "",
+          };
+        });
+        toast.success("GSTIN details fetched");
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Lookup failed"))
+      .finally(() => setGstinLooking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.gstin, open]);
 
   const load = async () => {
     if (!activeCompanyId) {
@@ -158,6 +191,7 @@ function LedgersPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
+    lookedRef.current = "";
     setOpen(true);
   };
 
@@ -177,6 +211,7 @@ function LedgersPage() {
         : "",
       opening_balance_is_debit: l.opening_balance_is_debit,
     });
+    lookedRef.current = l.gstin ?? "";
     setOpen(true);
   };
 
@@ -293,7 +328,9 @@ function LedgersPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="gstin">GSTIN</Label>
+                    <Label htmlFor="gstin" className="flex items-center gap-2">
+                      GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
+                    </Label>
                     <Input
                       id="gstin"
                       value={form.gstin}
