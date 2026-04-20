@@ -102,6 +102,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         gstin: gstin.trim() || null,
         state_code: stateCode || null,
         state: state?.name ?? null,
+        address: address.trim() || null,
       };
       if (editId) {
         const { data, error } = await supabase
@@ -162,8 +163,16 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>GSTIN</Label>
-              <Input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} />
+              <Label className="flex items-center gap-2">
+                GSTIN {looking && <Loader2 className="h-3 w-3 animate-spin" />}
+              </Label>
+              <Input
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                maxLength={15}
+                placeholder="22AAAAA0000A1Z5"
+              />
+              <p className="text-[10px] text-muted-foreground">Auto-fetches name & address</p>
             </div>
             <div className="space-y-1">
               <Label>State</Label>
@@ -176,6 +185,10 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Address</Label>
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
