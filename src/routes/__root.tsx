@@ -1,4 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { AuthProvider } from "@/lib/auth-context";
+import { CompanyProvider } from "@/lib/company-context";
+import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 
@@ -29,21 +32,23 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Your Mehtaji — Modern Accounting for India" },
+      {
+        name: "description",
+        content:
+          "GST-ready accounting software for Indian businesses. Multi-company, multi-user, with sales, purchase, inventory and reports. Inspired by Busy.",
+      },
+      { name: "author", content: "Your Mehtaji" },
+      { property: "og:title", content: "Your Mehtaji — Modern Accounting for India" },
+      {
+        property: "og:description",
+        content:
+          "GST-ready accounting with sales, purchase, inventory, ledgers, P&L, balance sheet and GSTR reports.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -65,5 +70,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <CompanyProvider>
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </CompanyProvider>
+    </AuthProvider>
+  );
 }
