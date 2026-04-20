@@ -220,7 +220,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
         </div>
         <div className="flex gap-2">
@@ -260,20 +260,32 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             </TableHeader>
             <TableBody>
               {lines.map((l, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
                   <TableCell>
-                    <Select value={l.ledger_id} onValueChange={(v) => update(i, { ledger_id: v })}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select ledger" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ledgers.map((lg) => (
-                          <SelectItem key={lg.id} value={lg.id}>
-                            {lg.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-1">
+                      <Select value={l.ledger_id} onValueChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select ledger" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ledgers.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">No ledgers — press F3.</div>
+                          ) : (
+                            ledgers.map((lg) => (
+                              <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
+                        <UserPlus className="h-4 w-4" />
+                      </Button>
+                      {l.ledger_id && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -348,6 +360,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
       </div>
+
+      {activeCompanyId && (
+        <QuickLedgerDialog
+          open={ledgerDlg.open}
+          onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+          companyId={activeCompanyId}
+          editId={ledgerDlg.editId}
+          onSaved={onLedgerSaved}
+        />
+      )}
     </div>
   );
 }
