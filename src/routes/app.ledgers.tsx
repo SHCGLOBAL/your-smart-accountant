@@ -191,6 +191,7 @@ function LedgersPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
+    lookedRef.current = "";
     setOpen(true);
   };
 
@@ -210,6 +211,7 @@ function LedgersPage() {
         : "",
       opening_balance_is_debit: l.opening_balance_is_debit,
     });
+    lookedRef.current = l.gstin ?? "";
     setOpen(true);
   };
 
