@@ -535,6 +535,25 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           </CardContent>
         </Card>
       </div>
+
+      {activeCompanyId && (
+        <>
+          <QuickLedgerDialog
+            open={ledgerDlg.open}
+            onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            editId={ledgerDlg.editId}
+            onSaved={onLedgerSaved}
+          />
+          <QuickItemDialog
+            open={itemDlg.open}
+            onOpenChange={(o) => setItemDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            editId={itemDlg.editId}
+            onSaved={onItemSaved}
+          />
+        </>
+      )}
     </div>
   );
 }
