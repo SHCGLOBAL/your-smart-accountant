@@ -263,7 +263,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, navigate, cfg]);
 
-  // Hotkeys: Ctrl+S save, Esc cancel
+  // Hotkeys: Ctrl+S save, Esc cancel, F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -271,11 +271,51 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         if (!saving) save();
       } else if (e.key === "Escape") {
         navigate({ to: "/app/vouchers" });
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (partyId) setLedgerDlg({ open: true, editId: partyId });
+          else toast.info("Select a party first to edit");
+        } else {
+          setLedgerDlg({ open: true, editId: null });
+        }
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        const itemId = lines[focusedLine]?.item_id ?? null;
+        if (e.shiftKey) {
+          if (itemId) setItemDlg({ open: true, editId: itemId, lineIdx: focusedLine });
+          else toast.info("Pick an item on a line first to edit");
+        } else {
+          setItemDlg({ open: true, editId: null, lineIdx: focusedLine });
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving]);
+  }, [save, navigate, saving, partyId, lines, focusedLine]);
+
+  const onLedgerSaved = (lg: QuickLedger) => {
+    setLedgers((cur) => {
+      const without = cur.filter((x) => x.id !== lg.id);
+      return [...without, { id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code }].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    });
+    if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
+  };
+
+  const onItemSaved = (it: QuickItem) => {
+    setItems((cur) => {
+      const without = cur.filter((x) => x.id !== it.id);
+      return [...without, it].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    const idx = itemDlg.lineIdx;
+    if (idx !== null) {
+      setLines((cur) =>
+        cur.map((l, i) => (i === idx ? { ...l, item_id: it.id, gst_rate: String(it.gst_rate) } : l)),
+      );
+    }
+  };
 
   return (
     <div className="space-y-4">
