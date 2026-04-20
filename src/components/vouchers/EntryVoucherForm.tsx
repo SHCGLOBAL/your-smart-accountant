@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
+import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +77,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   );
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [saving, setSaving] = useState(false);
+  const [focusedLine, setFocusedLine] = useState(0);
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -183,11 +186,33 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         if (!saving) save();
       } else if (e.key === "Escape") {
         navigate({ to: "/app/vouchers" });
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        const lid = lines[focusedLine]?.ledger_id ?? null;
+        if (e.shiftKey) {
+          if (lid) setLedgerDlg({ open: true, editId: lid, lineIdx: focusedLine });
+          else toast.info("Pick a ledger on a line first to edit");
+        } else {
+          setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving]);
+  }, [save, navigate, saving, lines, focusedLine]);
+
+  const onLedgerSaved = (lg: QuickLedger) => {
+    setLedgers((cur) => {
+      const without = cur.filter((x) => x.id !== lg.id);
+      return [...without, { id: lg.id, name: lg.name, type: lg.type }].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    });
+    const idx = ledgerDlg.lineIdx;
+    if (idx !== null) {
+      setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ledger_id: lg.id } : l)));
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -195,7 +220,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
         </div>
         <div className="flex gap-2">
@@ -235,20 +260,32 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             </TableHeader>
             <TableBody>
               {lines.map((l, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
                   <TableCell>
-                    <Select value={l.ledger_id} onValueChange={(v) => update(i, { ledger_id: v })}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select ledger" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ledgers.map((lg) => (
-                          <SelectItem key={lg.id} value={lg.id}>
-                            {lg.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-1">
+                      <Select value={l.ledger_id} onValueChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select ledger" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ledgers.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">No ledgers — press F3.</div>
+                          ) : (
+                            ledgers.map((lg) => (
+                              <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
+                        <UserPlus className="h-4 w-4" />
+                      </Button>
+                      {l.ledger_id && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -323,6 +360,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
       </div>
+
+      {activeCompanyId && (
+        <QuickLedgerDialog
+          open={ledgerDlg.open}
+          onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+          companyId={activeCompanyId}
+          editId={ledgerDlg.editId}
+          onSaved={onLedgerSaved}
+        />
+      )}
     </div>
   );
 }

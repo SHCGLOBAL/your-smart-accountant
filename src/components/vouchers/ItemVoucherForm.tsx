@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, UserPlus, PackagePlus, X } from "lucide-react";
+import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
+import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +101,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [focusedLine, setFocusedLine] = useState<number>(0);
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
+  const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
 
   // Load masters
   useEffect(() => {
@@ -258,7 +263,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, navigate, cfg]);
 
-  // Hotkeys: Ctrl+S save, Esc cancel
+  // Hotkeys: Ctrl+S save, Esc cancel, F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -266,11 +271,51 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         if (!saving) save();
       } else if (e.key === "Escape") {
         navigate({ to: "/app/vouchers" });
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (partyId) setLedgerDlg({ open: true, editId: partyId });
+          else toast.info("Select a party first to edit");
+        } else {
+          setLedgerDlg({ open: true, editId: null });
+        }
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        const itemId = lines[focusedLine]?.item_id ?? null;
+        if (e.shiftKey) {
+          if (itemId) setItemDlg({ open: true, editId: itemId, lineIdx: focusedLine });
+          else toast.info("Pick an item on a line first to edit");
+        } else {
+          setItemDlg({ open: true, editId: null, lineIdx: focusedLine });
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving]);
+  }, [save, navigate, saving, partyId, lines, focusedLine]);
+
+  const onLedgerSaved = (lg: QuickLedger) => {
+    setLedgers((cur) => {
+      const without = cur.filter((x) => x.id !== lg.id);
+      return [...without, { id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code }].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    });
+    if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
+  };
+
+  const onItemSaved = (it: QuickItem) => {
+    setItems((cur) => {
+      const without = cur.filter((x) => x.id !== it.id);
+      return [...without, it].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    const idx = itemDlg.lineIdx;
+    if (idx !== null) {
+      setLines((cur) =>
+        cur.map((l, i) => (i === idx ? { ...l, item_id: it.id, gst_rate: String(it.gst_rate) } : l)),
+      );
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -278,7 +323,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
             {interstate && (
               <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                 Interstate (IGST)
@@ -303,7 +348,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>{cfg.partyLabel}</Label>
+            <Label className="flex items-center justify-between">
+              <span>{cfg.partyLabel}</span>
+              <span className="flex gap-2">
+                <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: null })} title="New ledger (F3)">
+                  <UserPlus className="h-3 w-3" /> New
+                </button>
+                {partyId && (
+                  <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: partyId })} title="Edit party (Shift+F3)">
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
+                )}
+              </span>
+            </Label>
             <Select value={partyId} onValueChange={setPartyId}>
               <SelectTrigger>
                 <SelectValue placeholder={`Select ${cfg.partyLabel.toLowerCase()}`} />
@@ -311,7 +368,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               <SelectContent>
                 {partyOpts.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground">
-                    No {cfg.partyLabel.toLowerCase()}s — create one in Ledgers.
+                    No {cfg.partyLabel.toLowerCase()}s yet — press <kbd className="rounded border px-1">F3</kbd> to create.
                   </div>
                 ) : (
                   partyOpts.map((p) => (
@@ -348,23 +405,33 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <TableBody>
               {lines.map((l, i) => (
                 <TableRow key={i}>
-                  <TableCell>
-                    <Select value={l.item_id} onValueChange={(v) => onPickItem(i, v)}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select item" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {items.length === 0 ? (
-                          <div className="p-2 text-sm text-muted-foreground">No items yet.</div>
-                        ) : (
-                          items.map((it) => (
-                            <SelectItem key={it.id} value={it.id}>
-                              {it.name} ({it.unit})
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                  <TableCell onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
+                    <div className="flex gap-1">
+                      <Select value={l.item_id} onValueChange={(v) => { setFocusedLine(i); onPickItem(i, v); }}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select item" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {items.length === 0 ? (
+                            <div className="p-2 text-sm text-muted-foreground">No items yet — press F4.</div>
+                          ) : (
+                            items.map((it) => (
+                              <SelectItem key={it.id} value={it.id}>
+                                {it.name} ({it.unit})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
+                        <PackagePlus className="h-4 w-4" />
+                      </Button>
+                      {l.item_id && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit item (Shift+F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: l.item_id, lineIdx: i }); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -468,6 +535,25 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           </CardContent>
         </Card>
       </div>
+
+      {activeCompanyId && (
+        <>
+          <QuickLedgerDialog
+            open={ledgerDlg.open}
+            onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            editId={ledgerDlg.editId}
+            onSaved={onLedgerSaved}
+          />
+          <QuickItemDialog
+            open={itemDlg.open}
+            onOpenChange={(o) => setItemDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            editId={itemDlg.editId}
+            onSaved={onItemSaved}
+          />
+        </>
+      )}
     </div>
   );
 }
