@@ -216,39 +216,6 @@ function GroupLedgerReport() {
         onPrint={() => window.print()}
       />
 
-            <Select value={groupKey} onValueChange={(v) => setGroupKey(v as GroupKey)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-80">
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">Balance Sheet</div>
-                {GROUPS.filter((g) => g.section === "Balance Sheet").map((g) => (
-                  <SelectItem key={g.key} value={g.key}>{g.label}</SelectItem>
-                ))}
-                <div className="px-2 py-1 mt-1 text-[10px] font-semibold uppercase text-muted-foreground">Profit & Loss</div>
-                {GROUPS.filter((g) => g.section === "Profit & Loss").map((g) => (
-                  <SelectItem key={g.key} value={g.key}>{g.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>From</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>To</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <ReportToolbar
-        title={group.label}
-        subtitle={`${group.section} · ${from} → ${to}`}
-        onExportCsv={() => downloadCsv(`${fileBase}.csv`, headers, tableRows)}
-        onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, headers, tableRows)}
-        onExportPdf={() => downloadPdfTable(`${fileBase}.pdf`, group.label, headers, tableRows)}
-        onPrint={() => window.print()}
-      />
 
       <Card>
         <CardContent className="p-0">
