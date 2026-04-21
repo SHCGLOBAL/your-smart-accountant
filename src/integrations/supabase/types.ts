@@ -113,6 +113,7 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          gst_filing_frequency: string
           invoice_footer_note: string | null
           invoice_prefix: string
           invoice_starting_number: number
@@ -125,6 +126,7 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          gst_filing_frequency?: string
           invoice_footer_note?: string | null
           invoice_prefix?: string
           invoice_starting_number?: number
@@ -137,6 +139,7 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          gst_filing_frequency?: string
           invoice_footer_note?: string | null
           invoice_prefix?: string
           invoice_starting_number?: number
