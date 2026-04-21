@@ -14,6 +14,127 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_statement_lines: {
+        Row: {
+          balance_paise: number | null
+          company_id: string
+          created_at: string
+          credit_paise: number
+          debit_paise: number
+          description: string | null
+          id: string
+          match_status: string
+          matched_voucher_id: string | null
+          reference: string | null
+          statement_id: string
+          txn_date: string
+        }
+        Insert: {
+          balance_paise?: number | null
+          company_id: string
+          created_at?: string
+          credit_paise?: number
+          debit_paise?: number
+          description?: string | null
+          id?: string
+          match_status?: string
+          matched_voucher_id?: string | null
+          reference?: string | null
+          statement_id: string
+          txn_date: string
+        }
+        Update: {
+          balance_paise?: number | null
+          company_id?: string
+          created_at?: string
+          credit_paise?: number
+          debit_paise?: number
+          description?: string | null
+          id?: string
+          match_status?: string
+          matched_voucher_id?: string | null
+          reference?: string | null
+          statement_id?: string
+          txn_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_statement_lines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_lines_matched_voucher_id_fkey"
+            columns: ["matched_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_lines_statement_id_fkey"
+            columns: ["statement_id"]
+            isOneToOne: false
+            referencedRelation: "bank_statements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_statements: {
+        Row: {
+          bank_ledger_id: string
+          company_id: string
+          file_name: string | null
+          from_date: string | null
+          id: string
+          imported_at: string
+          imported_by: string
+          matched_lines: number
+          to_date: string | null
+          total_lines: number
+        }
+        Insert: {
+          bank_ledger_id: string
+          company_id: string
+          file_name?: string | null
+          from_date?: string | null
+          id?: string
+          imported_at?: string
+          imported_by: string
+          matched_lines?: number
+          to_date?: string | null
+          total_lines?: number
+        }
+        Update: {
+          bank_ledger_id?: string
+          company_id?: string
+          file_name?: string | null
+          from_date?: string | null
+          id?: string
+          imported_at?: string
+          imported_by?: string
+          matched_lines?: number
+          to_date?: string | null
+          total_lines?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_statements_bank_ledger_id_fkey"
+            columns: ["bank_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "ledgers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           address: string | null
@@ -113,41 +234,53 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          einvoice_enabled: boolean
+          ewaybill_enabled: boolean
           gst_filing_frequency: string
           invoice_footer_note: string | null
           invoice_prefix: string
           invoice_starting_number: number
           invoice_terms: string | null
+          reminder_template: string | null
           show_bank_details: boolean
           show_signatory: boolean
           theme: string
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           company_id: string
           created_at?: string
+          einvoice_enabled?: boolean
+          ewaybill_enabled?: boolean
           gst_filing_frequency?: string
           invoice_footer_note?: string | null
           invoice_prefix?: string
           invoice_starting_number?: number
           invoice_terms?: string | null
+          reminder_template?: string | null
           show_bank_details?: boolean
           show_signatory?: boolean
           theme?: string
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           company_id?: string
           created_at?: string
+          einvoice_enabled?: boolean
+          ewaybill_enabled?: boolean
           gst_filing_frequency?: string
           invoice_footer_note?: string | null
           invoice_prefix?: string
           invoice_starting_number?: number
           invoice_terms?: string | null
+          reminder_template?: string | null
           show_bank_details?: boolean
           show_signatory?: boolean
           theme?: string
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: [
           {
@@ -155,6 +288,87 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: true
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      einvoice_details: {
+        Row: {
+          ack_date: string | null
+          ack_no: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          company_id: string
+          created_at: string
+          distance_km: number | null
+          ewb_date: string | null
+          ewb_no: string | null
+          ewb_valid_until: string | null
+          irn: string | null
+          signed_invoice: string | null
+          signed_qr: string | null
+          status: string
+          transporter_id: string | null
+          transporter_name: string | null
+          updated_at: string
+          vehicle_no: string | null
+          voucher_id: string
+        }
+        Insert: {
+          ack_date?: string | null
+          ack_no?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          company_id: string
+          created_at?: string
+          distance_km?: number | null
+          ewb_date?: string | null
+          ewb_no?: string | null
+          ewb_valid_until?: string | null
+          irn?: string | null
+          signed_invoice?: string | null
+          signed_qr?: string | null
+          status?: string
+          transporter_id?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_no?: string | null
+          voucher_id: string
+        }
+        Update: {
+          ack_date?: string | null
+          ack_no?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          company_id?: string
+          created_at?: string
+          distance_km?: number | null
+          ewb_date?: string | null
+          ewb_no?: string | null
+          ewb_valid_until?: string | null
+          irn?: string | null
+          signed_invoice?: string | null
+          signed_qr?: string | null
+          status?: string
+          transporter_id?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_no?: string | null
+          voucher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "einvoice_details_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "einvoice_details_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: true
+            referencedRelation: "vouchers"
             referencedColumns: ["id"]
           },
         ]
@@ -234,10 +448,12 @@ export type Database = {
           opening_balance_paise: number
           pan: string | null
           phone: string | null
+          reminders_enabled: boolean
           state: string | null
           state_code: string | null
           type: Database["public"]["Enums"]["ledger_type"]
           updated_at: string
+          whatsapp_number: string | null
         }
         Insert: {
           address?: string | null
@@ -254,10 +470,12 @@ export type Database = {
           opening_balance_paise?: number
           pan?: string | null
           phone?: string | null
+          reminders_enabled?: boolean
           state?: string | null
           state_code?: string | null
           type: Database["public"]["Enums"]["ledger_type"]
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Update: {
           address?: string | null
@@ -274,10 +492,12 @@ export type Database = {
           opening_balance_paise?: number
           pan?: string | null
           phone?: string | null
+          reminders_enabled?: boolean
           state?: string | null
           state_code?: string | null
           type?: Database["public"]["Enums"]["ledger_type"]
           updated_at?: string
+          whatsapp_number?: string | null
         }
         Relationships: [
           {
@@ -285,6 +505,64 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_reminders: {
+        Row: {
+          channel: string
+          company_id: string
+          id: string
+          ledger_id: string
+          message: string | null
+          sent_at: string
+          sent_by: string
+          status: string
+          voucher_id: string | null
+        }
+        Insert: {
+          channel: string
+          company_id: string
+          id?: string
+          ledger_id: string
+          message?: string | null
+          sent_at?: string
+          sent_by: string
+          status?: string
+          voucher_id?: string | null
+        }
+        Update: {
+          channel?: string
+          company_id?: string
+          id?: string
+          ledger_id?: string
+          message?: string | null
+          sent_at?: string
+          sent_by?: string
+          status?: string
+          voucher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reminders_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "ledgers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reminders_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
             referencedColumns: ["id"]
           },
         ]
@@ -315,6 +593,82 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      recurring_invoices: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string
+          end_date: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          last_generated_at: string | null
+          last_generated_voucher_id: string | null
+          name: string
+          next_run_date: string
+          party_ledger_id: string | null
+          template_json: Json
+          updated_at: string
+          voucher_type: Database["public"]["Enums"]["voucher_type"]
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          last_generated_at?: string | null
+          last_generated_voucher_id?: string | null
+          name: string
+          next_run_date: string
+          party_ledger_id?: string | null
+          template_json?: Json
+          updated_at?: string
+          voucher_type?: Database["public"]["Enums"]["voucher_type"]
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          last_generated_at?: string | null
+          last_generated_voucher_id?: string | null
+          name?: string
+          next_run_date?: string
+          party_ledger_id?: string | null
+          template_json?: Json
+          updated_at?: string
+          voucher_type?: Database["public"]["Enums"]["voucher_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_invoices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_invoices_last_generated_voucher_id_fkey"
+            columns: ["last_generated_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_invoices_party_ledger_id_fkey"
+            columns: ["party_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "ledgers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       voucher_entries: {
         Row: {
@@ -619,6 +973,9 @@ export type Database = {
         | "contra"
         | "credit_note"
         | "debit_note"
+        | "quotation"
+        | "sales_order"
+        | "delivery_note"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -773,6 +1130,9 @@ export const Constants = {
         "contra",
         "credit_note",
         "debit_note",
+        "quotation",
+        "sales_order",
+        "delivery_note",
       ],
     },
   },

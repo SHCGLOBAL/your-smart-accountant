@@ -7,6 +7,9 @@ import {
   FileBarChart,
   Settings,
   Building2,
+  Landmark,
+  Repeat,
+  FileCode2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,11 +38,21 @@ const groups: { label: string; items: { title: string; url: string; icon: typeof
   },
   {
     label: "Vouchers",
-    items: [{ title: "All Vouchers", url: "/app/vouchers", icon: ReceiptText }],
+    items: [
+      { title: "All Vouchers", url: "/app/vouchers", icon: ReceiptText },
+      { title: "Recurring", url: "/app/recurring", icon: Repeat },
+    ],
   },
   {
-    label: "Reports",
-    items: [{ title: "Reports", url: "/app/reports", icon: FileBarChart }],
+    label: "Compliance",
+    items: [
+      { title: "Reports", url: "/app/reports", icon: FileBarChart },
+      { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2 },
+    ],
+  },
+  {
+    label: "Banking",
+    items: [{ title: "Bank Reconciliation", url: "/app/bank", icon: Landmark }],
   },
   {
     label: "Setup",
