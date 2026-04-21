@@ -36,6 +36,7 @@ import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledge
 import { Route as AppReportsGstr3bRouteImport } from './routes/app.reports.gstr3b'
 import { Route as AppReportsGstr2bRouteImport } from './routes/app.reports.gstr2b'
 import { Route as AppReportsGstr1RouteImport } from './routes/app.reports.gstr1'
+import { Route as AppReportsGroupLedgerRouteImport } from './routes/app.reports.group-ledger'
 import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
 import { Route as AppReportsBrsRouteImport } from './routes/app.reports.brs'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
@@ -187,6 +188,11 @@ const AppReportsGstr1Route = AppReportsGstr1RouteImport.update({
   path: '/gstr1',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsGroupLedgerRoute = AppReportsGroupLedgerRouteImport.update({
+  id: '/group-ledger',
+  path: '/group-ledger',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
   id: '/day-book',
   path: '/day-book',
@@ -281,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
@@ -367,6 +375,7 @@ export interface FileRoutesById {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
@@ -412,6 +421,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/day-book'
+    | '/app/reports/group-ledger'
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
@@ -454,6 +464,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/day-book'
+    | '/app/reports/group-ledger'
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
@@ -497,6 +508,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/day-book'
+    | '/app/reports/group-ledger'
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
@@ -720,6 +732,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsGstr1RouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/group-ledger': {
+      id: '/app/reports/group-ledger'
+      path: '/group-ledger'
+      fullPath: '/app/reports/group-ledger'
+      preLoaderRoute: typeof AppReportsGroupLedgerRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/day-book': {
       id: '/app/reports/day-book'
       path: '/day-book'
@@ -826,6 +845,7 @@ interface AppReportsRouteChildren {
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
   AppReportsBrsRoute: typeof AppReportsBrsRoute
   AppReportsDayBookRoute: typeof AppReportsDayBookRoute
+  AppReportsGroupLedgerRoute: typeof AppReportsGroupLedgerRoute
   AppReportsGstr1Route: typeof AppReportsGstr1Route
   AppReportsGstr2bRoute: typeof AppReportsGstr2bRoute
   AppReportsGstr3bRoute: typeof AppReportsGstr3bRoute
@@ -845,6 +865,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
   AppReportsBrsRoute: AppReportsBrsRoute,
   AppReportsDayBookRoute: AppReportsDayBookRoute,
+  AppReportsGroupLedgerRoute: AppReportsGroupLedgerRoute,
   AppReportsGstr1Route: AppReportsGstr1Route,
   AppReportsGstr2bRoute: AppReportsGstr2bRoute,
   AppReportsGstr3bRoute: AppReportsGstr3bRoute,
