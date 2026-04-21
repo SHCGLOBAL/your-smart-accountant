@@ -253,6 +253,25 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         .insert(itemRows as any);
       if (iErr) throw iErr;
 
+      // 4. Auto-post double-entry ledger postings so reports balance.
+      const postings = await buildItemVoucherPostings(
+        activeCompanyId,
+        voucherType,
+        partyId,
+        totals,
+      );
+      const entryRows = postings.map((p) => ({
+        voucher_id: vData.id,
+        ledger_id: p.ledger_id,
+        debit_paise: p.debit_paise,
+        credit_paise: p.credit_paise,
+        line_no: p.line_no,
+      }));
+      const { error: eErr } = await supabase
+        .from("voucher_entries")
+        .insert(entryRows);
+      if (eErr) throw eErr;
+
       toast.success(`${cfg.title} ${numData} saved`);
       navigate({ to: "/app/vouchers" });
     } catch (e) {
