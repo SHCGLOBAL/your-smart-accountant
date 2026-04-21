@@ -233,6 +233,45 @@ export function EwayBillPrepDialog({
     }
   }
 
+  async function autoGenerateIrn() {
+    if (!voucher || !irpPayload) return;
+    setGenIrn(true);
+    try {
+      const res = await generateIrn({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: irpPayload as Record<string, unknown> } });
+      if (res.success) {
+        setIrn(res.irn ?? "");
+        setAckNo(res.ackNo ?? "");
+        toast.success(`IRN generated: ${res.irn?.slice(0, 12)}…`);
+        onSaved?.();
+      } else {
+        toast.error(res.error ?? "Failed to generate IRN");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "IRN generation failed");
+    } finally {
+      setGenIrn(false);
+    }
+  }
+
+  async function autoGenerateEwb() {
+    if (!voucher || !ewbPayload) return;
+    setGenEwb(true);
+    try {
+      const res = await generateEwb({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: ewbPayload as Record<string, unknown> } });
+      if (res.success) {
+        setEwbNo(res.ewbNo ?? "");
+        if (res.ewbValidUntil) setEwbValid(new Date(res.ewbValidUntil).toISOString().slice(0, 16));
+        toast.success(`E-Way Bill generated: ${res.ewbNo}`);
+        onSaved?.();
+      } else {
+        toast.error(res.error ?? "Failed to generate E-Way Bill");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "EWB generation failed");
+    } finally {
+      setGenEwb(false);
+    }
+  }
   function copyJson(data: unknown, label: string) {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     toast.success(`${label} JSON copied`);
