@@ -2,12 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { MessageCircle, Mail } from "lucide-react";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useAuth } from "@/lib/auth-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { renderReminder, whatsappLink, mailtoLink, logReminder } from "@/lib/reminders";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/reports/receivables")({
   head: () => ({ meta: [{ title: "Outstanding Receivables — Reports" }] }),
@@ -21,6 +26,10 @@ interface Ledger {
   credit_days: number;
   opening_balance_paise: number;
   opening_balance_is_debit: boolean;
+  email: string | null;
+  phone: string | null;
+  whatsapp_number: string | null;
+  reminders_enabled: boolean;
 }
 
 interface Entry {
@@ -38,25 +47,37 @@ const BUCKETS = [
 ];
 
 export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const { user } = useAuth();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [reminderTpl, setReminderTpl] = useState<string>("");
 
   const isRecv = mode === "receivables";
   const partyType = isRecv ? "sundry_debtor" : "sundry_creditor";
+  const companyName = activeMembership?.companies.name || "Company";
 
   useEffect(() => {
     if (!activeCompanyId) return;
     supabase
       .from("ledgers")
-      .select("id, name, type, credit_days, opening_balance_paise, opening_balance_is_debit")
+      .select("id, name, type, credit_days, opening_balance_paise, opening_balance_is_debit, email, phone, whatsapp_number, reminders_enabled")
       .eq("company_id", activeCompanyId)
       .eq("type", partyType)
       .order("name")
       .then(({ data }) => setLedgers((data || []) as Ledger[]));
+
+    supabase
+      .from("company_settings")
+      .select("reminder_template")
+      .eq("company_id", activeCompanyId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.reminder_template) setReminderTpl(data.reminder_template);
+      });
   }, [activeCompanyId, partyType]);
 
   useEffect(() => {
@@ -78,12 +99,8 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
         const ledgerEntries = entries.filter((e) => e.ledger_id === l.id);
         const movement = ledgerEntries.reduce((s, e) => s + e.debit_paise - e.credit_paise, 0);
         const closing = obSigned + movement;
-        // Receivable: positive (Dr); Payable: negative (Cr) → flip sign
         const outstanding = isRecv ? closing : -closing;
         if (outstanding <= 0) return null;
-
-        // Estimate "oldest open" using earliest unmatched debit (recv) or credit (pay).
-        // Simplification: oldest voucher with same-side amount on this ledger within window.
         const openSide = ledgerEntries
           .filter((e) => (isRecv ? e.debit_paise > 0 : e.credit_paise > 0))
           .map((e) => e.vouchers?.voucher_date)
@@ -94,10 +111,8 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
           ? Math.floor((today.getTime() - new Date(oldestDate).getTime()) / (1000 * 60 * 60 * 24))
           : 0;
         const overdue = Math.max(0, days - (l.credit_days || 0));
-        const buckets = BUCKETS.map((b) =>
-          days >= b.lo && days <= b.hi ? outstanding : 0,
-        );
-        return { id: l.id, name: l.name, days, credit_days: l.credit_days, overdue, outstanding, buckets, oldestDate };
+        const buckets = BUCKETS.map((b) => (days >= b.lo && days <= b.hi ? outstanding : 0));
+        return { ledger: l, name: l.name, days, credit_days: l.credit_days, overdue, outstanding, buckets, oldestDate };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => b.outstanding - a.outstanding);
@@ -110,11 +125,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const csvBody = (): (string | number)[][] => [
     head,
     ...rows.map((x) => [
-      x.name,
-      x.oldestDate ?? "",
-      x.days,
-      x.credit_days,
-      x.overdue,
+      x.name, x.oldestDate ?? "", x.days, x.credit_days, x.overdue,
       ...x.buckets.map((b) => (b ? (b / 100).toFixed(2) : "")),
       (x.outstanding / 100).toFixed(2),
     ]),
@@ -124,40 +135,62 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const title = isRecv ? "Outstanding Receivables" : "Outstanding Payables";
   const slug = isRecv ? "receivables" : "payables";
 
+  function buildMessage(row: typeof rows[number]): string {
+    return renderReminder(reminderTpl || "Dear {party}, kindly clear ₹{amount} overdue by {days} days. — {company}", {
+      partyName: row.name,
+      amountPaise: row.outstanding,
+      daysOverdue: row.overdue,
+      companyName,
+    });
+  }
+
+  async function sendWhatsApp(row: typeof rows[number]) {
+    const msg = buildMessage(row);
+    const phone = row.ledger.whatsapp_number || row.ledger.phone;
+    if (!phone) { toast.error("No WhatsApp number on this party"); return; }
+    window.open(whatsappLink(phone, msg), "_blank");
+    if (activeCompanyId && user) {
+      await logReminder({ companyId: activeCompanyId, ledgerId: row.ledger.id, channel: "whatsapp", message: msg, sentBy: user.id });
+      toast.success("Reminder logged");
+    }
+  }
+
+  async function sendEmail(row: typeof rows[number]) {
+    const msg = buildMessage(row);
+    if (!row.ledger.email) { toast.error("No email on this party"); return; }
+    window.location.href = mailtoLink(row.ledger.email, `Payment reminder — ${companyName}`, msg);
+    if (activeCompanyId && user) {
+      await logReminder({ companyId: activeCompanyId, ledgerId: row.ledger.id, channel: "email", message: msg, sentBy: user.id });
+      toast.success("Reminder logged");
+    }
+  }
+
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3">
           <ReportToolbar
-            from={from}
-            to={to}
-            onFrom={setFrom}
-            onTo={setTo}
+            from={from} to={to} onFrom={setFrom} onTo={setTo}
             onExportCsv={() => downloadCsv(`${slug}-${to}.csv`, csvBody())}
             onExportXlsx={() => downloadXlsx(`${slug}-${to}.xlsx`, [{ name: title, rows: csvBody() }])}
             onExportPdf={() =>
               downloadPdfTable({
-                title,
-                subtitle: `As on ${to}`,
-                head: [head],
+                title, subtitle: `As on ${to}`, head: [head],
                 body: rows.map((x) => [
-                  x.name,
-                  x.oldestDate ?? "",
-                  String(x.days),
-                  String(x.credit_days),
-                  String(x.overdue),
+                  x.name, x.oldestDate ?? "", String(x.days), String(x.credit_days), String(x.overdue),
                   ...x.buckets.map((b) => (b ? r(b).toFixed(2) : "")),
                   r(x.outstanding).toFixed(2),
                 ]),
                 foot: [["TOTAL", "", "", "", "", ...totalsByBucket.map((b) => r(b).toFixed(2)), r(totalOut).toFixed(2)]],
-                fileName: `${slug}-${to}.pdf`,
-                orientation: "l",
+                fileName: `${slug}-${to}.pdf`, orientation: "l",
                 rightAlignCols: [2, 3, 4, 5, 6, 7, 8, 9],
               })
             }
             onPrint={() => window.print()}
           />
-          <p className="mt-2 text-xs text-muted-foreground">As on <strong>{to}</strong>. Aging buckets are based on the oldest open voucher date.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            As on <strong>{to}</strong>. {isRecv && "Use the WhatsApp / Email buttons to send a reminder; the message uses the template from Settings."}
+          </p>
         </CardContent>
       </Card>
       <Card>
@@ -170,22 +203,21 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
                 <TableHead className="text-right">Days</TableHead>
                 <TableHead className="text-right">Credit Days</TableHead>
                 <TableHead className="text-right">Overdue</TableHead>
-                {BUCKETS.map((b) => (
-                  <TableHead key={b.label} className="text-right">{b.label}</TableHead>
-                ))}
+                {BUCKETS.map((b) => <TableHead key={b.label} className="text-right">{b.label}</TableHead>)}
                 <TableHead className="text-right">Total</TableHead>
+                {isRecv && <TableHead className="text-center print:hidden">Remind</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="p-6 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={isRecv ? 11 : 10} className="p-6 text-center text-sm text-muted-foreground">
                     Nothing outstanding.
                   </TableCell>
                 </TableRow>
               )}
               {rows.map((x) => (
-                <TableRow key={x.id}>
+                <TableRow key={x.ledger.id}>
                   <TableCell>{x.name}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{x.oldestDate ?? "—"}</TableCell>
                   <TableCell className="text-right">{x.days}</TableCell>
@@ -195,6 +227,18 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
                     <TableCell key={i} className="text-right font-mono">{b ? formatINR(b) : ""}</TableCell>
                   ))}
                   <TableCell className="text-right font-mono font-semibold">{formatINR(x.outstanding)}</TableCell>
+                  {isRecv && (
+                    <TableCell className="print:hidden">
+                      <div className="flex justify-center gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
+                          <MessageCircle className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
+                          <Mail className="h-4 w-4 text-blue-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {rows.length > 0 && (
@@ -204,6 +248,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
                     <TableCell key={i} className="text-right font-mono font-semibold">{b ? formatINR(b) : ""}</TableCell>
                   ))}
                   <TableCell className="text-right font-mono font-semibold">{formatINR(totalOut)}</TableCell>
+                  {isRecv && <TableCell className="print:hidden" />}
                 </TableRow>
               )}
             </TableBody>
