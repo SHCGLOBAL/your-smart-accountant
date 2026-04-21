@@ -98,6 +98,9 @@ export function EwayBillPrepDialog({
   const [ewbNo, setEwbNo] = useState("");
   const [ewbValid, setEwbValid] = useState("");
   const [saving, setSaving] = useState(false);
+  const [genIrn, setGenIrn] = useState(false);
+  const [genEwb, setGenEwb] = useState(false);
+  const [setu, setSetu] = useState<{ configured: boolean; einvoice_enabled: boolean; ewaybill_enabled: boolean; environment: string } | null>(null);
   const [company, setCompany] = useState<{ name: string; gstin: string | null; address: string | null; state_code: string | null; pin?: string | null } | null>(null);
   const [party, setParty] = useState<{ name: string; gstin: string | null; address: string | null; state_code: string | null } | null>(null);
 
