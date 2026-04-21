@@ -110,12 +110,6 @@ async function logCall(args: {
   });
 }
 
-async function assertAdmin(supabase: ReturnType<typeof supabaseAdmin.auth.admin.listUsers> extends infer _ ? typeof supabaseAdmin : never, companyId: string, userId: string): Promise<void> {
-  // Use authed client passed via context — this enforces RLS / role.
-  // Implemented inline below per server fn for clarity.
-  void supabase; void companyId; void userId;
-}
-
 // ---------- Check status ----------
 export const getSetuStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
