@@ -345,7 +345,7 @@ export function EwayBillPrepDialog({
 
           <TabsContent value="einv" className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              For B2B invoices when company turnover > ₹5 Cr, generate IRN on the IRP portal and paste below. Values appear on the invoice PDF and are kept as audit trail.
+              For B2B invoices when company turnover &gt; ₹5 Cr, generate IRN on the IRP portal and paste below. Values appear on the invoice PDF and are kept as audit trail.
             </p>
             <Field label="IRN (64-char hash)"><Input value={irn} onChange={(e) => setIrn(e.target.value)} placeholder="Paste IRN" /></Field>
             <Field label="Acknowledgement No."><Input value={ackNo} onChange={(e) => setAckNo(e.target.value)} /></Field>
