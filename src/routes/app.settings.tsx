@@ -46,7 +46,11 @@ interface Member {
 }
 
 function SettingsPage() {
-  const { activeCompanyId, activeMembership } = useCompany();
+  const { activeCompanyId, activeMembership, memberships } = useCompany();
+  const restoreFileRef = useRef<HTMLInputElement | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [wipeBeforeRestore, setWipeBeforeRestore] = useState(false);
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<Settings>({
     invoice_prefix: "INV",
