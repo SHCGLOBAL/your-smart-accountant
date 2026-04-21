@@ -297,10 +297,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
       toast.success(`${cfg.title} ${numData} saved`);
 
-      // Auto-prompt E-Way Bill / E-Invoice for sales-side vouchers above ₹50,000
-      // (interstate, or intra-state where goods cross city limits — user decides).
-      const isSalesSide = voucherType === "sales" || voucherType === "credit_note";
-      if (isSalesSide && totals.total_paise > 5_000_000) {
+      // Auto-prompt E-Way Bill / E-Invoice for any goods-movement voucher above ₹50,000
+      // (sales/purchase + their notes — interstate, or intra-state beyond city limits).
+      const movesGoods = voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note";
+      if (movesGoods && totals.total_paise > 5_000_000) {
         setEwbDlg({
           open: true,
           voucher: {
@@ -624,10 +624,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
-            {(voucherType === "sales" || voucherType === "credit_note") && totals.total_paise > 5_000_000 && (
+            {(voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note") && totals.total_paise > 5_000_000 && (
               <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
                 <Truck className="inline h-3 w-3 mr-1" />
-                Invoice value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
+                Voucher value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
               </div>
             )}
           </CardContent>
