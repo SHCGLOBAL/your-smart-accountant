@@ -298,6 +298,3 @@ export const saveSetuCredentials = createServerFn({ method: "POST" })
     if (error) return { success: false, error: error.message };
     return { success: true };
   });
-
-// silence unused import in the type-only assertion helper
-void assertAdmin;
