@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/app/reports/profit-loss")({
 
 function ProfitLoss() {
   const { activeCompanyId } = useCompany();
+  const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
