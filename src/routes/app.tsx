@@ -7,6 +7,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,6 +125,7 @@ function AppLayout() {
               </DropdownMenu>
             </div>
           </header>
+          <QuickActionsRibbon />
           <main className="flex-1 p-4 md:p-6">
             <Outlet />
           </main>
