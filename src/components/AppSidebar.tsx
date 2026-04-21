@@ -52,7 +52,10 @@ const groups: { label: string; items: { title: string; url: string; icon: typeof
   },
   {
     label: "Banking",
-    items: [{ title: "Bank Reconciliation", url: "/app/bank", icon: Landmark }],
+    items: [
+      { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark },
+      { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark },
+    ],
   },
   {
     label: "Setup",
