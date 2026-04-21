@@ -296,7 +296,30 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (eErr) throw eErr;
 
       toast.success(`${cfg.title} ${numData} saved`);
-      navigate({ to: "/app/vouchers" });
+
+      // Auto-prompt E-Way Bill / E-Invoice for sales-side vouchers above ₹50,000
+      // (interstate, or intra-state where goods cross city limits — user decides).
+      const isSalesSide = voucherType === "sales" || voucherType === "credit_note";
+      if (isSalesSide && totals.total_paise > 5_000_000) {
+        setEwbDlg({
+          open: true,
+          voucher: {
+            id: vData.id,
+            company_id: activeCompanyId,
+            voucher_number: numData as string,
+            voucher_date: date,
+            total_paise: totals.total_paise,
+            subtotal_paise: totals.subtotal_paise,
+            cgst_paise: totals.cgst_paise,
+            sgst_paise: totals.sgst_paise,
+            igst_paise: totals.igst_paise,
+            is_interstate: interstate,
+            place_of_supply_code: placeOfSupply || null,
+          },
+        });
+      } else {
+        navigate({ to: "/app/vouchers" });
+      }
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Failed to save");
