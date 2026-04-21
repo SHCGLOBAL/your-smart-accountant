@@ -28,7 +28,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
 import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
-import { GST_RATES } from "@/lib/constants";
+import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note";
@@ -97,6 +97,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
+  const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
+  const [roundOff, setRoundOff] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
@@ -140,7 +142,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [ledgers, cfg.partyTypes],
   );
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
-  const interstate = isInterstate(companyStateCode, partyLedger?.state_code);
+  const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
+
+  // Auto-fill place of supply from party state when party changes
+  useEffect(() => {
+    if (partyLedger?.state_code && !placeOfSupply) {
+      setPlaceOfSupply(partyLedger.state_code);
+    }
+  }, [partyLedger, placeOfSupply]);
 
   const computed: GstLineResult[] = useMemo(
     () =>
@@ -157,7 +166,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       ),
     [lines, interstate],
   );
-  const totals = useMemo(() => sumLines(computed), [computed]);
+  const rawTotals = useMemo(() => sumLines(computed), [computed]);
+  const roundOffPaise = useMemo(() => {
+    if (!roundOff) return 0;
+    const rounded = Math.round(rawTotals.total_paise / 100) * 100;
+    return rounded - rawTotals.total_paise;
+  }, [rawTotals.total_paise, roundOff]);
+  const totals = useMemo(
+    () => ({ ...rawTotals, total_paise: rawTotals.total_paise + roundOffPaise }),
+    [rawTotals, roundOffPaise],
+  );
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
     setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -220,7 +238,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           cgst_paise: totals.cgst_paise,
           sgst_paise: totals.sgst_paise,
           igst_paise: totals.igst_paise,
+          round_off_paise: roundOffPaise,
           total_paise: totals.total_paise,
+          place_of_supply_code: placeOfSupply || null,
         })
         .select("id")
         .single();
@@ -281,7 +301,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     } finally {
       setSaving(false);
     }
-  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, navigate, cfg]);
+  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, navigate, cfg]);
 
   // Hotkeys: Ctrl+S save, Esc cancel, F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
@@ -362,7 +382,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       </div>
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Date</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -403,6 +423,21 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           <div className="space-y-1">
             <Label>Reference No.</Label>
             <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="PO / Bill no." />
+          </div>
+          <div className="space-y-1">
+            <Label>Place of Supply</Label>
+            <Select value={placeOfSupply} onValueChange={setPlaceOfSupply}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select state" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {INDIAN_STATES.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.code} — {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -548,7 +583,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               </>
             )}
             <div className="my-2 border-t" />
-            <Row label="Total" value={formatINR(totals.total_paise)} bold />
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={roundOff}
+                  onChange={(e) => setRoundOff(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                Round off
+              </label>
+              <span className="font-mono">{roundOffPaise === 0 ? "—" : formatINR(roundOffPaise)}</span>
+            </div>
+            <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
