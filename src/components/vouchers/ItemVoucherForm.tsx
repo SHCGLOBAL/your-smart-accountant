@@ -424,6 +424,21 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <Label>Reference No.</Label>
             <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="PO / Bill no." />
           </div>
+          <div className="space-y-1">
+            <Label>Place of Supply</Label>
+            <Select value={placeOfSupply} onValueChange={setPlaceOfSupply}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select state" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {INDIAN_STATES.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.code} — {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
