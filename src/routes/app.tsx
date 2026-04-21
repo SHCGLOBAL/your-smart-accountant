@@ -33,7 +33,7 @@ function AppLayout() {
   const { loading: companyLoading, memberships } = useCompany();
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/login" });
+    if (!loading && !user) navigate({ to: "/" });
   }, [user, loading, navigate]);
 
   // Global Busy-style hotkeys for new vouchers
