@@ -29,14 +29,22 @@ interface CredsRow {
 }
 
 async function loadCreds(companyId: string): Promise<CredsRow | null> {
-  const { data } = await supabaseAdmin
+  // Cast: types regenerate after migration; new tables not yet in generated types.
+  const admin = supabaseAdmin as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: CredsRow | null }> };
+      };
+    };
+  };
+  const { data } = await admin
     .from("gst_api_credentials")
     .select(
       "company_id, environment, setu_client_id, setu_client_secret, gstn_username, einvoice_enabled, ewaybill_enabled, last_token, last_token_expires_at",
     )
     .eq("company_id", companyId)
     .maybeSingle();
-  return (data as CredsRow | null) ?? null;
+  return data ?? null;
 }
 
 async function ensureToken(c: CredsRow): Promise<string> {
@@ -67,7 +75,11 @@ async function ensureToken(c: CredsRow): Promise<string> {
     throw new Error(`Setu auth failed [${res.status}]: ${json.error || json.message || "unknown"}`);
   }
   const expIso = new Date(Date.now() + (json.expires_in ?? 3600) * 1000).toISOString();
-  await supabaseAdmin
+  await (supabaseAdmin as unknown as {
+    from: (t: string) => {
+      update: (v: Record<string, unknown>) => { eq: (k: string, v: string) => Promise<unknown> };
+    };
+  })
     .from("gst_api_credentials")
     .update({ last_token: json.access_token, last_token_expires_at: expIso })
     .eq("company_id", c.company_id);
@@ -84,12 +96,14 @@ async function logCall(args: {
   errorMessage?: string;
   userId: string;
 }): Promise<void> {
-  await supabaseAdmin.from("einvoice_api_log").insert({
+  await (supabaseAdmin as unknown as {
+    from: (t: string) => { insert: (v: Record<string, unknown>) => Promise<unknown> };
+  }).from("einvoice_api_log").insert({
     company_id: args.companyId,
     voucher_id: args.voucherId,
     action: args.action,
-    request_summary: args.request as Record<string, unknown>,
-    response_summary: args.response as Record<string, unknown>,
+    request_summary: args.request,
+    response_summary: args.response,
     success: args.success,
     error_message: args.errorMessage ?? null,
     created_by: args.userId,
@@ -109,7 +123,14 @@ export const getSetuStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     // RLS will only return the row if user is admin
-    const { data: c } = await supabase
+    const sb = supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { environment?: string; einvoice_enabled?: boolean; ewaybill_enabled?: boolean; setu_client_id?: string | null; gstn_username?: string | null } | null }> };
+        };
+      };
+    };
+    const { data: c } = await sb
       .from("gst_api_credentials")
       .select("environment, einvoice_enabled, ewaybill_enabled, setu_client_id, gstn_username")
       .eq("company_id", data.companyId)
