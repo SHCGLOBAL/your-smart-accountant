@@ -29,6 +29,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
 import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
 import { GST_RATES } from "@/lib/constants";
+import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note";
 
