@@ -373,6 +373,56 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <KeyRound className="h-4 w-4" /> GST APIs (Setu) {setuStatus?.configured && <span className="text-xs font-normal text-green-600">● Connected</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Connect your Setu GSP account for one-click E-Invoice (IRN) and E-Way Bill generation. Sign up at <a href="https://setu.co/products/gst" target="_blank" rel="noreferrer" className="underline">setu.co/products/gst</a> and copy your Client ID & Secret. Credentials are stored encrypted and only used server-side.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Environment</Label>
+                <Select value={setuEnv} onValueChange={(v) => setSetuEnv(v as "sandbox" | "production")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sandbox">Sandbox (UAT — for testing)</SelectItem>
+                    <SelectItem value="production">Production (live filings)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>GSTN Portal Username (optional)</Label>
+                <Input value={gstnUsername} onChange={(e) => setGstnUsername(e.target.value)} placeholder="GST portal user ID" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Setu Client ID</Label>
+                <Input value={setuClientId} onChange={(e) => setSetuClientId(e.target.value)} placeholder="From Setu dashboard" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Setu Client Secret</Label>
+                <Input type="password" value={setuClientSecret} onChange={(e) => setSetuClientSecret(e.target.value)} placeholder={setuStatus?.configured ? "•••• (leave blank to keep)" : "From Setu dashboard"} />
+              </div>
+              <div className="flex items-center justify-between rounded border p-3">
+                <Label>Enable E-Invoice (IRN)</Label>
+                <Switch checked={eiEnabled} onCheckedChange={setEiEnabled} />
+              </div>
+              <div className="flex items-center justify-between rounded border p-3">
+                <Label>Enable E-Way Bill</Label>
+                <Switch checked={ewbEnabled} onCheckedChange={setEwbEnabled} />
+              </div>
+            </div>
+            <Button onClick={saveSetu} disabled={savingSetu}>
+              <Save className="mr-2 h-4 w-4" /> {savingSetu ? "Saving…" : "Save GST API credentials"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Data backup</CardTitle></CardHeader>
         <CardContent className="space-y-2">
