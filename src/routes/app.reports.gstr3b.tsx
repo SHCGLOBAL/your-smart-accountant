@@ -1,168 +1,211 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { downloadCsv } from "@/lib/csv";
-import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { downloadXlsx } from "@/lib/exporters";
+import {
+  buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson, gstr3bToXlsxSheets,
+  monthRange, periodFP, downloadJson,
+  type CompanyMeta, type BuiltGstr3B,
+} from "@/lib/gst-returns";
 
 export const Route = createFileRoute("/app/reports/gstr3b")({
-  head: () => ({ meta: [{ title: "GSTR-3B Summary — Reports" }] }),
-  component: GSTR3B,
+  head: () => ({ meta: [{ title: "GSTR-3B — Reports" }] }),
+  component: GSTR3BPage,
 });
 
-interface VRow {
-  voucher_type: string;
-  subtotal_paise: number;
-  cgst_paise: number;
-  sgst_paise: number;
-  igst_paise: number;
-  total_paise: number;
-}
+const monthsOfYear = (year: number) => {
+  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return names.map((n, i) => ({ value: `${year}-${String(i + 1).padStart(2, "0")}`, label: `${n} ${year}` }));
+};
 
-function GSTR3B() {
+function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
-  const initial = defaultFyRange();
-  const [from, setFrom] = useState(initial.from);
-  const [to, setTo] = useState(initial.to);
-  const [rows, setRows] = useState<VRow[]>([]);
+  const today = new Date();
+  const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+  const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
+  const [company, setCompany] = useState<CompanyMeta | null>(null);
+  const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
+
+  const period = useMemo(() => {
+    const r = monthRange(month);
+    return { ...r, fp: periodFP(r.from) };
+  }, [month]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("vouchers")
-      .select("voucher_type, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise")
-      .eq("company_id", activeCompanyId)
-      .in("voucher_type", ["sales", "purchase", "credit_note", "debit_note"])
-      .gte("voucher_date", from)
-      .lte("voucher_date", to)
-      .then(({ data }) => setRows((data || []) as VRow[]));
-  }, [activeCompanyId, from, to]);
+    (async () => setCompany(await fetchCompanyMeta(activeCompanyId)))();
+  }, [activeCompanyId]);
 
-  const sumByType = (t: string) => rows
-    .filter((x) => x.voucher_type === t)
-    .reduce((s, x) => ({
-      sub: s.sub + x.subtotal_paise,
-      cgst: s.cgst + x.cgst_paise,
-      sgst: s.sgst + x.sgst_paise,
-      igst: s.igst + x.igst_paise,
-    }), { sub: 0, cgst: 0, sgst: 0, igst: 0 });
+  useEffect(() => {
+    if (!activeCompanyId || !company) return;
+    (async () => {
+      const [sales, purchases, creditNotes, debitNotes] = await Promise.all([
+        fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
+        fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
+        fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
+        fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
+      ]);
+      setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes }));
+    })();
+  }, [activeCompanyId, company, period.from, period.to, period.fp]);
 
-  const sales = sumByType("sales");
-  const cn = sumByType("credit_note");
-  const purchase = sumByType("purchase");
-  const dn = sumByType("debit_note");
-
-  // Output tax = sales - credit notes (returns reduce output)
-  const out = {
-    sub: sales.sub - cn.sub,
-    cgst: sales.cgst - cn.cgst,
-    sgst: sales.sgst - cn.sgst,
-    igst: sales.igst - cn.igst,
-  };
-  // Input tax = purchase - debit notes
-  const inp = {
-    sub: purchase.sub - dn.sub,
-    cgst: purchase.cgst - dn.cgst,
-    sgst: purchase.sgst - dn.sgst,
-    igst: purchase.igst - dn.igst,
-  };
-  const net = {
-    cgst: out.cgst - inp.cgst,
-    sgst: out.sgst - inp.sgst,
-    igst: out.igst - inp.igst,
-  };
-  const totalPayable = net.cgst + net.sgst + net.igst;
-
-  const body: (string | number)[][] = [
-    ["", "Taxable Value", "CGST", "SGST", "IGST"],
-    ["Outward (Sales − Credit Notes)", (out.sub/100).toFixed(2), (out.cgst/100).toFixed(2), (out.sgst/100).toFixed(2), (out.igst/100).toFixed(2)],
-    ["Inward / ITC (Purchase − Debit Notes)", (inp.sub/100).toFixed(2), (inp.cgst/100).toFixed(2), (inp.sgst/100).toFixed(2), (inp.igst/100).toFixed(2)],
-    ["Net GST Payable", "", (net.cgst/100).toFixed(2), (net.sgst/100).toFixed(2), (net.igst/100).toFixed(2)],
-    ["Total Payable", "", "", "", (totalPayable/100).toFixed(2)],
-  ];
+  const fileBase = `GSTR3B_${company?.gstin || "GSTIN"}_${period.fp}`;
 
   return (
     <div className="space-y-3">
       <Card>
-        <CardContent className="p-3">
-          <ReportToolbar
-            from={from}
-            to={to}
-            onFrom={setFrom}
-            onTo={setTo}
-            onExportCsv={() => downloadCsv(`gstr3b-${from}_to_${to}.csv`, body)}
-            onExportXlsx={() => downloadXlsx(`gstr3b-${from}_to_${to}.xlsx`, [{ name: "GSTR-3B", rows: body }])}
-            onExportPdf={() =>
-              downloadPdfTable({
-                title: "GSTR-3B Summary",
-                subtitle: `${from} to ${to}`,
-                head: [["", "Taxable", "CGST", "SGST", "IGST"]],
-                body: [
-                  ["Outward (Sales − Credit Notes)", r(out.sub).toFixed(2), r(out.cgst).toFixed(2), r(out.sgst).toFixed(2), r(out.igst).toFixed(2)],
-                  ["Inward / ITC (Purchase − Debit Notes)", r(inp.sub).toFixed(2), r(inp.cgst).toFixed(2), r(inp.sgst).toFixed(2), r(inp.igst).toFixed(2)],
-                  ["Net GST Payable", "", r(net.cgst).toFixed(2), r(net.sgst).toFixed(2), r(net.igst).toFixed(2)],
-                ],
-                foot: [["Total Payable", "", "", "", r(totalPayable).toFixed(2)]],
-                fileName: `gstr3b-${from}_to_${to}.pdf`,
-                rightAlignCols: [1, 2, 3, 4],
-              })
-            }
-            onPrint={() => window.print()}
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead></TableHead>
-                <TableHead className="text-right">Taxable</TableHead>
-                <TableHead className="text-right">CGST</TableHead>
-                <TableHead className="text-right">SGST</TableHead>
-                <TableHead className="text-right">IGST</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>Outward Supplies (Sales − Credit Notes)</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(out.sub)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(out.cgst)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(out.sgst)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(out.igst)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Input Tax Credit (Purchase − Debit Notes)</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(inp.sub)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(inp.cgst)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(inp.sgst)}</TableCell>
-                <TableCell className="text-right font-mono">{formatINR(inp.igst)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-semibold">Net GST Payable</TableCell>
-                <TableCell></TableCell>
-                <TableCell className={`text-right font-mono font-semibold ${net.cgst < 0 ? "text-primary" : ""}`}>{formatINR(net.cgst)}</TableCell>
-                <TableCell className={`text-right font-mono font-semibold ${net.sgst < 0 ? "text-primary" : ""}`}>{formatINR(net.sgst)}</TableCell>
-                <TableCell className={`text-right font-mono font-semibold ${net.igst < 0 ? "text-primary" : ""}`}>{formatINR(net.igst)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-semibold">Total Payable</TableCell>
-                <TableCell colSpan={3}></TableCell>
-                <TableCell className={`text-right font-mono font-semibold ${totalPayable < 0 ? "text-primary" : ""}`}>{formatINR(totalPayable)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-          {totalPayable < 0 && (
-            <div className="border-t bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
-              Negative net = Input Tax Credit exceeds Output Tax → carry forward as ITC.
+        <CardContent className="p-3 print:hidden">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Return period</Label>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" disabled={!built}
+                onClick={() => built && downloadXlsx(`${fileBase}.xlsx`, gstr3bToXlsxSheets(built))}>
+                <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel Summary
+              </Button>
+              <Button variant="outline" size="sm" disabled={!built}
+                onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
+                <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => window.print()}>
+                <Printer className="mr-1 h-4 w-4" /> Print
+              </Button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Period: <strong>{period.from}</strong> to <strong>{period.to}</strong> · FP <code>{period.fp}</code></p>
         </CardContent>
       </Card>
+
+      {built && (
+        <>
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Nature of Supplies</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">Cess</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  <Sup row={["(a) Outward taxable (other than zero rated, nil rated, exempted)", built.sup_details.osup_det]} />
+                  <Sup row={["(b) Outward zero-rated", built.sup_details.osup_zero]} />
+                  <Sup row={["(c) Other outward (nil/exempt)", built.sup_details.osup_nil_exmp]} />
+                  <Sup row={["(d) Inward — reverse charge", built.sup_details.isup_rev]} />
+                  <Sup row={["(e) Non-GST outward", built.sup_details.osup_nongst]} />
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">3.2 Inter-state to Unregistered (from 3.1(a))</div>
+              {built.inter_sup.unreg_details.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-muted-foreground">No inter-state B2C supplies in this period.</div>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>POS</TableHead>
+                    <TableHead className="text-right">Taxable</TableHead>
+                    <TableHead className="text-right">IGST</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {built.inter_sup.unreg_details.map((p) => (
+                      <TableRow key={p.pos}>
+                        <TableCell className="font-mono">{p.pos}</TableCell>
+                        <TableCell className="text-right font-mono">{moneyR(p.txval)}</TableCell>
+                        <TableCell className="text-right font-mono">{moneyR(p.iamt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">4. Eligible ITC</div>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Details</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>(A) ITC Available — All other ITC</TableCell>
+                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].iamt)}</TableCell>
+                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].camt)}</TableCell>
+                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].samt)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">(C) Net ITC Available</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.iamt)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.camt)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.samt)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">6.1 Payment of Tax</div>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Tax Payable</TableHead>
+                  <TableHead className="text-right">Net cash payable</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  <TableRow><TableCell>Integrated Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.iamt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.iamt_payable)}</TableCell></TableRow>
+                  <TableRow><TableCell>Central Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.camt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.camt_payable)}</TableCell></TableRow>
+                  <TableRow><TableCell>State/UT Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.samt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.samt_payable)}</TableCell></TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
+  );
+}
+
+function moneyR(v: number) { return formatINR(Math.round(v * 100)); }
+
+function Sup({ row }: { row: [string, { txval: number; iamt: number; camt: number; samt: number; csamt: number }] }) {
+  const [label, s] = row;
+  return (
+    <TableRow>
+      <TableCell>{label}</TableCell>
+      <TableCell className="text-right font-mono">{moneyR(s.txval)}</TableCell>
+      <TableCell className="text-right font-mono">{moneyR(s.iamt)}</TableCell>
+      <TableCell className="text-right font-mono">{moneyR(s.camt)}</TableCell>
+      <TableCell className="text-right font-mono">{moneyR(s.samt)}</TableCell>
+      <TableCell className="text-right font-mono">{moneyR(s.csamt)}</TableCell>
+    </TableRow>
   );
 }
