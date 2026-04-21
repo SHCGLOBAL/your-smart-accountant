@@ -10,6 +10,7 @@ export const Route = createFileRoute("/app/reports")({
 const TABS = [
   { to: "/app/reports/day-book", label: "Day Book" },
   { to: "/app/reports/ledger", label: "Ledger" },
+  { to: "/app/reports/group-ledger", label: "Group Ledger (B/S & P&L)" },
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
   { to: "/app/reports/profit-loss", label: "P&L" },
   { to: "/app/reports/balance-sheet", label: "Balance Sheet" },
