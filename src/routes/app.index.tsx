@@ -234,7 +234,7 @@ function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
                 <XAxis dataKey="month" fontSize={11} />
                 <YAxis fontSize={11} tickFormatter={(v) => v >= 100000 ? `${(v / 100000).toFixed(1)}L` : `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => `₹ ${v.toLocaleString("en-IN")}`} />
+                <Tooltip formatter={(v) => `₹ ${Number(v).toLocaleString("en-IN")}`} />
                 <Legend />
                 <Bar dataKey="sales" name="Sales" fill="oklch(0.55 0.18 265)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="purchase" name="Purchase" fill="oklch(0.7 0.16 60)" radius={[4, 4, 0, 0]} />
