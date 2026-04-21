@@ -135,6 +135,13 @@ export function EwayBillPrepDialog({
         setTransporterId(ex.transporter_id ?? "");
         setDistance(ex.distance_km ? String(ex.distance_km) : "");
       }
+      // Check Setu credentials status (admin only — gracefully ignore failure)
+      try {
+        const s = await getSetuStatus({ data: { companyId: voucher.company_id } });
+        setSetu(s);
+      } catch {
+        setSetu({ configured: false, einvoice_enabled: false, ewaybill_enabled: false, environment: "sandbox" });
+      }
     })();
   }, [open, voucher]);
 
