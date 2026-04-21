@@ -11,11 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Download, Truck, FileCode2 } from "lucide-react";
+import { Copy, Download, Truck, FileCode2, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { upsertEinvoice, ddmmyyyy } from "@/lib/einvoice";
 import { formatINR } from "@/lib/money";
 import { INDIAN_STATES } from "@/lib/constants";
+import { generateIrn, generateEwb, getSetuStatus } from "@/utils/setu.functions";
 import { toast } from "sonner";
 
 interface VoucherSnapshot {
@@ -97,6 +98,9 @@ export function EwayBillPrepDialog({
   const [ewbNo, setEwbNo] = useState("");
   const [ewbValid, setEwbValid] = useState("");
   const [saving, setSaving] = useState(false);
+  const [genIrn, setGenIrn] = useState(false);
+  const [genEwb, setGenEwb] = useState(false);
+  const [setu, setSetu] = useState<{ configured: boolean; einvoice_enabled: boolean; ewaybill_enabled: boolean; environment: string } | null>(null);
   const [company, setCompany] = useState<{ name: string; gstin: string | null; address: string | null; state_code: string | null; pin?: string | null } | null>(null);
   const [party, setParty] = useState<{ name: string; gstin: string | null; address: string | null; state_code: string | null } | null>(null);
 
@@ -130,6 +134,13 @@ export function EwayBillPrepDialog({
         setTransporterName(ex.transporter_name ?? "");
         setTransporterId(ex.transporter_id ?? "");
         setDistance(ex.distance_km ? String(ex.distance_km) : "");
+      }
+      // Check Setu credentials status (admin only — gracefully ignore failure)
+      try {
+        const s = await getSetuStatus({ data: { companyId: voucher.company_id } });
+        setSetu(s);
+      } catch {
+        setSetu({ configured: false, einvoice_enabled: false, ewaybill_enabled: false, environment: "sandbox" });
       }
     })();
   }, [open, voucher]);
@@ -222,6 +233,45 @@ export function EwayBillPrepDialog({
     }
   }
 
+  async function autoGenerateIrn() {
+    if (!voucher || !irpPayload) return;
+    setGenIrn(true);
+    try {
+      const res = await generateIrn({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: irpPayload as Record<string, unknown> } });
+      if (res.success) {
+        setIrn(res.irn ?? "");
+        setAckNo(res.ackNo ?? "");
+        toast.success(`IRN generated: ${res.irn?.slice(0, 12)}…`);
+        onSaved?.();
+      } else {
+        toast.error(res.error ?? "Failed to generate IRN");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "IRN generation failed");
+    } finally {
+      setGenIrn(false);
+    }
+  }
+
+  async function autoGenerateEwb() {
+    if (!voucher || !ewbPayload) return;
+    setGenEwb(true);
+    try {
+      const res = await generateEwb({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: ewbPayload as Record<string, unknown> } });
+      if (res.success) {
+        setEwbNo(res.ewbNo ?? "");
+        if (res.ewbValidUntil) setEwbValid(new Date(res.ewbValidUntil).toISOString().slice(0, 16));
+        toast.success(`E-Way Bill generated: ${res.ewbNo}`);
+        onSaved?.();
+      } else {
+        toast.error(res.error ?? "Failed to generate E-Way Bill");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "EWB generation failed");
+    } finally {
+      setGenEwb(false);
+    }
+  }
   function copyJson(data: unknown, label: string) {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2));
     toast.success(`${label} JSON copied`);
@@ -375,6 +425,26 @@ export function EwayBillPrepDialog({
           </TabsContent>
         </Tabs>
 
+        {setu && (
+          <div className="rounded border p-3 bg-primary/5 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold flex items-center gap-1"><Zap className="h-3 w-3" /> Setu API ({setu.environment})</span>
+              <Badge variant={setu.configured ? "default" : "outline"}>{setu.configured ? "Connected" : "Not configured"}</Badge>
+            </div>
+            {setu.configured ? (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="default" disabled={!setu.einvoice_enabled || genIrn || !irpPayload} onClick={autoGenerateIrn}>
+                  <Zap className="h-3 w-3 mr-1" />{genIrn ? "Generating IRN…" : "Generate IRN via Setu"}
+                </Button>
+                <Button size="sm" variant="default" disabled={!setu.ewaybill_enabled || genEwb || !ewbPayload} onClick={autoGenerateEwb}>
+                  <Zap className="h-3 w-3 mr-1" />{genEwb ? "Generating EWB…" : "Generate E-Way Bill via Setu"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">Add Setu API credentials in <strong>Settings → GST APIs</strong> (admin only) to enable one-click IRN / EWB generation.</p>
+            )}
+          </div>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save details"}</Button>

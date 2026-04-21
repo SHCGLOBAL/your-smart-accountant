@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Download, Moon, Save, Sun, UserPlus } from "lucide-react";
+import { Download, Moon, Save, Sun, UserPlus, KeyRound } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useTheme } from "@/lib/theme-context";
+import { getSetuStatus, saveSetuCredentials } from "@/utils/setu.functions";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -55,6 +56,15 @@ function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "accountant" | "viewer">("accountant");
   const [exporting, setExporting] = useState(false);
+  // Setu / GST API credentials
+  const [setuEnv, setSetuEnv] = useState<"sandbox" | "production">("sandbox");
+  const [setuClientId, setSetuClientId] = useState("");
+  const [setuClientSecret, setSetuClientSecret] = useState("");
+  const [gstnUsername, setGstnUsername] = useState("");
+  const [eiEnabled, setEiEnabled] = useState(false);
+  const [ewbEnabled, setEwbEnabled] = useState(false);
+  const [setuStatus, setSetuStatus] = useState<{ configured: boolean } | null>(null);
+  const [savingSetu, setSavingSetu] = useState(false);
 
   const isAdmin = activeMembership?.role === "admin";
 
@@ -88,8 +98,50 @@ function SettingsPage() {
           })),
         );
       }
+
+      // Load Setu status (admin only)
+      if (isAdmin) {
+        try {
+          const s = await getSetuStatus({ data: { companyId: activeCompanyId } });
+          setSetuStatus({ configured: s.configured });
+          setSetuEnv((s.environment as "sandbox" | "production") || "sandbox");
+          setEiEnabled(s.einvoice_enabled);
+          setEwbEnabled(s.ewaybill_enabled);
+          setGstnUsername(s.gstn_username ?? "");
+        } catch { /* not admin or no row yet */ }
+      }
     })();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isAdmin]);
+
+  const saveSetu = async () => {
+    if (!activeCompanyId) return;
+    if (!setuClientId || !setuClientSecret) {
+      toast.error("Setu Client ID and Secret are required");
+      return;
+    }
+    setSavingSetu(true);
+    try {
+      const res = await saveSetuCredentials({
+        data: {
+          companyId: activeCompanyId,
+          environment: setuEnv,
+          setuClientId, setuClientSecret,
+          gstnUsername: gstnUsername || undefined,
+          einvoiceEnabled: eiEnabled,
+          ewaybillEnabled: ewbEnabled,
+        },
+      });
+      if (res.success) {
+        toast.success("Setu credentials saved");
+        setSetuClientSecret(""); // clear from memory
+        setSetuStatus({ configured: true });
+      } else {
+        toast.error(res.error ?? "Failed to save");
+      }
+    } finally {
+      setSavingSetu(false);
+    }
+  };
 
   const saveSettings = async () => {
     if (!activeCompanyId) return;
@@ -320,6 +372,56 @@ function SettingsPage() {
           </p>
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <KeyRound className="h-4 w-4" /> GST APIs (Setu) {setuStatus?.configured && <span className="text-xs font-normal text-primary">● Connected</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Connect your Setu GSP account for one-click E-Invoice (IRN) and E-Way Bill generation. Sign up at <a href="https://setu.co/products/gst" target="_blank" rel="noreferrer" className="underline">setu.co/products/gst</a> and copy your Client ID & Secret. Credentials are stored encrypted and only used server-side.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Environment</Label>
+                <Select value={setuEnv} onValueChange={(v) => setSetuEnv(v as "sandbox" | "production")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sandbox">Sandbox (UAT — for testing)</SelectItem>
+                    <SelectItem value="production">Production (live filings)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>GSTN Portal Username (optional)</Label>
+                <Input value={gstnUsername} onChange={(e) => setGstnUsername(e.target.value)} placeholder="GST portal user ID" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Setu Client ID</Label>
+                <Input value={setuClientId} onChange={(e) => setSetuClientId(e.target.value)} placeholder="From Setu dashboard" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Setu Client Secret</Label>
+                <Input type="password" value={setuClientSecret} onChange={(e) => setSetuClientSecret(e.target.value)} placeholder={setuStatus?.configured ? "•••• (leave blank to keep)" : "From Setu dashboard"} />
+              </div>
+              <div className="flex items-center justify-between rounded border p-3">
+                <Label>Enable E-Invoice (IRN)</Label>
+                <Switch checked={eiEnabled} onCheckedChange={setEiEnabled} />
+              </div>
+              <div className="flex items-center justify-between rounded border p-3">
+                <Label>Enable E-Way Bill</Label>
+                <Switch checked={ewbEnabled} onCheckedChange={setEwbEnabled} />
+              </div>
+            </div>
+            <Button onClick={saveSetu} disabled={savingSetu}>
+              <Save className="mr-2 h-4 w-4" /> {savingSetu ? "Saving…" : "Save GST API credentials"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle className="text-base">Data backup</CardTitle></CardHeader>
