@@ -53,11 +53,8 @@ interface LedgerOpt {
 }
 
 function HousekeepingPage() {
-  const { activeCompanyId, currentRole } = useCompany() as {
-    activeCompanyId: string | null;
-    currentRole?: string | null;
-  };
-  const isAdmin = currentRole === "admin";
+  const { activeCompanyId, activeMembership } = useCompany();
+  const isAdmin = activeMembership?.role === "admin";
 
   return (
     <div className="space-y-4">
@@ -75,9 +72,9 @@ function HousekeepingPage() {
       </div>
 
       {!isAdmin && (
-        <Card className="border-amber-500/50 bg-amber-500/5">
+        <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex items-center gap-2 p-3 text-sm">
-            <ShieldAlert className="h-4 w-4 text-amber-600" />
+            <ShieldAlert className="h-4 w-4 text-destructive" />
             Most housekeeping actions require <strong>Admin</strong> role.
           </CardContent>
         </Card>
