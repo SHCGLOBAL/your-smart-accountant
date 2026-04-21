@@ -52,6 +52,9 @@ const QUICK = [
   { type: "credit_note", label: "Credit Note", hotkey: "Alt+C", icon: FileMinus, to: "/app/vouchers/new/credit_note" },
   { type: "debit_note", label: "Debit Note", hotkey: "Alt+D", icon: FilePlus, to: "/app/vouchers/new/debit_note" },
   { type: "journal", label: "Journal / Contra", hotkey: "Alt+J", icon: BookOpen, to: "/app/vouchers/new/journal" },
+  { type: "sales_order", label: "Sales Order", hotkey: "Alt+O", icon: ShoppingCart, to: "/app/vouchers/new/sales_order" },
+  { type: "delivery_note", label: "Delivery Challan", hotkey: "Alt+L", icon: ShoppingBag, to: "/app/vouchers/new/delivery_note" },
+  { type: "quotation", label: "Quotation", hotkey: "Alt+Q", icon: FilePlus, to: "/app/vouchers/new/quotation" },
 ] as const;
 
 interface VoucherRow {
@@ -65,7 +68,7 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
-const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note"] as const;
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation"] as const;
 
 function VouchersHub() {
   const location = useLocation();

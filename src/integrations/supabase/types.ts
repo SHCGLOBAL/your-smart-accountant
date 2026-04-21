@@ -17,6 +17,7 @@ export type Database = {
       bank_statement_lines: {
         Row: {
           balance_paise: number | null
+          cleared_date: string | null
           company_id: string
           created_at: string
           credit_paise: number
@@ -24,6 +25,7 @@ export type Database = {
           description: string | null
           id: string
           match_status: string
+          matched_entry_id: string | null
           matched_voucher_id: string | null
           reference: string | null
           statement_id: string
@@ -31,6 +33,7 @@ export type Database = {
         }
         Insert: {
           balance_paise?: number | null
+          cleared_date?: string | null
           company_id: string
           created_at?: string
           credit_paise?: number
@@ -38,6 +41,7 @@ export type Database = {
           description?: string | null
           id?: string
           match_status?: string
+          matched_entry_id?: string | null
           matched_voucher_id?: string | null
           reference?: string | null
           statement_id: string
@@ -45,6 +49,7 @@ export type Database = {
         }
         Update: {
           balance_paise?: number | null
+          cleared_date?: string | null
           company_id?: string
           created_at?: string
           credit_paise?: number
@@ -52,6 +57,7 @@ export type Database = {
           description?: string | null
           id?: string
           match_status?: string
+          matched_entry_id?: string | null
           matched_voucher_id?: string | null
           reference?: string | null
           statement_id?: string
@@ -63,6 +69,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_lines_matched_entry_id_fkey"
+            columns: ["matched_entry_id"]
+            isOneToOne: false
+            referencedRelation: "voucher_entries"
             referencedColumns: ["id"]
           },
           {
@@ -131,6 +144,65 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_allocations: {
+        Row: {
+          amount_paise: number
+          company_id: string
+          created_at: string
+          id: string
+          invoice_voucher_id: string
+          ledger_id: string
+          payment_voucher_id: string
+        }
+        Insert: {
+          amount_paise?: number
+          company_id: string
+          created_at?: string
+          id?: string
+          invoice_voucher_id: string
+          ledger_id: string
+          payment_voucher_id: string
+        }
+        Update: {
+          amount_paise?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          invoice_voucher_id?: string
+          ledger_id?: string
+          payment_voucher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_allocations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_allocations_invoice_voucher_id_fkey"
+            columns: ["invoice_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_allocations_ledger_id_fkey"
+            columns: ["ledger_id"]
+            isOneToOne: false
+            referencedRelation: "ledgers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bill_allocations_payment_voucher_id_fkey"
+            columns: ["payment_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
             referencedColumns: ["id"]
           },
         ]
@@ -483,6 +555,129 @@ export type Database = {
           },
         ]
       }
+      gstr2b_imports: {
+        Row: {
+          company_id: string
+          file_name: string | null
+          id: string
+          imported_at: string
+          imported_by: string
+          matched_lines: number
+          period: string
+          source: string
+          total_lines: number
+        }
+        Insert: {
+          company_id: string
+          file_name?: string | null
+          id?: string
+          imported_at?: string
+          imported_by: string
+          matched_lines?: number
+          period: string
+          source?: string
+          total_lines?: number
+        }
+        Update: {
+          company_id?: string
+          file_name?: string | null
+          id?: string
+          imported_at?: string
+          imported_by?: string
+          matched_lines?: number
+          period?: string
+          source?: string
+          total_lines?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gstr2b_imports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gstr2b_lines: {
+        Row: {
+          cess_paise: number
+          cgst_paise: number
+          company_id: string
+          created_at: string
+          id: string
+          igst_paise: number
+          import_id: string
+          invoice_date: string | null
+          invoice_no: string
+          invoice_value_paise: number
+          match_status: string
+          matched_voucher_id: string | null
+          sgst_paise: number
+          supplier_gstin: string
+          supplier_name: string | null
+          taxable_paise: number
+        }
+        Insert: {
+          cess_paise?: number
+          cgst_paise?: number
+          company_id: string
+          created_at?: string
+          id?: string
+          igst_paise?: number
+          import_id: string
+          invoice_date?: string | null
+          invoice_no: string
+          invoice_value_paise?: number
+          match_status?: string
+          matched_voucher_id?: string | null
+          sgst_paise?: number
+          supplier_gstin: string
+          supplier_name?: string | null
+          taxable_paise?: number
+        }
+        Update: {
+          cess_paise?: number
+          cgst_paise?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          igst_paise?: number
+          import_id?: string
+          invoice_date?: string | null
+          invoice_no?: string
+          invoice_value_paise?: number
+          match_status?: string
+          matched_voucher_id?: string | null
+          sgst_paise?: number
+          supplier_gstin?: string
+          supplier_name?: string | null
+          taxable_paise?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gstr2b_lines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gstr2b_lines_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "gstr2b_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gstr2b_lines_matched_voucher_id_fkey"
+            columns: ["matched_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           company_id: string
@@ -782,6 +977,7 @@ export type Database = {
       }
       voucher_entries: {
         Row: {
+          cleared_date: string | null
           created_at: string
           credit_paise: number
           debit_paise: number
@@ -792,6 +988,7 @@ export type Database = {
           voucher_id: string
         }
         Insert: {
+          cleared_date?: string | null
           created_at?: string
           credit_paise?: number
           debit_paise?: number
@@ -802,6 +999,7 @@ export type Database = {
           voucher_id: string
         }
         Update: {
+          cleared_date?: string | null
           created_at?: string
           credit_paise?: number
           debit_paise?: number
@@ -929,12 +1127,15 @@ export type Database = {
       vouchers: {
         Row: {
           cgst_paise: number
+          chain_status: string
           company_id: string
           created_at: string
           created_by: string
+          due_date: string | null
           id: string
           igst_paise: number
           is_interstate: boolean
+          linked_voucher_ids: Json
           narration: string | null
           original_voucher_id: string | null
           party_ledger_id: string | null
@@ -954,12 +1155,15 @@ export type Database = {
         }
         Insert: {
           cgst_paise?: number
+          chain_status?: string
           company_id: string
           created_at?: string
           created_by: string
+          due_date?: string | null
           id?: string
           igst_paise?: number
           is_interstate?: boolean
+          linked_voucher_ids?: Json
           narration?: string | null
           original_voucher_id?: string | null
           party_ledger_id?: string | null
@@ -979,12 +1183,15 @@ export type Database = {
         }
         Update: {
           cgst_paise?: number
+          chain_status?: string
           company_id?: string
           created_at?: string
           created_by?: string
+          due_date?: string | null
           id?: string
           igst_paise?: number
           is_interstate?: boolean
+          linked_voucher_ids?: Json
           narration?: string | null
           original_voucher_id?: string | null
           party_ledger_id?: string | null

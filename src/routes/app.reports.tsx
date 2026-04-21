@@ -13,12 +13,16 @@ const TABS = [
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
   { to: "/app/reports/profit-loss", label: "P&L" },
   { to: "/app/reports/balance-sheet", label: "Balance Sheet" },
+  { to: "/app/reports/outstanding", label: "Outstanding (Bill-wise)" },
+  { to: "/app/reports/ageing", label: "Ageing" },
   { to: "/app/reports/receivables", label: "Receivables" },
   { to: "/app/reports/payables", label: "Payables" },
   { to: "/app/reports/sales-register", label: "Sales Register" },
   { to: "/app/reports/purchase-register", label: "Purchase Register" },
   { to: "/app/reports/gstr1", label: "GSTR-1" },
   { to: "/app/reports/gstr3b", label: "GSTR-3B" },
+  { to: "/app/reports/gstr2b", label: "GSTR-2B Recon" },
+  { to: "/app/reports/brs", label: "Bank Recon (BRS)" },
   { to: "/app/reports/stock-summary", label: "Stock Summary" },
 ] as const;
 

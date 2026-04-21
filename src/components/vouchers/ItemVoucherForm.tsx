@@ -32,7 +32,7 @@ import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/g
 import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 
-type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note";
+type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
 interface LedgerOpt {
   id: string;
@@ -86,6 +86,21 @@ const TITLES: Record<VoucherType, { title: string; partyLabel: string; partyType
     title: "Debit Note (Purchase Return)",
     partyLabel: "Supplier",
     partyTypes: ["sundry_creditor"],
+  },
+  sales_order: {
+    title: "Sales Order",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  delivery_note: {
+    title: "Delivery Challan",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  quotation: {
+    title: "Quotation",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
   },
 };
 
@@ -277,30 +292,34 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (iErr) throw iErr;
 
       // 4. Auto-post double-entry ledger postings so reports balance.
-      const postings = await buildItemVoucherPostings(
-        activeCompanyId,
-        voucherType,
-        partyId,
-        totals,
-      );
-      const entryRows = postings.map((p) => ({
-        voucher_id: vData.id,
-        ledger_id: p.ledger_id,
-        debit_paise: p.debit_paise,
-        credit_paise: p.credit_paise,
-        line_no: p.line_no,
-      }));
-      const { error: eErr } = await supabase
-        .from("voucher_entries")
-        .insert(entryRows);
-      if (eErr) throw eErr;
+      // Sales orders, delivery challans, and quotations are non-financial — no postings.
+      const skipPostings = voucherType === "sales_order" || voucherType === "delivery_note" || voucherType === "quotation";
+      if (!skipPostings) {
+        const postings = await buildItemVoucherPostings(
+          activeCompanyId,
+          voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
+          partyId,
+          totals,
+        );
+        const entryRows = postings.map((p) => ({
+          voucher_id: vData.id,
+          ledger_id: p.ledger_id,
+          debit_paise: p.debit_paise,
+          credit_paise: p.credit_paise,
+          line_no: p.line_no,
+        }));
+        const { error: eErr } = await supabase
+          .from("voucher_entries")
+          .insert(entryRows);
+        if (eErr) throw eErr;
+      }
 
       toast.success(`${cfg.title} ${numData} saved`);
 
-      // Auto-prompt E-Way Bill / E-Invoice for sales-side vouchers above ₹50,000
-      // (interstate, or intra-state where goods cross city limits — user decides).
-      const isSalesSide = voucherType === "sales" || voucherType === "credit_note";
-      if (isSalesSide && totals.total_paise > 5_000_000) {
+      // Auto-prompt E-Way Bill / E-Invoice for any goods-movement voucher above ₹50,000
+      // (sales/purchase + their notes — interstate, or intra-state beyond city limits).
+      const movesGoods = voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note";
+      if (movesGoods && totals.total_paise > 5_000_000) {
         setEwbDlg({
           open: true,
           voucher: {
@@ -624,10 +643,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
-            {(voucherType === "sales" || voucherType === "credit_note") && totals.total_paise > 5_000_000 && (
+            {(voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note") && totals.total_paise > 5_000_000 && (
               <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
                 <Truck className="inline h-3 w-3 mr-1" />
-                Invoice value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
+                Voucher value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
               </div>
             )}
           </CardContent>
