@@ -7,6 +7,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { Button } from "@/components/ui/button";
 import {
