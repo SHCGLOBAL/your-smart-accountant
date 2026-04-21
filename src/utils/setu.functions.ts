@@ -280,8 +280,13 @@ export const saveSetuCredentials = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    // RLS ensures only admin can write
-    const { error } = await supabase.from("gst_api_credentials").upsert(
+    // RLS ensures only admin can write. Cast for new table not yet in generated types.
+    const sb = supabase as unknown as {
+      from: (t: string) => {
+        upsert: (v: Record<string, unknown>, o: { onConflict: string }) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+    const { error } = await sb.from("gst_api_credentials").upsert(
       {
         company_id: data.companyId,
         provider: "setu",
