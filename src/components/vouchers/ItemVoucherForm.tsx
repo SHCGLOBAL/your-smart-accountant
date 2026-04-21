@@ -382,7 +382,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       </div>
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Date</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
