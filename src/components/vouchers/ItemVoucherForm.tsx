@@ -301,7 +301,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     } finally {
       setSaving(false);
     }
-  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, navigate, cfg]);
+  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, navigate, cfg]);
 
   // Hotkeys: Ctrl+S save, Esc cancel, F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
