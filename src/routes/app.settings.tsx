@@ -28,6 +28,7 @@ interface Settings {
   invoice_terms: string | null;
   show_bank_details: boolean;
   show_signatory: boolean;
+  gst_filing_frequency: "monthly" | "quarterly";
 }
 
 interface Member {
@@ -47,6 +48,7 @@ function SettingsPage() {
     invoice_terms: "",
     show_bank_details: true,
     show_signatory: true,
+    gst_filing_frequency: "monthly",
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -61,7 +63,7 @@ function SettingsPage() {
     (async () => {
       const { data } = await supabase
         .from("company_settings")
-        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory")
+        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency")
         .eq("company_id", activeCompanyId)
         .maybeSingle();
       if (data) setSettings(data as Settings);
@@ -236,6 +238,17 @@ function SettingsPage() {
             <div className="flex items-center justify-between rounded border p-3">
               <Label>Show signatory section</Label>
               <Switch checked={settings.show_signatory} onCheckedChange={(v) => setSettings({ ...settings, show_signatory: v })} />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>GST filing frequency</Label>
+              <Select value={settings.gst_filing_frequency} onValueChange={(v) => setSettings({ ...settings, gst_filing_frequency: v as "monthly" | "quarterly" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Monthly (turnover &gt; ₹5 Cr or opted-out of QRMP)</SelectItem>
+                  <SelectItem value="quarterly">Quarterly (QRMP — turnover up to ₹5 Cr)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Used by GSTR-1 / IFF and GSTR-3B reports.</p>
             </div>
           </div>
           <Button onClick={saveSettings} disabled={savingSettings || !isAdmin}>
