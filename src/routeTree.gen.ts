@@ -31,16 +31,23 @@ import { Route as AppReportsReceivablesRouteImport } from './routes/app.reports.
 import { Route as AppReportsPurchaseRegisterRouteImport } from './routes/app.reports.purchase-register'
 import { Route as AppReportsProfitLossRouteImport } from './routes/app.reports.profit-loss'
 import { Route as AppReportsPayablesRouteImport } from './routes/app.reports.payables'
+import { Route as AppReportsOutstandingRouteImport } from './routes/app.reports.outstanding'
 import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
 import { Route as AppReportsGstr3bRouteImport } from './routes/app.reports.gstr3b'
+import { Route as AppReportsGstr2bRouteImport } from './routes/app.reports.gstr2b'
 import { Route as AppReportsGstr1RouteImport } from './routes/app.reports.gstr1'
 import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
+import { Route as AppReportsBrsRouteImport } from './routes/app.reports.brs'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
+import { Route as AppReportsAgeingRouteImport } from './routes/app.reports.ageing'
+import { Route as AppVouchersNewSales_orderRouteImport } from './routes/app.vouchers.new.sales_order'
 import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.new.sales'
 import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers.new.receipt'
+import { Route as AppVouchersNewQuotationRouteImport } from './routes/app.vouchers.new.quotation'
 import { Route as AppVouchersNewPurchaseRouteImport } from './routes/app.vouchers.new.purchase'
 import { Route as AppVouchersNewPaymentRouteImport } from './routes/app.vouchers.new.payment'
 import { Route as AppVouchersNewJournalRouteImport } from './routes/app.vouchers.new.journal'
+import { Route as AppVouchersNewDelivery_noteRouteImport } from './routes/app.vouchers.new.delivery_note'
 import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
 import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouchers.new.credit_note'
 
@@ -155,6 +162,11 @@ const AppReportsPayablesRoute = AppReportsPayablesRouteImport.update({
   path: '/payables',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsOutstandingRoute = AppReportsOutstandingRouteImport.update({
+  id: '/outstanding',
+  path: '/outstanding',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
   id: '/ledger',
   path: '/ledger',
@@ -163,6 +175,11 @@ const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
 const AppReportsGstr3bRoute = AppReportsGstr3bRouteImport.update({
   id: '/gstr3b',
   path: '/gstr3b',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsGstr2bRoute = AppReportsGstr2bRouteImport.update({
+  id: '/gstr2b',
+  path: '/gstr2b',
   getParentRoute: () => AppReportsRoute,
 } as any)
 const AppReportsGstr1Route = AppReportsGstr1RouteImport.update({
@@ -175,11 +192,27 @@ const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
   path: '/day-book',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsBrsRoute = AppReportsBrsRouteImport.update({
+  id: '/brs',
+  path: '/brs',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsBalanceSheetRoute = AppReportsBalanceSheetRouteImport.update({
   id: '/balance-sheet',
   path: '/balance-sheet',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsAgeingRoute = AppReportsAgeingRouteImport.update({
+  id: '/ageing',
+  path: '/ageing',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppVouchersNewSales_orderRoute =
+  AppVouchersNewSales_orderRouteImport.update({
+    id: '/new/sales_order',
+    path: '/new/sales_order',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
 const AppVouchersNewSalesRoute = AppVouchersNewSalesRouteImport.update({
   id: '/new/sales',
   path: '/new/sales',
@@ -188,6 +221,11 @@ const AppVouchersNewSalesRoute = AppVouchersNewSalesRouteImport.update({
 const AppVouchersNewReceiptRoute = AppVouchersNewReceiptRouteImport.update({
   id: '/new/receipt',
   path: '/new/receipt',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewQuotationRoute = AppVouchersNewQuotationRouteImport.update({
+  id: '/new/quotation',
+  path: '/new/quotation',
   getParentRoute: () => AppVouchersRoute,
 } as any)
 const AppVouchersNewPurchaseRoute = AppVouchersNewPurchaseRouteImport.update({
@@ -205,6 +243,12 @@ const AppVouchersNewJournalRoute = AppVouchersNewJournalRouteImport.update({
   path: '/new/journal',
   getParentRoute: () => AppVouchersRoute,
 } as any)
+const AppVouchersNewDelivery_noteRoute =
+  AppVouchersNewDelivery_noteRouteImport.update({
+    id: '/new/delivery_note',
+    path: '/new/delivery_note',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
 const AppVouchersNewDebit_noteRoute =
   AppVouchersNewDebit_noteRouteImport.update({
     id: '/new/debit_note',
@@ -233,11 +277,15 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
@@ -248,11 +296,14 @@ export interface FileRoutesByFullPath {
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
   '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
+  '/app/vouchers/new/sales_order': typeof AppVouchersNewSales_orderRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -268,11 +319,15 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app': typeof AppIndexRoute
+  '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
@@ -283,11 +338,14 @@ export interface FileRoutesByTo {
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
   '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
+  '/app/vouchers/new/sales_order': typeof AppVouchersNewSales_orderRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -305,11 +363,15 @@ export interface FileRoutesById {
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
@@ -320,11 +382,14 @@ export interface FileRoutesById {
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
   '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
+  '/app/vouchers/new/sales_order': typeof AppVouchersNewSales_orderRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -343,11 +408,15 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
+    | '/app/reports/brs'
     | '/app/reports/day-book'
     | '/app/reports/gstr1'
+    | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/outstanding'
     | '/app/reports/payables'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
@@ -358,11 +427,14 @@ export interface FileRouteTypes {
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
     | '/app/vouchers/new/sales'
+    | '/app/vouchers/new/sales_order'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -378,11 +450,15 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app'
+    | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
+    | '/app/reports/brs'
     | '/app/reports/day-book'
     | '/app/reports/gstr1'
+    | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/outstanding'
     | '/app/reports/payables'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
@@ -393,11 +469,14 @@ export interface FileRouteTypes {
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
     | '/app/vouchers/new/sales'
+    | '/app/vouchers/new/sales_order'
   id:
     | '__root__'
     | '/'
@@ -414,11 +493,15 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
+    | '/app/reports/brs'
     | '/app/reports/day-book'
     | '/app/reports/gstr1'
+    | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/outstanding'
     | '/app/reports/payables'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
@@ -429,11 +512,14 @@ export interface FileRouteTypes {
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
     | '/app/vouchers/new/sales'
+    | '/app/vouchers/new/sales_order'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -599,6 +685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsPayablesRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/outstanding': {
+      id: '/app/reports/outstanding'
+      path: '/outstanding'
+      fullPath: '/app/reports/outstanding'
+      preLoaderRoute: typeof AppReportsOutstandingRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/ledger': {
       id: '/app/reports/ledger'
       path: '/ledger'
@@ -611,6 +704,13 @@ declare module '@tanstack/react-router' {
       path: '/gstr3b'
       fullPath: '/app/reports/gstr3b'
       preLoaderRoute: typeof AppReportsGstr3bRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/gstr2b': {
+      id: '/app/reports/gstr2b'
+      path: '/gstr2b'
+      fullPath: '/app/reports/gstr2b'
+      preLoaderRoute: typeof AppReportsGstr2bRouteImport
       parentRoute: typeof AppReportsRoute
     }
     '/app/reports/gstr1': {
@@ -627,12 +727,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsDayBookRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/brs': {
+      id: '/app/reports/brs'
+      path: '/brs'
+      fullPath: '/app/reports/brs'
+      preLoaderRoute: typeof AppReportsBrsRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/balance-sheet': {
       id: '/app/reports/balance-sheet'
       path: '/balance-sheet'
       fullPath: '/app/reports/balance-sheet'
       preLoaderRoute: typeof AppReportsBalanceSheetRouteImport
       parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/ageing': {
+      id: '/app/reports/ageing'
+      path: '/ageing'
+      fullPath: '/app/reports/ageing'
+      preLoaderRoute: typeof AppReportsAgeingRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/vouchers/new/sales_order': {
+      id: '/app/vouchers/new/sales_order'
+      path: '/new/sales_order'
+      fullPath: '/app/vouchers/new/sales_order'
+      preLoaderRoute: typeof AppVouchersNewSales_orderRouteImport
+      parentRoute: typeof AppVouchersRoute
     }
     '/app/vouchers/new/sales': {
       id: '/app/vouchers/new/sales'
@@ -646,6 +767,13 @@ declare module '@tanstack/react-router' {
       path: '/new/receipt'
       fullPath: '/app/vouchers/new/receipt'
       preLoaderRoute: typeof AppVouchersNewReceiptRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/quotation': {
+      id: '/app/vouchers/new/quotation'
+      path: '/new/quotation'
+      fullPath: '/app/vouchers/new/quotation'
+      preLoaderRoute: typeof AppVouchersNewQuotationRouteImport
       parentRoute: typeof AppVouchersRoute
     }
     '/app/vouchers/new/purchase': {
@@ -669,6 +797,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVouchersNewJournalRouteImport
       parentRoute: typeof AppVouchersRoute
     }
+    '/app/vouchers/new/delivery_note': {
+      id: '/app/vouchers/new/delivery_note'
+      path: '/new/delivery_note'
+      fullPath: '/app/vouchers/new/delivery_note'
+      preLoaderRoute: typeof AppVouchersNewDelivery_noteRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
     '/app/vouchers/new/debit_note': {
       id: '/app/vouchers/new/debit_note'
       path: '/new/debit_note'
@@ -687,11 +822,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppReportsRouteChildren {
+  AppReportsAgeingRoute: typeof AppReportsAgeingRoute
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
+  AppReportsBrsRoute: typeof AppReportsBrsRoute
   AppReportsDayBookRoute: typeof AppReportsDayBookRoute
   AppReportsGstr1Route: typeof AppReportsGstr1Route
+  AppReportsGstr2bRoute: typeof AppReportsGstr2bRoute
   AppReportsGstr3bRoute: typeof AppReportsGstr3bRoute
   AppReportsLedgerRoute: typeof AppReportsLedgerRoute
+  AppReportsOutstandingRoute: typeof AppReportsOutstandingRoute
   AppReportsPayablesRoute: typeof AppReportsPayablesRoute
   AppReportsProfitLossRoute: typeof AppReportsProfitLossRoute
   AppReportsPurchaseRegisterRoute: typeof AppReportsPurchaseRegisterRoute
@@ -702,11 +841,15 @@ interface AppReportsRouteChildren {
 }
 
 const AppReportsRouteChildren: AppReportsRouteChildren = {
+  AppReportsAgeingRoute: AppReportsAgeingRoute,
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
+  AppReportsBrsRoute: AppReportsBrsRoute,
   AppReportsDayBookRoute: AppReportsDayBookRoute,
   AppReportsGstr1Route: AppReportsGstr1Route,
+  AppReportsGstr2bRoute: AppReportsGstr2bRoute,
   AppReportsGstr3bRoute: AppReportsGstr3bRoute,
   AppReportsLedgerRoute: AppReportsLedgerRoute,
+  AppReportsOutstandingRoute: AppReportsOutstandingRoute,
   AppReportsPayablesRoute: AppReportsPayablesRoute,
   AppReportsProfitLossRoute: AppReportsProfitLossRoute,
   AppReportsPurchaseRegisterRoute: AppReportsPurchaseRegisterRoute,
@@ -724,22 +867,28 @@ interface AppVouchersRouteChildren {
   AppVouchersVoucherIdRoute: typeof AppVouchersVoucherIdRoute
   AppVouchersNewCredit_noteRoute: typeof AppVouchersNewCredit_noteRoute
   AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
+  AppVouchersNewDelivery_noteRoute: typeof AppVouchersNewDelivery_noteRoute
   AppVouchersNewJournalRoute: typeof AppVouchersNewJournalRoute
   AppVouchersNewPaymentRoute: typeof AppVouchersNewPaymentRoute
   AppVouchersNewPurchaseRoute: typeof AppVouchersNewPurchaseRoute
+  AppVouchersNewQuotationRoute: typeof AppVouchersNewQuotationRoute
   AppVouchersNewReceiptRoute: typeof AppVouchersNewReceiptRoute
   AppVouchersNewSalesRoute: typeof AppVouchersNewSalesRoute
+  AppVouchersNewSales_orderRoute: typeof AppVouchersNewSales_orderRoute
 }
 
 const AppVouchersRouteChildren: AppVouchersRouteChildren = {
   AppVouchersVoucherIdRoute: AppVouchersVoucherIdRoute,
   AppVouchersNewCredit_noteRoute: AppVouchersNewCredit_noteRoute,
   AppVouchersNewDebit_noteRoute: AppVouchersNewDebit_noteRoute,
+  AppVouchersNewDelivery_noteRoute: AppVouchersNewDelivery_noteRoute,
   AppVouchersNewJournalRoute: AppVouchersNewJournalRoute,
   AppVouchersNewPaymentRoute: AppVouchersNewPaymentRoute,
   AppVouchersNewPurchaseRoute: AppVouchersNewPurchaseRoute,
+  AppVouchersNewQuotationRoute: AppVouchersNewQuotationRoute,
   AppVouchersNewReceiptRoute: AppVouchersNewReceiptRoute,
   AppVouchersNewSalesRoute: AppVouchersNewSalesRoute,
+  AppVouchersNewSales_orderRoute: AppVouchersNewSales_orderRoute,
 }
 
 const AppVouchersRouteWithChildren = AppVouchersRoute._addFileChildren(

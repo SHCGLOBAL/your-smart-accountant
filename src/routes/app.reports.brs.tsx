@@ -49,13 +49,12 @@ function BrsPage() {
   }, [activeCompanyId, ledgerId]);
 
   const load = () => {
-    if (!ledgerId) return;
+    if (!ledgerId || !activeCompanyId) return;
     supabase.from("voucher_entries")
       .select("id, debit_paise, credit_paise, cleared_date, vouchers!inner(voucher_date, voucher_number, voucher_type, reference_no, company_id)")
       .eq("ledger_id", ledgerId)
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", asOf)
-      .order("vouchers(voucher_date)" as never)
       .then(({ data }) => setEntries((data || []) as unknown as Entry[]));
   };
   useEffect(load, [ledgerId, asOf, activeCompanyId]);
