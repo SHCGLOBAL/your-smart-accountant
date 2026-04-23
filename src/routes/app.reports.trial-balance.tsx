@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -69,39 +69,70 @@ function TrialBalance() {
     });
   }, [ledgers, entries, to]);
 
+  const drRows: TRow[] = rows
+    .filter((r2) => r2.debit)
+    .map((r2) => ({
+      label: r2.name,
+      amount: formatINR(r2.debit),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+    }));
+  const crRows: TRow[] = rows
+    .filter((r2) => r2.credit)
+    .map((r2) => ({
+      label: r2.name,
+      amount: formatINR(r2.credit),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+    }));
+
   const totals = rows.reduce(
-    (acc, r) => ({ dr: acc.dr + r.debit, cr: acc.cr + r.credit }),
+    (acc, r2) => ({ dr: acc.dr + r2.debit, cr: acc.cr + r2.credit }),
     { dr: 0, cr: 0 },
   );
 
-  const csvRows = (): (string | number)[][] => [
-    [`Trial Balance as on ${to}`, "", ""],
-    ["Ledger", "Debit", "Credit"],
-    ...rows
-      .filter((r2) => r2.debit || r2.credit)
-      .map((r2) => [r2.name, r2.debit ? (r2.debit / 100).toFixed(2) : "", r2.credit ? (r2.credit / 100).toFixed(2) : ""]),
-    ["Total", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2)],
-  ];
+  const csvRows = (): (string | number)[][] => {
+    const max = Math.max(drRows.length, crRows.length);
+    const drList = rows.filter((r2) => r2.debit);
+    const crList = rows.filter((r2) => r2.credit);
+    return [
+      [`Trial Balance as on ${to}`, "", "", ""],
+      ["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"],
+      ...Array.from({ length: max }).map((_, i) => [
+        drList[i]?.name ?? "",
+        drList[i] ? (drList[i].debit / 100).toFixed(2) : "",
+        crList[i]?.name ?? "",
+        crList[i] ? (crList[i].credit / 100).toFixed(2) : "",
+      ]),
+      ["Total", (totals.dr / 100).toFixed(2), "Total", (totals.cr / 100).toFixed(2)],
+    ];
+  };
 
   const onExportCsv = () => downloadCsv(`trial-balance-${to}.csv`, csvRows());
   const onExportXlsx = () =>
     downloadXlsx(`trial-balance-${to}.xlsx`, [{ name: "Trial Balance", rows: csvRows() }]);
-  const onExportPdf = () =>
+  const onExportPdf = () => {
+    const drList = rows.filter((r2) => r2.debit);
+    const crList = rows.filter((r2) => r2.credit);
+    const max = Math.max(drList.length, crList.length);
     downloadPdfTable({
       title: "Trial Balance",
       subtitle: `As on ${to}`,
-      head: [["Ledger", "Debit", "Credit"]],
-      body: rows
-        .filter((r2) => r2.debit || r2.credit)
-        .map((r2) => [r2.name, r2.debit ? r(r2.debit).toFixed(2) : "", r2.credit ? r(r2.credit).toFixed(2) : ""]),
-      foot: [["Total", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2)]],
+      head: [["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"]],
+      body: Array.from({ length: max }).map((_, i) => [
+        drList[i]?.name ?? "",
+        drList[i] ? r(drList[i].debit).toFixed(2) : "",
+        crList[i]?.name ?? "",
+        crList[i] ? r(crList[i].credit).toFixed(2) : "",
+      ]),
+      foot: [["Total", r(totals.dr).toFixed(2), "Total", r(totals.cr).toFixed(2)]],
       fileName: `trial-balance-${to}.pdf`,
-      rightAlignCols: [1, 2],
+      orientation: "l",
+      rightAlignCols: [1, 3],
     });
+  };
 
   return (
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -113,48 +144,28 @@ function TrialBalance() {
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
           />
-          <p className="mt-2 text-xs text-muted-foreground">Closing balances as on <strong>{to}</strong> (opening balance + all postings up to date).</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Closing balances as on <strong>{to}</strong>.
+          </p>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ledger</TableHead>
-                <TableHead className="text-right">Debit</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.filter((r) => r.debit || r.credit).map((r) => (
-                <TableRow
-                  key={r.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: r.id, from, to } })}
-                  title="Drill down to ledger statement"
-                >
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell className="text-right font-mono">{r.debit ? formatINR(r.debit) : ""}</TableCell>
-                  <TableCell className="text-right font-mono">{r.credit ? formatINR(r.credit) : ""}</TableCell>
-                </TableRow>
-              ))}
-              <TableRow>
-                <TableCell className="font-semibold">Total</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.dr)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cr)}</TableCell>
-              </TableRow>
-              {totals.dr !== totals.cr && (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-destructive">
-                    ⚠ Difference: {formatINR(Math.abs(totals.dr - totals.cr))}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <TAccount
+        title="Trial Balance"
+        subtitle={`as on ${to}`}
+        leftHeader="Dr. Ledger"
+        rightHeader="Cr. Ledger"
+        leftRows={drRows}
+        rightRows={crRows}
+        leftTotal={formatINR(totals.dr)}
+        rightTotal={formatINR(totals.cr)}
+      />
+      {totals.dr !== totals.cr && (
+        <Card>
+          <CardContent className="p-3 text-center text-sm text-destructive">
+            ⚠ Difference: {formatINR(Math.abs(totals.dr - totals.cr))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

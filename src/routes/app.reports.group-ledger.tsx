@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { ReportToolbar } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import type { LedgerTypeValue } from "@/lib/constants";
 
@@ -18,7 +18,6 @@ export const Route = createFileRoute("/app/reports/group-ledger")({
   component: GroupLedgerReport,
 });
 
-// Tally-style groupings — Balance Sheet & Profit/Loss buckets
 type GroupKey =
   | "sundry_debtors"
   | "sundry_creditors"
@@ -45,12 +44,10 @@ interface GroupDef {
   label: string;
   section: "Balance Sheet" | "Profit & Loss" | "Combined";
   types: LedgerTypeValue[];
-  /** debit positive nature → asset/expense; credit positive → liability/income */
   nature: "debit" | "credit";
 }
 
 const GROUPS: GroupDef[] = [
-  // Balance Sheet — Assets
   { key: "sundry_debtors", label: "Sundry Debtors", section: "Balance Sheet", types: ["sundry_debtor"], nature: "debit" },
   { key: "cash_in_hand", label: "Cash-in-Hand", section: "Balance Sheet", types: ["cash"], nature: "debit" },
   { key: "bank_accounts", label: "Bank Accounts", section: "Balance Sheet", types: ["bank"], nature: "debit" },
@@ -58,14 +55,12 @@ const GROUPS: GroupDef[] = [
   { key: "current_assets", label: "Current Assets", section: "Balance Sheet", types: ["current_asset"], nature: "debit" },
   { key: "stock_in_hand", label: "Stock-in-Hand", section: "Balance Sheet", types: ["stock_in_hand"], nature: "debit" },
   { key: "all_assets", label: "All Assets (combined)", section: "Balance Sheet", types: ["sundry_debtor", "cash", "bank", "fixed_asset", "current_asset", "stock_in_hand"], nature: "debit" },
-  // Balance Sheet — Liabilities
   { key: "sundry_creditors", label: "Sundry Creditors", section: "Balance Sheet", types: ["sundry_creditor"], nature: "credit" },
   { key: "loans_liabilities", label: "Loans (Liability)", section: "Balance Sheet", types: ["loan_liability"], nature: "credit" },
   { key: "current_liabilities", label: "Current Liabilities", section: "Balance Sheet", types: ["current_liability"], nature: "credit" },
   { key: "duties_taxes", label: "Duties & Taxes", section: "Balance Sheet", types: ["duties_taxes"], nature: "credit" },
   { key: "capital", label: "Capital Account", section: "Balance Sheet", types: ["capital"], nature: "credit" },
   { key: "all_liabilities", label: "All Liabilities (combined)", section: "Balance Sheet", types: ["sundry_creditor", "loan_liability", "current_liability", "duties_taxes", "capital"], nature: "credit" },
-  // P&L
   { key: "direct_income", label: "Direct Income (Sales)", section: "Profit & Loss", types: ["income_direct"], nature: "credit" },
   { key: "indirect_income", label: "Indirect Income", section: "Profit & Loss", types: ["income_indirect"], nature: "credit" },
   { key: "all_income", label: "All Income (combined)", section: "Profit & Loss", types: ["income_direct", "income_indirect"], nature: "credit" },
@@ -137,12 +132,11 @@ function GroupLedgerReport() {
     }
     return ledgers.map((l) => {
       const opSign = l.opening_balance_is_debit ? 1 : -1;
-      const op = opSign * l.opening_balance_paise; // +ve = debit
+      const op = opSign * l.opening_balance_paise;
       const b = before.get(l.id) || { dr: 0, cr: 0 };
       const p = period.get(l.id) || { dr: 0, cr: 0 };
       const opening = op + (b.dr - b.cr);
       const closing = opening + (p.dr - p.cr);
-      // Display in natural sign of group
       const display = group.nature === "debit" ? closing : -closing;
       return {
         id: l.id,
@@ -156,15 +150,37 @@ function GroupLedgerReport() {
     }).sort((a, b) => Math.abs(b.closing_paise) - Math.abs(a.closing_paise));
   }, [ledgers, entries, from, to, group.nature]);
 
-  const totals = useMemo(() => ({
-    opening: rows.reduce((s, r) => s + r.opening_paise, 0),
-    debit: rows.reduce((s, r) => s + r.debit_paise, 0),
-    credit: rows.reduce((s, r) => s + r.credit_paise, 0),
-    closing: rows.reduce((s, r) => s + r.closing_paise, 0),
-  }), [rows]);
+  // T-format split: Dr balances on the left, Cr balances on the right
+  const drRows: TRow[] = rows
+    .filter((r2) => r2.closing_paise > 0)
+    .map((r2) => ({
+      label: (
+        <span>
+          {r2.name}{" "}
+          <Badge variant="outline" className="ml-1 align-middle text-[10px]">{r2.type.replace(/_/g, " ")}</Badge>
+        </span>
+      ),
+      amount: formatINR(r2.closing_paise),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+    }));
+  const crRows: TRow[] = rows
+    .filter((r2) => r2.closing_paise < 0)
+    .map((r2) => ({
+      label: (
+        <span>
+          {r2.name}{" "}
+          <Badge variant="outline" className="ml-1 align-middle text-[10px]">{r2.type.replace(/_/g, " ")}</Badge>
+        </span>
+      ),
+      amount: formatINR(-r2.closing_paise),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+    }));
 
-  const headers = ["Ledger", "Opening", "Debit", "Credit", "Closing"];
-  const tableRows = rows.map((row) => [row.name, r(row.opening_paise), r(row.debit_paise), r(row.credit_paise), r(row.closing_paise)]);
+  const drTotal = drRows.reduce((s, _, i) => s + (rows.filter((x) => x.closing_paise > 0)[i]?.closing_paise ?? 0), 0);
+  const crTotal = crRows.reduce((s, _, i) => s + (-(rows.filter((x) => x.closing_paise < 0)[i]?.closing_paise ?? 0)), 0);
+
+  const headers = ["Ledger", "Side", "Amount (₹)"];
+  const tableRows = rows.map((row) => [row.name, row.closing_paise >= 0 ? "Dr" : "Cr", r(Math.abs(row.closing_paise))]);
   const fileBase = `${group.label.replace(/\s+/g, "_")}_${from}_to_${to}`;
 
   function exportCsv() {
@@ -213,58 +229,26 @@ function GroupLedgerReport() {
         hideDates
         onExportCsv={exportCsv}
         onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, [{ name: group.label.slice(0, 31), rows: [headers, ...tableRows] }])}
-        onExportPdf={() => downloadPdfTable({ title: group.label, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [1, 2, 3, 4] })}
+        onExportPdf={() => downloadPdfTable({ title: group.label, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [2] })}
         onPrint={() => window.print()}
       />
 
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ledger</TableHead>
-                <TableHead className="text-right">Opening</TableHead>
-                <TableHead className="text-right">Debit</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
-                <TableHead className="text-right">Closing ({group.nature === "debit" ? "Dr" : "Cr"})</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={5} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="p-6 text-center text-sm text-muted-foreground">No ledgers in this group.</TableCell></TableRow>
-              ) : rows.map((r) => (
-                <TableRow
-                  key={r.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: r.id, from, to } })}
-                  title="Drill down to ledger statement"
-                >
-                  <TableCell>
-                    <span className="font-medium hover:underline">{r.name}</span>
-                    <Badge variant="outline" className="ml-2 text-[10px]">{r.type.replace(/_/g, " ")}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.opening_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.debit_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.credit_paise)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(r.closing_paise)}</TableCell>
-                </TableRow>
-              ))}
-              {rows.length > 0 && (
-                <TableRow className="border-t-2 bg-muted/40">
-                  <TableCell className="font-semibold">Total ({rows.length} ledgers)</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.opening)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.debit)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.credit)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.closing)}</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {loading ? (
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
+      ) : rows.length === 0 ? (
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">No ledgers in this group.</CardContent></Card>
+      ) : (
+        <TAccount
+          title={group.label}
+          subtitle={`${group.section} · ${from} to ${to}`}
+          leftHeader="Dr. Balances"
+          rightHeader="Cr. Balances"
+          leftRows={drRows}
+          rightRows={crRows}
+          leftTotal={formatINR(drTotal)}
+          rightTotal={formatINR(crTotal)}
+        />
+      )}
     </div>
   );
 }

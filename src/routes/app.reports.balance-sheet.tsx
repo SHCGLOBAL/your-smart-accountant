@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
@@ -49,51 +49,72 @@ function BalanceSheet() {
     return { assets, liabilities, totalA, totalL, profit };
   }, [balances]);
 
-  // Add net profit/loss to liability side (profit) or asset side (loss) to balance
   const liabExtended = profit >= 0
-    ? [...liabilities, { id: "__pl", name: "Net Profit (current period)", type: "capital", value: profit }]
-    : liabilities;
+    ? [...liabilities.filter((x) => x.value), { id: "__pl", name: "Net Profit (current period)", type: "capital", value: profit }]
+    : liabilities.filter((x) => x.value);
   const assetExtended = profit < 0
-    ? [...assets, { id: "__pl", name: "Net Loss (current period)", type: "current_asset", value: -profit }]
-    : assets;
+    ? [...assets.filter((x) => x.value), { id: "__pl", name: "Net Loss (current period)", type: "current_asset", value: -profit }]
+    : assets.filter((x) => x.value);
   const grandL = totalL + Math.max(0, profit);
   const grandA = totalA + Math.max(0, -profit);
 
-  const csvRows = (): (string | number)[][] => [
-    [`Balance Sheet as on ${to}`, ""],
-    ["LIABILITIES", ""],
-    ...liabExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
-    ["Total Liabilities", (grandL / 100).toFixed(2)],
-    ["", ""],
-    ["ASSETS", ""],
-    ...assetExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
-    ["Total Assets", (grandA / 100).toFixed(2)],
-  ];
+  const liabRows: TRow[] = liabExtended.map((x) => ({
+    label: x.name,
+    amount: formatINR(x.value),
+    onClick: x.id !== "__pl"
+      ? () => navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })
+      : undefined,
+    emphasis: x.id === "__pl" ? "bold" : "normal",
+  }));
+  const assetRows: TRow[] = assetExtended.map((x) => ({
+    label: x.name,
+    amount: formatINR(x.value),
+    onClick: x.id !== "__pl"
+      ? () => navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })
+      : undefined,
+    emphasis: x.id === "__pl" ? "bold" : "normal",
+  }));
+
+  const csvRows = (): (string | number)[][] => {
+    const max = Math.max(liabExtended.length, assetExtended.length);
+    return [
+      [`Balance Sheet as on ${to}`, "", "", ""],
+      ["Liabilities", "Amount (₹)", "Assets", "Amount (₹)"],
+      ...Array.from({ length: max }).map((_, i) => [
+        liabExtended[i]?.name ?? "",
+        liabExtended[i] ? (liabExtended[i].value / 100).toFixed(2) : "",
+        assetExtended[i]?.name ?? "",
+        assetExtended[i] ? (assetExtended[i].value / 100).toFixed(2) : "",
+      ]),
+      ["Total", (grandL / 100).toFixed(2), "Total", (grandA / 100).toFixed(2)],
+    ];
+  };
 
   const onExportCsv = () => downloadCsv(`balance-sheet-${to}.csv`, csvRows());
   const onExportXlsx = () =>
     downloadXlsx(`balance-sheet-${to}.xlsx`, [{ name: "Balance Sheet", rows: csvRows() }]);
-  const onExportPdf = () =>
+  const onExportPdf = () => {
+    const max = Math.max(liabExtended.length, assetExtended.length);
     downloadPdfTable({
       title: "Balance Sheet",
       subtitle: `As on ${to}`,
-      head: [["Particulars", "Amount (₹)"]],
-      body: [
-        ["— LIABILITIES —", ""],
-        ...liabExtended.filter((x) => x.value).map((x) => [x.name, r(x.value).toFixed(2)]),
-        ["Total Liabilities", r(grandL).toFixed(2)],
-        ["", ""],
-        ["— ASSETS —", ""],
-        ...assetExtended.filter((x) => x.value).map((x) => [x.name, r(x.value).toFixed(2)]),
-        ["Total Assets", r(grandA).toFixed(2)],
-      ],
+      head: [["Liabilities", "Amount (₹)", "Assets", "Amount (₹)"]],
+      body: Array.from({ length: max }).map((_, i) => [
+        liabExtended[i]?.name ?? "",
+        liabExtended[i] ? r(liabExtended[i].value).toFixed(2) : "",
+        assetExtended[i]?.name ?? "",
+        assetExtended[i] ? r(assetExtended[i].value).toFixed(2) : "",
+      ]),
+      foot: [["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)]],
       fileName: `balance-sheet-${to}.pdf`,
-      rightAlignCols: [1],
+      orientation: "l",
+      rightAlignCols: [1, 3],
     });
+  };
 
   return (
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -105,45 +126,21 @@ function BalanceSheet() {
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
           />
-          <p className="mt-2 text-xs text-muted-foreground">Closing position as on <strong>{to}</strong>. Net profit/loss for the period is added to balance the sheet.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Closing position as on <strong>{to}</strong>. Net P/L for the period auto-balances the sheet.
+          </p>
         </CardContent>
       </Card>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow><TableHead>Liabilities</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {liabExtended.filter((x) => x.value).map((x) => (
-                  <TableRow
-                    key={x.id}
-                    className={x.id !== "__pl" ? "cursor-pointer hover:bg-muted/50" : ""}
-                    onClick={() => x.id !== "__pl" && navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })}
-                  ><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
-                ))}
-                <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(grandL)}</TableCell></TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader><TableRow><TableHead>Assets</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {assetExtended.filter((x) => x.value).map((x) => (
-                  <TableRow
-                    key={x.id}
-                    className={x.id !== "__pl" ? "cursor-pointer hover:bg-muted/50" : ""}
-                    onClick={() => x.id !== "__pl" && navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })}
-                  ><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
-                ))}
-                <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(grandA)}</TableCell></TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+      <TAccount
+        title="Balance Sheet"
+        subtitle={`as on ${to}`}
+        leftHeader="Liabilities"
+        rightHeader="Assets"
+        leftRows={liabRows}
+        rightRows={assetRows}
+        leftTotal={formatINR(grandL)}
+        rightTotal={formatINR(grandA)}
+      />
     </div>
   );
 }

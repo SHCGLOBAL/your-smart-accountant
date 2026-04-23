@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, PL_INCOME, PL_EXPENSE, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
@@ -28,24 +28,61 @@ function ProfitLoss() {
   }, [activeCompanyId, from, to]);
 
   const { incomes, expenses, totalInc, totalExp, profit } = useMemo(() => {
-    const incomes = balances.filter((b) => PL_INCOME.has(b.type)).map((b) => ({ ...b, value: -b.closing_paise })); // income natural = Cr
-    const expenses = balances.filter((b) => PL_EXPENSE.has(b.type)).map((b) => ({ ...b, value: b.closing_paise }));
+    // Exclude direct income / direct expense — those belong to Trading A/c.
+    // Indirect items are P&L items.
+    const incomes = balances
+      .filter((b) => b.type === "income_indirect")
+      .map((b) => ({ ...b, value: -b.closing_paise }));
+    const expenses = balances
+      .filter((b) => b.type === "expense_indirect")
+      .map((b) => ({ ...b, value: b.closing_paise }));
     const totalInc = incomes.reduce((s, x) => s + x.value, 0);
     const totalExp = expenses.reduce((s, x) => s + x.value, 0);
     return { incomes, expenses, totalInc, totalExp, profit: totalInc - totalExp };
   }, [balances]);
 
+  // T-account rows
+  const expenseRows: TRow[] = expenses
+    .filter((e) => e.value)
+    .map((e) => ({
+      label: <>To {e.name}</>,
+      amount: formatINR(e.value),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
+    }));
+  if (profit > 0) {
+    expenseRows.push({
+      label: "To Net Profit c/d",
+      amount: formatINR(profit),
+      emphasis: "bold",
+    });
+  }
+  const incomeRows: TRow[] = incomes
+    .filter((e) => e.value)
+    .map((e) => ({
+      label: <>By {e.name}</>,
+      amount: formatINR(e.value),
+      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
+    }));
+  if (profit < 0) {
+    incomeRows.push({
+      label: "By Net Loss c/d",
+      amount: formatINR(-profit),
+      emphasis: "bold",
+    });
+  }
+  const grandLeft = totalExp + Math.max(0, profit);
+  const grandRight = totalInc + Math.max(0, -profit);
+
   const csvRows = (): (string | number)[][] => [
-    [`Profit & Loss: ${from} to ${to}`, ""],
-    ["EXPENSES", ""],
-    ...expenses.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
-    ["Total Expenses", (totalExp / 100).toFixed(2)],
-    ["", ""],
-    ["INCOMES", ""],
-    ...incomes.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
-    ["Total Income", (totalInc / 100).toFixed(2)],
-    ["", ""],
-    [profit >= 0 ? "Net Profit" : "Net Loss", (Math.abs(profit) / 100).toFixed(2)],
+    [`Profit & Loss A/c: ${from} to ${to}`, "", "", ""],
+    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    ...Array.from({ length: Math.max(expenseRows.length, incomeRows.length) }).map((_, i) => [
+      typeof expenseRows[i]?.label === "string" ? (expenseRows[i].label as string) : "",
+      expenseRows[i] ? r(expenses[i]?.value ?? (profit > 0 && i === expenseRows.length - 1 ? profit : 0)).toFixed(2) : "",
+      typeof incomeRows[i]?.label === "string" ? (incomeRows[i].label as string) : "",
+      incomeRows[i] ? r(incomes[i]?.value ?? (profit < 0 && i === incomeRows.length - 1 ? -profit : 0)).toFixed(2) : "",
+    ]),
+    ["Total", (grandLeft / 100).toFixed(2), "Total", (grandRight / 100).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`profit-loss-${from}_to_${to}.csv`, csvRows());
@@ -53,26 +90,27 @@ function ProfitLoss() {
     downloadXlsx(`profit-loss-${from}_to_${to}.xlsx`, [{ name: "P&L", rows: csvRows() }]);
   const onExportPdf = () =>
     downloadPdfTable({
-      title: "Profit & Loss",
+      title: "Profit & Loss A/c",
       subtitle: `${from} to ${to}`,
-      head: [["Particulars", "Amount (₹)"]],
-      body: [
-        ["— EXPENSES —", ""],
-        ...expenses.filter((e) => e.value).map((e) => [e.name, r(e.value).toFixed(2)]),
-        ["Total Expenses", r(totalExp).toFixed(2)],
-        ["", ""],
-        ["— INCOME —", ""],
-        ...incomes.filter((e) => e.value).map((e) => [e.name, r(e.value).toFixed(2)]),
-        ["Total Income", r(totalInc).toFixed(2)],
-      ],
-      foot: [[profit >= 0 ? "Net Profit" : "Net Loss", r(Math.abs(profit)).toFixed(2)]],
+      head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+      body: Array.from({ length: Math.max(expenses.length + (profit > 0 ? 1 : 0), incomes.length + (profit < 0 ? 1 : 0)) }).map((_, i) => {
+        const lExp = expenses.filter((e) => e.value);
+        const lInc = incomes.filter((e) => e.value);
+        const lLabel = i < lExp.length ? `To ${lExp[i].name}` : profit > 0 && i === lExp.length ? "To Net Profit c/d" : "";
+        const lAmt = i < lExp.length ? r(lExp[i].value).toFixed(2) : profit > 0 && i === lExp.length ? r(profit).toFixed(2) : "";
+        const rLabel = i < lInc.length ? `By ${lInc[i].name}` : profit < 0 && i === lInc.length ? "By Net Loss c/d" : "";
+        const rAmt = i < lInc.length ? r(lInc[i].value).toFixed(2) : profit < 0 && i === lInc.length ? r(-profit).toFixed(2) : "";
+        return [lLabel, lAmt, rLabel, rAmt];
+      }),
+      foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
       fileName: `profit-loss-${from}_to_${to}.pdf`,
-      rightAlignCols: [1],
+      orientation: "l",
+      rightAlignCols: [1, 3],
     });
 
   return (
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -84,54 +122,19 @@ function ProfitLoss() {
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
           />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Indirect Income & Indirect Expenses only. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.
+          </p>
         </CardContent>
       </Card>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Expenses</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenses.filter((e) => e.value).map((e) => (
-                  <TableRow
-                    key={e.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } })}
-                  ><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
-                ))}
-                {profit > 0 && (
-                  <TableRow><TableCell className="font-semibold text-primary">Net Profit</TableCell><TableCell className="text-right font-mono font-semibold text-primary">{formatINR(profit)}</TableCell></TableRow>
-                )}
-                <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(totalExp + Math.max(0, profit))}</TableCell></TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Income</TableHead><TableHead className="text-right">Amount</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {incomes.filter((e) => e.value).map((e) => (
-                  <TableRow
-                    key={e.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } })}
-                  ><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
-                ))}
-                {profit < 0 && (
-                  <TableRow><TableCell className="font-semibold text-destructive">Net Loss</TableCell><TableCell className="text-right font-mono font-semibold text-destructive">{formatINR(-profit)}</TableCell></TableRow>
-                )}
-                <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(totalInc + Math.max(0, -profit))}</TableCell></TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+      <TAccount
+        title="Profit & Loss Account"
+        subtitle={`for the period ${from} to ${to}`}
+        leftRows={expenseRows}
+        rightRows={incomeRows}
+        leftTotal={formatINR(grandLeft)}
+        rightTotal={formatINR(grandRight)}
+      />
     </div>
   );
 }
