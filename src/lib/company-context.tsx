@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
+import { rememberActiveCompanyName } from "./desktop-save";
 
 export interface CompanyMembership {
   company_id: string;
