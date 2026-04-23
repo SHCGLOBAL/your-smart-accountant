@@ -12,6 +12,7 @@ const TABS = [
   { to: "/app/reports/ledger", label: "Ledger" },
   { to: "/app/reports/group-ledger", label: "Group Ledger (B/S & P&L)" },
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
+  { to: "/app/reports/trading", label: "Trading A/c" },
   { to: "/app/reports/profit-loss", label: "P&L" },
   { to: "/app/reports/balance-sheet", label: "Balance Sheet" },
   { to: "/app/reports/outstanding", label: "Outstanding (Bill-wise)" },

@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -37,6 +37,11 @@ const TYPE_LABEL: Record<string, string> = {
   debit_note: "Debit Note",
 };
 
+// Voucher types whose net effect is a debit movement on the day-book "money out / asset / expense" side
+const DR_TYPES = new Set(["purchase", "payment", "debit_note"]);
+// Voucher types whose net effect is a credit movement on the "money in / income / liability" side
+const CR_TYPES = new Set(["sales", "receipt", "credit_note"]);
+
 function DayBook() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
@@ -63,19 +68,45 @@ function DayBook() {
       });
   }, [activeCompanyId, from, to]);
 
-  const total = useMemo(() => rows.reduce((s, r) => s + r.total_paise, 0), [rows]);
+  const { drRows, crRows, drTotal, crTotal } = useMemo(() => {
+    const drRows: TRow[] = [];
+    const crRows: TRow[] = [];
+    let drTotal = 0;
+    let crTotal = 0;
+    for (const r2 of rows) {
+      const label = `${TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type} — ${r2.ledgers?.name ?? "—"}`;
+      const hint = `${r2.voucher_date} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
+      const onClick = () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r2.id } });
+      const tRow: TRow = { label, hint, amount: formatINR(r2.total_paise), onClick };
+      if (DR_TYPES.has(r2.voucher_type)) {
+        drRows.push(tRow);
+        drTotal += r2.total_paise;
+      } else if (CR_TYPES.has(r2.voucher_type)) {
+        crRows.push(tRow);
+        crTotal += r2.total_paise;
+      } else {
+        // journal/contra — show on Dr side
+        drRows.push(tRow);
+        drTotal += r2.total_paise;
+      }
+    }
+    return { drRows, crRows, drTotal, crTotal };
+  }, [rows, navigate]);
+
+  const total = drTotal + crTotal;
 
   const csvRows = (): (string | number)[][] => [
-    ["Date", "Type", "Number", "Party", "Narration", "Amount"],
+    ["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"],
     ...rows.map((r2) => [
       r2.voucher_date,
       TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
       r2.voucher_number,
       r2.ledgers?.name ?? "",
       r2.narration ?? "",
+      DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr",
       (r2.total_paise / 100).toFixed(2),
     ]),
-    ["", "", "", "", "Total", (total / 100).toFixed(2)],
+    ["", "", "", "", "", "Total", (total / 100).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`day-book-${from}_to_${to}.csv`, csvRows());
@@ -85,24 +116,25 @@ function DayBook() {
     downloadPdfTable({
       title: "Day Book",
       subtitle: `${from} to ${to}`,
-      head: [["Date", "Type", "Number", "Party", "Narration", "Amount"]],
+      head: [["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"]],
       body: rows.map((r2) => [
         r2.voucher_date,
         TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
         r2.voucher_number,
         r2.ledgers?.name ?? "",
         r2.narration ?? "",
+        DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr",
         r(r2.total_paise).toFixed(2),
       ]),
-      foot: [["", "", "", "", "Total", r(total).toFixed(2)]],
+      foot: [["", "", "", "", "", "Total", r(total).toFixed(2)]],
       fileName: `day-book-${from}_to_${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [5],
+      rightAlignCols: [6],
     });
 
   return (
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -116,51 +148,22 @@ function DayBook() {
           />
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-          ) : rows.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={BookOpen} title="No vouchers in range" description="Adjust the date filter or post some vouchers." />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[110px]">Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Number</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>Narration</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
-                    title="Click to edit"
-                  >
-                    <TableCell>{r.voucher_date}</TableCell>
-                    <TableCell>{TYPE_LABEL[r.voucher_type] ?? r.voucher_type}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
-                    <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
-                    <TableCell className="max-w-[260px] truncate text-muted-foreground">{r.narration ?? ""}</TableCell>
-                    <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={5} className="text-right font-semibold">Total</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(total)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {loading ? (
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
+      ) : rows.length === 0 ? (
+        <Card><CardContent className="p-6"><EmptyState icon={BookOpen} title="No vouchers in range" description="Adjust the date filter or post some vouchers." /></CardContent></Card>
+      ) : (
+        <TAccount
+          title="Day Book"
+          subtitle={`for the period ${from} to ${to}`}
+          leftHeader="Dr.  Out / Purchases / Payments"
+          rightHeader="Receipts / Sales  Cr."
+          leftRows={drRows}
+          rightRows={crRows}
+          leftTotal={formatINR(drTotal)}
+          rightTotal={formatINR(crTotal)}
+        />
+      )}
     </div>
   );
 }

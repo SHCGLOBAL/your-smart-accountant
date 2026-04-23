@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -71,7 +71,6 @@ function LedgerStatement() {
       });
   }, [activeCompanyId, ledgerId]);
 
-  // Sync from search param changes (when navigating from another report)
   useEffect(() => {
     if (search.ledgerId && search.ledgerId !== ledgerId) setLedgerId(search.ledgerId);
     if (search.from) setFrom(search.from);
@@ -83,7 +82,6 @@ function LedgerStatement() {
 
   useEffect(() => {
     if (!ledgerId || !ledger) return;
-    // entries within range
     supabase
       .from("voucher_entries")
       .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
@@ -93,7 +91,6 @@ function LedgerStatement() {
       .order("voucher_date", { referencedTable: "vouchers", ascending: true })
       .then(({ data }) => setEntries((data || []) as unknown as EntryRow[]));
 
-    // sum entries strictly before "from" to compute opening for window
     supabase
       .from("voucher_entries")
       .select("debit_paise, credit_paise, vouchers!inner(voucher_date)")
@@ -107,14 +104,6 @@ function LedgerStatement() {
       });
   }, [ledgerId, from, to, ledger]);
 
-  const running = useMemo(() => {
-    let bal = openingBeforeFrom;
-    return entries.map((e) => {
-      bal += e.debit_paise - e.credit_paise;
-      return { ...e, balance: bal };
-    });
-  }, [entries, openingBeforeFrom]);
-
   const totals = useMemo(() => {
     return entries.reduce(
       (acc, e) => ({ dr: acc.dr + e.debit_paise, cr: acc.cr + e.credit_paise }),
@@ -124,25 +113,82 @@ function LedgerStatement() {
 
   const closing = openingBeforeFrom + totals.dr - totals.cr;
 
-  const fmtBal = (p: number) => `${formatINR(Math.abs(p))} ${p >= 0 ? "Dr" : "Cr"}`;
+  // T-format split: opening goes on whichever side is natural,
+  // each entry goes Dr or Cr depending on which has amount,
+  // closing balance is shown as a "By/To Balance c/d" balancing entry.
+  const drRows: TRow[] = [];
+  const crRows: TRow[] = [];
 
-  const csvRows = (): (string | number)[][] => [
-    [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", "", ""],
-    [`Period: ${from} to ${to}`, "", "", "", "", "", ""],
-    ["Date", "Voucher", "Type", "Narration", "Debit", "Credit", "Balance"],
-    ["", "", "", "Opening", "", "", (openingBeforeFrom / 100).toFixed(2)],
-    ...running.map((r2) => [
-      r2.vouchers?.voucher_date ?? "",
-      r2.vouchers?.voucher_number ?? "",
-      r2.vouchers?.voucher_type ?? "",
-      r2.narration ?? r2.vouchers?.narration ?? "",
-      r2.debit_paise ? (r2.debit_paise / 100).toFixed(2) : "",
-      r2.credit_paise ? (r2.credit_paise / 100).toFixed(2) : "",
-      (r2.balance / 100).toFixed(2),
-    ]),
-    ["", "", "", "Totals", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2), ""],
-    ["", "", "", "Closing", "", "", (closing / 100).toFixed(2)],
-  ];
+  if (openingBeforeFrom > 0) {
+    drRows.push({
+      label: "To Opening Balance",
+      hint: from,
+      amount: formatINR(openingBeforeFrom),
+      emphasis: "bold",
+    });
+  } else if (openingBeforeFrom < 0) {
+    crRows.push({
+      label: "By Opening Balance",
+      hint: from,
+      amount: formatINR(-openingBeforeFrom),
+      emphasis: "bold",
+    });
+  }
+
+  for (const e of entries) {
+    const v = e.vouchers;
+    const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
+    const hint = v ? `${v.voucher_date} · ${v.voucher_number}` : "";
+    const goto = v ? () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } }) : undefined;
+    if (e.debit_paise > 0) {
+      drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
+    }
+    if (e.credit_paise > 0) {
+      crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
+    }
+  }
+
+  // Balance c/d entry on the smaller side
+  const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
+  const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
+  if (drSubtotal > crSubtotal) {
+    crRows.push({
+      label: "By Balance c/d",
+      hint: to,
+      amount: formatINR(drSubtotal - crSubtotal),
+      emphasis: "bold",
+    });
+  } else if (crSubtotal > drSubtotal) {
+    drRows.push({
+      label: "To Balance c/d",
+      hint: to,
+      amount: formatINR(crSubtotal - drSubtotal),
+      emphasis: "bold",
+    });
+  }
+
+  const grandTotal = Math.max(drSubtotal, crSubtotal);
+
+  const csvRows = (): (string | number)[][] => {
+    const max = Math.max(drRows.length, crRows.length);
+    return [
+      [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
+      [`Period: ${from} to ${to}`, "", "", ""],
+      ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+      ...Array.from({ length: max }).map((_, i) => {
+        const lLabel = typeof drRows[i]?.label === "string" ? (drRows[i].label as string) : drRows[i] ? String(drRows[i].label) : "";
+        const rLabel = typeof crRows[i]?.label === "string" ? (crRows[i].label as string) : crRows[i] ? String(crRows[i].label) : "";
+        return [
+          lLabel,
+          drRows[i] ? String(drRows[i].amount).replace(/[₹,\s]/g, "") : "",
+          rLabel,
+          crRows[i] ? String(crRows[i].amount).replace(/[₹,\s]/g, "") : "",
+        ];
+      }),
+      ["Total", (grandTotal / 100).toFixed(2), "Total", (grandTotal / 100).toFixed(2)],
+      ["", "", "Closing", (closing / 100).toFixed(2)],
+    ];
+  };
 
   const onExportCsv = () => downloadCsv(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.csv`, csvRows());
   const onExportXlsx = () =>
@@ -151,33 +197,24 @@ function LedgerStatement() {
     ]);
   const onExportPdf = () =>
     downloadPdfTable({
-      title: `Ledger Statement — ${ledger?.name ?? ""}`,
+      title: `Ledger A/c — ${ledger?.name ?? ""}`,
       subtitle: `${from} to ${to}`,
-      head: [["Date", "Voucher", "Type", "Narration", "Debit", "Credit", "Balance"]],
-      body: [
-        ["", "", "", "Opening", "", "", r(openingBeforeFrom).toFixed(2)],
-        ...running.map((r2) => [
-          r2.vouchers?.voucher_date ?? "",
-          r2.vouchers?.voucher_number ?? "",
-          r2.vouchers?.voucher_type ?? "",
-          r2.narration ?? r2.vouchers?.narration ?? "",
-          r2.debit_paise ? r(r2.debit_paise).toFixed(2) : "",
-          r2.credit_paise ? r(r2.credit_paise).toFixed(2) : "",
-          r(r2.balance).toFixed(2),
-        ]),
-      ],
-      foot: [
-        ["", "", "", "Totals", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-        ["", "", "", "Closing", "", "", r(closing).toFixed(2)],
-      ],
+      head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+      body: Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => [
+        drRows[i] ? String(drRows[i].label) : "",
+        drRows[i] ? r(parseInt(String(drRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
+        crRows[i] ? String(crRows[i].label) : "",
+        crRows[i] ? r(parseInt(String(crRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
+      ]),
+      foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
       fileName: `ledger-${ledger?.name ?? "x"}-${from}_to_${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [4, 5, 6],
+      rightAlignCols: [1, 3],
     });
 
   return (
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -206,59 +243,28 @@ function LedgerStatement() {
           />
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          {!ledger ? (
-            <div className="p-6 text-sm text-muted-foreground">Select a ledger to view its statement.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[110px]">Date</TableHead>
-                  <TableHead>Voucher</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Narration</TableHead>
-                  <TableHead className="text-right">Debit</TableHead>
-                  <TableHead className="text-right">Credit</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell colSpan={4} className="font-medium text-muted-foreground">Opening Balance</TableCell>
-                  <TableCell></TableCell>
-                  <TableCell></TableCell>
-                  <TableCell className="text-right font-mono">{fmtBal(openingBeforeFrom)}</TableCell>
-                </TableRow>
-                {running.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className={r.vouchers ? "cursor-pointer hover:bg-muted/50" : ""}
-                    onClick={() => r.vouchers && navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.vouchers.id } })}
-                    title={r.vouchers ? "Click to edit voucher" : ""}
-                  >
-                    <TableCell>{r.vouchers?.voucher_date}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.vouchers?.voucher_number}</TableCell>
-                    <TableCell className="capitalize">{r.vouchers?.voucher_type.replace("_", " ")}</TableCell>
-                    <TableCell className="max-w-[240px] truncate text-muted-foreground">
-                      {r.narration ?? r.vouchers?.narration ?? ""}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{r.debit_paise ? formatINR(r.debit_paise) : ""}</TableCell>
-                    <TableCell className="text-right font-mono">{r.credit_paise ? formatINR(r.credit_paise) : ""}</TableCell>
-                    <TableCell className="text-right font-mono">{fmtBal(r.balance)}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={4} className="text-right font-semibold">Totals</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.dr)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cr)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{fmtBal(closing)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {!ledger ? (
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a ledger to view its statement.</CardContent></Card>
+      ) : (
+        <>
+          <TAccount
+            title={`${ledger.name} Account`}
+            subtitle={`for the period ${from} to ${to}`}
+            leftRows={drRows}
+            rightRows={crRows}
+            leftTotal={formatINR(grandTotal)}
+            rightTotal={formatINR(grandTotal)}
+          />
+          <Card>
+            <CardContent className="flex justify-between p-3 text-sm">
+              <span className="text-muted-foreground">Closing balance</span>
+              <span className="font-mono font-semibold">
+                {formatINR(Math.abs(closing))} {closing >= 0 ? "Dr" : "Cr"}
+              </span>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
