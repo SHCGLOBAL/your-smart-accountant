@@ -43,9 +43,16 @@ function activeCompanyName(): string {
 
 function browserDownload(fileName: string, contents: string | ArrayBuffer | Uint8Array, mime: string): void {
   let blob: Blob;
-  if (typeof contents === "string") blob = new Blob([contents], { type: mime });
-  else if (contents instanceof Uint8Array) blob = new Blob([contents], { type: mime });
-  else blob = new Blob([new Uint8Array(contents)], { type: mime });
+  if (typeof contents === "string") {
+    blob = new Blob([contents], { type: mime });
+  } else if (contents instanceof Uint8Array) {
+    // Copy into a fresh ArrayBuffer to satisfy strict BlobPart typing.
+    const copy = new Uint8Array(contents.byteLength);
+    copy.set(contents);
+    blob = new Blob([copy.buffer], { type: mime });
+  } else {
+    blob = new Blob([contents], { type: mime });
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
