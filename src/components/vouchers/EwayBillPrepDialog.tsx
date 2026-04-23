@@ -18,6 +18,7 @@ import { formatINR } from "@/lib/money";
 import { INDIAN_STATES } from "@/lib/constants";
 import { generateIrn, generateEwb, getSetuStatus } from "@/utils/setu.functions";
 import { toast } from "sonner";
+import { saveExport } from "@/lib/desktop-save";
 
 interface VoucherSnapshot {
   id: string;
