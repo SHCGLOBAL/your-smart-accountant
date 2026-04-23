@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
+import { rememberActiveCompanyName } from "./desktop-save";
 
 export interface CompanyMembership {
   company_id: string;
@@ -69,6 +70,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   };
 
   const activeMembership = memberships.find((m) => m.company_id === activeCompanyId) ?? null;
+
+  useEffect(() => {
+    rememberActiveCompanyName(activeMembership?.companies?.name ?? null);
+  }, [activeMembership]);
+
 
   return (
     <CompanyContext.Provider
