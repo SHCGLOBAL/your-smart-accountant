@@ -7,7 +7,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, PL_INCOME, PL_EXPENSE, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
