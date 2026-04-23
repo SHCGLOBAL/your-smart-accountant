@@ -71,6 +71,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const activeMembership = memberships.find((m) => m.company_id === activeCompanyId) ?? null;
 
+  useEffect(() => {
+    rememberActiveCompanyName(activeMembership?.companies?.name ?? null);
+  }, [activeMembership]);
+
+
   return (
     <CompanyContext.Provider
       value={{ loading, memberships, activeCompanyId, activeMembership, setActiveCompanyId, refresh }}
