@@ -939,38 +939,77 @@ export function gstr3bToJson(b: BuiltGstr3B): Record<string, unknown> {
 
 export function gstr3bToXlsxSheets(b: BuiltGstr3B): XlsxSheet[] {
   const s = b.sup_details;
+  const fpLabel = (() => {
+    const m = b.meta.fp;
+    const mon = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m.slice(0, 2))] || m.slice(0, 2);
+    return `${mon} ${m.slice(2)}`;
+  })();
   const summary: (string | number)[][] = [
-    [`GSTR-3B for ${b.meta.gstin} — ${b.meta.fp}`],
+    ["Form GSTR-3B"],
+    ["[See rule 61(5)]"],
     [],
-    ["3.1 Outward Supplies & inward RCM"],
+    ["Year", b.meta.fp.slice(2), "", "Period", fpLabel],
+    ["GSTIN", b.meta.gstin, "", "Legal name of the registered person", b.meta.legal_name || ""],
+    [],
+    ["3.1 Details of Outward Supplies and inward supplies liable to reverse charge"],
     ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ["(a) Outward taxable", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
-    ["(b) Outward zero-rated", s.osup_zero.txval, s.osup_zero.iamt, 0, 0, s.osup_zero.csamt],
-    ["(c) Other outward (nil/exempt)", s.osup_nil_exmp.txval, 0, 0, 0, 0],
-    ["(d) Inward — reverse charge", s.isup_rev.txval, s.isup_rev.iamt, s.isup_rev.camt, s.isup_rev.samt, s.isup_rev.csamt],
-    ["(e) Non-GST outward", s.osup_nongst.txval, 0, 0, 0, 0],
+    ["(a) Outward taxable supplies (other than zero rated, nil rated and exempted)", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
+    ["(b) Outward taxable supplies (zero rated)", s.osup_zero.txval, s.osup_zero.iamt, 0, 0, s.osup_zero.csamt],
+    ["(c) Other outward supplies (Nil rated, exempted)", s.osup_nil_exmp.txval, 0, 0, 0, 0],
+    ["(d) Inward supplies (liable to reverse charge)", s.isup_rev.txval, s.isup_rev.iamt, s.isup_rev.camt, s.isup_rev.samt, s.isup_rev.csamt],
+    ["(e) Non-GST outward supplies", s.osup_nongst.txval, 0, 0, 0, 0],
     [],
-    ["3.2 Inter-state to Unregistered (from 3.1(a))"],
-    ["Place of Supply", "Total Taxable Value", "Integrated Tax"],
-    ...b.inter_sup.unreg_details.map((p) => [p.pos, p.txval, p.iamt]),
+    ["3.1.1 Details of Supplies notified under section 9(5) of the CGST Act, 2017 and corresponding provisions in IGST/UTGST/SGST Acts"],
+    ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
+    ["(i) Taxable supplies on which electronic commerce operator pays tax u/s 9(5)", b.sup_eco?.txval || 0, b.sup_eco?.iamt || 0, b.sup_eco?.camt || 0, b.sup_eco?.samt || 0, b.sup_eco?.csamt || 0],
+    ["(ii) Taxable supplies made by registered person through electronic commerce operator", 0, 0, 0, 0, 0],
+    [],
+    ["3.2 Of the supplies shown in 3.1(a) above, details of inter-state supplies made to unregistered persons, composition taxable persons and UIN holders"],
+    ["", "Place of Supply (State/UT)", "Total Taxable Value", "Amount of Integrated Tax"],
+    ["Supplies made to Unregistered Persons", "", "", ""],
+    ...b.inter_sup.unreg_details.map((p) => ["", p.pos, p.txval, p.iamt]),
+    ["Supplies made to Composition Taxable Persons", "", "", ""],
+    ["Supplies made to UIN holders", "", "", ""],
     [],
     ["4. Eligible ITC"],
     ["Details", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ...b.itc_elg.itc_avl.map((x) => [`(A) ITC Available — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
-    ...b.itc_elg.itc_rev.map((x) => [`(B) ITC Reversed — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
-    ["(C) Net ITC", b.itc_elg.itc_net.iamt, b.itc_elg.itc_net.camt, b.itc_elg.itc_net.samt, b.itc_elg.itc_net.csamt],
-    ...b.itc_elg.itc_inelg.map((x) => [`(D) Ineligible — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
+    ["(A) ITC Available (whether in full or part)", "", "", "", ""],
+    ...b.itc_elg.itc_avl.map((x) => [
+      x.ty === "IMPG" ? "  (1) Import of goods" :
+      x.ty === "IMPS" ? "  (2) Import of services" :
+      x.ty === "ISRC" ? "  (3) Inward supplies liable to reverse charge (other than 1 & 2 above)" :
+      x.ty === "ISD"  ? "  (4) Inward supplies from ISD" :
+      "  (5) All other ITC",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
+    ["(B) ITC Reversed", "", "", "", ""],
+    ...b.itc_elg.itc_rev.map((x) => [
+      x.ty === "RUL" ? "  (1) As per rules 38, 42 & 43 of CGST Rules and section 17(5)" : "  (2) Others",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
+    ["(C) Net ITC available (A) - (B)", b.itc_elg.itc_net.iamt, b.itc_elg.itc_net.camt, b.itc_elg.itc_net.samt, b.itc_elg.itc_net.csamt],
+    ["(D) Other Details", "", "", "", ""],
+    ...b.itc_elg.itc_inelg.map((x) => [
+      x.ty === "RUL" ? "  (1) ITC reclaimed which was reversed under Table 4(B)(2) in earlier tax period" : "  (2) Ineligible ITC under section 16(4) and ITC restricted due to PoS provisions",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
     [],
-    ["5. Inward Exempt/Nil/Non-GST"],
-    ["Type", "Inter-state", "Intra-state"],
-    ...b.inward_sup.isup_details.map((x) => [x.ty, x.inter, x.intra]),
+    ["5. Values of exempt, nil-rated and non-GST inward supplies"],
+    ["Nature of Supplies", "Inter-State Supplies", "Intra-State Supplies"],
+    ...b.inward_sup.isup_details.map((x) => [
+      x.ty === "GST" ? "From a supplier under composition scheme, Exempt and Nil rated supply" : "Non GST supply",
+      x.inter, x.intra,
+    ]),
     [],
     ["6.1 Payment of tax"],
-    ["Description", "Tax Payable", "Net Cash Payable"],
-    ["Integrated Tax", b.tax_pmt.iamt, b.tax_pmt.iamt_payable],
-    ["Central Tax", b.tax_pmt.camt, b.tax_pmt.camt_payable],
-    ["State/UT Tax", b.tax_pmt.samt, b.tax_pmt.samt_payable],
-    ["Cess", 0, 0],
+    ["Description", "Total tax payable", "Tax paid through ITC — IGST", "CGST", "SGST/UTGST", "Cess", "Tax paid TDS./TCS", "Tax/Cess paid in cash", "Interest", "Late Fee"],
+    ["Integrated Tax", b.tax_pmt.iamt, 0, 0, 0, 0, 0, b.tax_pmt.iamt_payable, 0, 0],
+    ["Central Tax", b.tax_pmt.camt, 0, 0, 0, 0, 0, b.tax_pmt.camt_payable, 0, 0],
+    ["State/UT Tax", b.tax_pmt.samt, 0, 0, 0, 0, 0, b.tax_pmt.samt_payable, 0, 0],
+    ["Cess", 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [],
+    ["Verification (by Authorized signatory)"],
+    ["I hereby solemnly affirm and declare that the information given herein above is true and correct to the best of my knowledge and belief and nothing has been concealed therefrom."],
   ];
   return [{ name: "GSTR-3B", rows: summary }];
 }
