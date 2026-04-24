@@ -276,3 +276,83 @@ function Sup({ row }: { row: [string, { txval: number; iamt: number; camt: numbe
     </TableRow>
   );
 }
+
+function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
+  companyId: string; period: string;
+  inward: InwardSummaryRow[]; reversal: ItcReversalRow[];
+  onChanged: () => void | Promise<void>;
+}) {
+  const inwGst = inward.find((x) => x.ty === "GST") ?? { ty: "GST" as const, inter_paise: 0, intra_paise: 0 };
+  const inwNon = inward.find((x) => x.ty === "NONGST") ?? { ty: "NONGST" as const, inter_paise: 0, intra_paise: 0 };
+  const revRul = reversal.find((x) => x.ty === "RUL") ?? { ty: "RUL" as const, iamt_paise: 0, camt_paise: 0, samt_paise: 0, csamt_paise: 0 };
+  const revOth = reversal.find((x) => x.ty === "OTH") ?? { ty: "OTH" as const, iamt_paise: 0, camt_paise: 0, samt_paise: 0, csamt_paise: 0 };
+
+  const [gInter, setGInter] = useState((inwGst.inter_paise / 100).toString());
+  const [gIntra, setGIntra] = useState((inwGst.intra_paise / 100).toString());
+  const [nInter, setNInter] = useState((inwNon.inter_paise / 100).toString());
+  const [nIntra, setNIntra] = useState((inwNon.intra_paise / 100).toString());
+  const [rRulI, setRRulI] = useState((revRul.iamt_paise / 100).toString());
+  const [rRulC, setRRulC] = useState((revRul.camt_paise / 100).toString());
+  const [rRulS, setRRulS] = useState((revRul.samt_paise / 100).toString());
+  const [rOthI, setROthI] = useState((revOth.iamt_paise / 100).toString());
+  const [rOthC, setROthC] = useState((revOth.camt_paise / 100).toString());
+  const [rOthS, setROthS] = useState((revOth.samt_paise / 100).toString());
+  const [saving, setSaving] = useState(false);
+
+  const toPaise = (v: string) => Math.round((Number(v) || 0) * 100);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const inwardRows = [
+        { company_id: companyId, period, ty: "GST", inter_paise: toPaise(gInter), intra_paise: toPaise(gIntra) },
+        { company_id: companyId, period, ty: "NONGST", inter_paise: toPaise(nInter), intra_paise: toPaise(nIntra) },
+      ];
+      const revRows = [
+        { company_id: companyId, period, ty: "RUL", iamt_paise: toPaise(rRulI), camt_paise: toPaise(rRulC), samt_paise: toPaise(rRulS), csamt_paise: 0 },
+        { company_id: companyId, period, ty: "OTH", iamt_paise: toPaise(rOthI), camt_paise: toPaise(rOthC), samt_paise: toPaise(rOthS), csamt_paise: 0 },
+      ];
+      const [r1, r2] = await Promise.all([
+        supabase.from("gstr3b_inward_summary").upsert(inwardRows, { onConflict: "company_id,period,ty" }),
+        supabase.from("gstr3b_itc_reversal").upsert(revRows, { onConflict: "company_id,period,ty" }),
+      ]);
+      if (r1.error) throw r1.error;
+      if (r2.error) throw r2.error;
+      toast.success("Saved manual entries");
+      await onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-4 print:hidden">
+        <div className="text-sm font-medium">Manual entries for {period}</div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">Section 5 — Inward exempt/nil/non-GST (₹)</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label className="text-xs">GST inter-state</Label><Input value={gInter} onChange={(e) => setGInter(e.target.value)} /></div>
+              <div><Label className="text-xs">GST intra-state</Label><Input value={gIntra} onChange={(e) => setGIntra(e.target.value)} /></div>
+              <div><Label className="text-xs">Non-GST inter</Label><Input value={nInter} onChange={(e) => setNInter(e.target.value)} /></div>
+              <div><Label className="text-xs">Non-GST intra</Label><Input value={nIntra} onChange={(e) => setNIntra(e.target.value)} /></div>
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">Section 4(B) — ITC Reversal (₹)</div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><Label className="text-xs">Rule 42/43 IGST</Label><Input value={rRulI} onChange={(e) => setRRulI(e.target.value)} /></div>
+              <div><Label className="text-xs">Rule 42/43 CGST</Label><Input value={rRulC} onChange={(e) => setRRulC(e.target.value)} /></div>
+              <div><Label className="text-xs">Rule 42/43 SGST</Label><Input value={rRulS} onChange={(e) => setRRulS(e.target.value)} /></div>
+              <div><Label className="text-xs">Others IGST</Label><Input value={rOthI} onChange={(e) => setROthI(e.target.value)} /></div>
+              <div><Label className="text-xs">Others CGST</Label><Input value={rOthC} onChange={(e) => setROthC(e.target.value)} /></div>
+              <div><Label className="text-xs">Others SGST</Label><Input value={rOthS} onChange={(e) => setROthS(e.target.value)} /></div>
+            </div>
+          </div>
+        </div>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save manual entries"}</Button>
+      </CardContent>
+    </Card>
+  );
+}
