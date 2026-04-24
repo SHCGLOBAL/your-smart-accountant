@@ -181,6 +181,8 @@ function GSTR1Page() {
 
       {built && (
         <>
+          <ValidationPanel issues={validateGstr1(built)} />
+
           <SectionTable title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2b.map((x) => [x.ctin, x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt")), money(sumLine(x.itms, "camt")), money(sumLine(x.itms, "samt"))])} />
 
