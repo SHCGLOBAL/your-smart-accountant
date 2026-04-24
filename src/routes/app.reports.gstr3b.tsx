@@ -186,18 +186,50 @@ function GSTR3BPage() {
                   <TableHead className="text-right">SGST</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell>(A) ITC Available — All other ITC</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].iamt)}</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].camt)}</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].samt)}</TableCell>
-                  </TableRow>
+                  {built.itc_elg.itc_avl.map((x, i) => (
+                    <TableRow key={`avl-${i}`}>
+                      <TableCell>(A) ITC Available — {x.ty === "ISRC" ? "Inward supplies (RCM)" : "All other ITC"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.iamt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.camt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.samt)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {built.itc_elg.itc_rev.map((x, i) => (
+                    <TableRow key={`rev-${i}`}>
+                      <TableCell>(B) ITC Reversed — {x.ty === "RUL" ? "As per Rule 42 & 43" : "Others"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.iamt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.camt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.samt)}</TableCell>
+                    </TableRow>
+                  ))}
                   <TableRow>
                     <TableCell className="font-semibold">(C) Net ITC Available</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.iamt)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.camt)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.samt)}</TableCell>
                   </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">5. Values of exempt, nil-rated and non-GST inward supplies</div>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Nature</TableHead>
+                  <TableHead className="text-right">Inter-state</TableHead>
+                  <TableHead className="text-right">Intra-state</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {built.inward_sup.isup_details.map((x) => (
+                    <TableRow key={x.ty}>
+                      <TableCell>{x.ty === "GST" ? "From a supplier under composition / exempt / nil-rated" : "Non-GST supply"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.inter)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.intra)}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
