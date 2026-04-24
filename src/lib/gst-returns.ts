@@ -565,7 +565,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
 
   return {
     meta: { gstin: company.gstin || "", fp, from, to },
-    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn, docs,
+    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn_b2b, hsn_b2c, docs,
   };
 }
 
