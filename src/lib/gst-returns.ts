@@ -77,7 +77,8 @@ export interface BuiltGstr1 {
   cdnur: CDNURInvoice[];
   exp: EXPInvoice[];
   nil: NilGroup[];
-  hsn: HSNRow[];
+  hsn_b2b: HSNRow[];
+  hsn_b2c: HSNRow[];
   docs: DocSummary[];
 }
 
@@ -509,12 +510,15 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     ...g, nil_amt: r(g.nil_amt), expt_amt: r(g.expt_amt), ngsup_amt: r(g.ngsup_amt),
   }));
 
-  // HSN summary across taxable + zero-rated sales (CDN reduces with sign)
-  const hsnMap = new Map<string, HSNRow>();
+  // HSN summary — split B2B (party has GSTIN) and B2C (no GSTIN / unregistered)
+  const hsnB2BMap = new Map<string, HSNRow>();
+  const hsnB2CMap = new Map<string, HSNRow>();
   const accumulate = (v: VoucherRow, sign: 1 | -1) => {
+    const isB2B = !!(v.ledgers?.gstin && v.ledgers.gstin.trim());
+    const map = isB2B ? hsnB2BMap : hsnB2CMap;
     for (const it of v.voucher_items) {
       const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
-      const cur = hsnMap.get(key) ?? {
+      const cur = map.get(key) ?? {
         hsn_sc: it.items?.hsn_code || "",
         desc: it.items?.name || "",
         uqc: (it.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (it.items?.unit || "OTH").toUpperCase(),
@@ -527,17 +531,20 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       cur.camt += sign * it.cgst_paise;
       cur.samt += sign * it.sgst_paise;
       cur.val += sign * (it.taxable_paise + it.cgst_paise + it.sgst_paise + it.igst_paise);
-      hsnMap.set(key, cur);
+      map.set(key, cur);
     }
   };
   for (const v of sales) accumulate(v, 1);
   if (!iffOnly) for (const v of creditNotes) accumulate(v, v.voucher_type === "credit_note" ? -1 : 1);
 
-  const hsn = Array.from(hsnMap.values()).map((h) => ({
-    ...h,
-    qty: Number(h.qty.toFixed(3)),
-    txval: r(h.txval), iamt: r(h.iamt), camt: r(h.camt), samt: r(h.samt), val: r(h.val),
-  }));
+  const finalizeHsn = (m: Map<string, HSNRow>): HSNRow[] =>
+    Array.from(m.values()).map((h) => ({
+      ...h,
+      qty: Number(h.qty.toFixed(3)),
+      txval: r(h.txval), iamt: r(h.iamt), camt: r(h.camt), samt: r(h.samt), val: r(h.val),
+    }));
+  const hsn_b2b = finalizeHsn(hsnB2BMap);
+  const hsn_b2c = finalizeHsn(hsnB2CMap);
 
   const docs: DocSummary[] = [];
   const buildDocFor = (label: string, nums: string[]) => {
@@ -558,7 +565,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
 
   return {
     meta: { gstin: company.gstin || "", fp, from, to },
-    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn, docs,
+    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn_b2b, hsn_b2c, docs,
   };
 }
 
@@ -615,7 +622,12 @@ export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
     out.exp = Array.from(byTyp.entries()).map(([exp_typ, inv]) => ({ exp_typ, inv }));
   }
   if (g.nil.length) out.nil = { inv: g.nil };
-  if (g.hsn.length) out.hsn = { data: g.hsn.map((h, i) => ({ num: i + 1, ...h })) };
+  if (g.hsn_b2b.length || g.hsn_b2c.length) {
+    out.hsn = {
+      hsn_b2b: g.hsn_b2b.map((h, i) => ({ num: i + 1, ...h })),
+      hsn_b2c: g.hsn_b2c.map((h, i) => ({ num: i + 1, ...h })),
+    };
+  }
   out.doc_issue = {
     doc_det: [
       { doc_num: 1, docs: g.docs.filter((d) => d.doc_typ.startsWith("Invoices")).map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
@@ -694,10 +706,11 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
   ];
   for (const n of g.nil) nilRows.push([n.sply_ty, n.nil_amt, n.expt_amt, n.ngsup_amt]);
 
-  const hsnRows: (string | number)[][] = [
-    ["HSN", "Description", "UQC", "Total Quantity", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount", "Total Value"],
-  ];
-  for (const h of g.hsn) hsnRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
+  const hsnHeader = ["HSN", "Description", "UQC", "Total Quantity", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount", "Total Value"];
+  const hsnB2BRows: (string | number)[][] = [hsnHeader];
+  for (const h of g.hsn_b2b) hsnB2BRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
+  const hsnB2CRows: (string | number)[][] = [hsnHeader];
+  for (const h of g.hsn_b2c) hsnB2CRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
 
   const docsRows: (string | number)[][] = [
     ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled", "Net Issued"],
@@ -715,7 +728,8 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
     { name: "cdnur", rows: headerRows(cdnurRows) },
     { name: "exp", rows: headerRows(expRows) },
     { name: "nil", rows: headerRows(nilRows) },
-    { name: "hsn", rows: headerRows(hsnRows) },
+    { name: "hsn_b2b", rows: headerRows(hsnB2BRows) },
+    { name: "hsn_b2c", rows: headerRows(hsnB2CRows) },
     { name: "docs", rows: headerRows(docsRows) },
   ];
 }
@@ -723,7 +737,7 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
 // ───────────────────── GSTR-3B builder ─────────────────────
 
 export interface BuiltGstr3B {
-  meta: { gstin: string; fp: string; from: string; to: string };
+  meta: { gstin: string; fp: string; from: string; to: string; legal_name?: string };
   sup_details: {
     osup_det: SupRow;
     osup_zero: SupRow;
@@ -886,7 +900,7 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
   const samt_payable = Math.max(0, outSamt - itc_net.samt * 100);
 
   return {
-    meta: { gstin: company.gstin || "", fp, from, to },
+    meta: { gstin: company.gstin || "", fp, from, to, legal_name: company.name },
     sup_details: {
       osup_det: { txval: r(osup_det.txval), iamt: r(osup_det.iamt), camt: r(osup_det.camt), samt: r(osup_det.samt), csamt: 0 },
       osup_zero: { txval: r(osup_zero.txval), iamt: r(osup_zero.iamt), camt: 0, samt: 0, csamt: 0 },
@@ -925,38 +939,77 @@ export function gstr3bToJson(b: BuiltGstr3B): Record<string, unknown> {
 
 export function gstr3bToXlsxSheets(b: BuiltGstr3B): XlsxSheet[] {
   const s = b.sup_details;
+  const fpLabel = (() => {
+    const m = b.meta.fp;
+    const mon = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m.slice(0, 2))] || m.slice(0, 2);
+    return `${mon} ${m.slice(2)}`;
+  })();
   const summary: (string | number)[][] = [
-    [`GSTR-3B for ${b.meta.gstin} — ${b.meta.fp}`],
+    ["Form GSTR-3B"],
+    ["[See rule 61(5)]"],
     [],
-    ["3.1 Outward Supplies & inward RCM"],
+    ["Year", b.meta.fp.slice(2), "", "Period", fpLabel],
+    ["GSTIN", b.meta.gstin, "", "Legal name of the registered person", b.meta.legal_name || ""],
+    [],
+    ["3.1 Details of Outward Supplies and inward supplies liable to reverse charge"],
     ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ["(a) Outward taxable", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
-    ["(b) Outward zero-rated", s.osup_zero.txval, s.osup_zero.iamt, 0, 0, s.osup_zero.csamt],
-    ["(c) Other outward (nil/exempt)", s.osup_nil_exmp.txval, 0, 0, 0, 0],
-    ["(d) Inward — reverse charge", s.isup_rev.txval, s.isup_rev.iamt, s.isup_rev.camt, s.isup_rev.samt, s.isup_rev.csamt],
-    ["(e) Non-GST outward", s.osup_nongst.txval, 0, 0, 0, 0],
+    ["(a) Outward taxable supplies (other than zero rated, nil rated and exempted)", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
+    ["(b) Outward taxable supplies (zero rated)", s.osup_zero.txval, s.osup_zero.iamt, 0, 0, s.osup_zero.csamt],
+    ["(c) Other outward supplies (Nil rated, exempted)", s.osup_nil_exmp.txval, 0, 0, 0, 0],
+    ["(d) Inward supplies (liable to reverse charge)", s.isup_rev.txval, s.isup_rev.iamt, s.isup_rev.camt, s.isup_rev.samt, s.isup_rev.csamt],
+    ["(e) Non-GST outward supplies", s.osup_nongst.txval, 0, 0, 0, 0],
     [],
-    ["3.2 Inter-state to Unregistered (from 3.1(a))"],
-    ["Place of Supply", "Total Taxable Value", "Integrated Tax"],
-    ...b.inter_sup.unreg_details.map((p) => [p.pos, p.txval, p.iamt]),
+    ["3.1.1 Details of Supplies notified under section 9(5) of the CGST Act, 2017 and corresponding provisions in IGST/UTGST/SGST Acts"],
+    ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
+    ["(i) Taxable supplies on which electronic commerce operator pays tax u/s 9(5)", b.sup_eco?.txval || 0, b.sup_eco?.iamt || 0, b.sup_eco?.camt || 0, b.sup_eco?.samt || 0, b.sup_eco?.csamt || 0],
+    ["(ii) Taxable supplies made by registered person through electronic commerce operator", 0, 0, 0, 0, 0],
+    [],
+    ["3.2 Of the supplies shown in 3.1(a) above, details of inter-state supplies made to unregistered persons, composition taxable persons and UIN holders"],
+    ["", "Place of Supply (State/UT)", "Total Taxable Value", "Amount of Integrated Tax"],
+    ["Supplies made to Unregistered Persons", "", "", ""],
+    ...b.inter_sup.unreg_details.map((p) => ["", p.pos, p.txval, p.iamt]),
+    ["Supplies made to Composition Taxable Persons", "", "", ""],
+    ["Supplies made to UIN holders", "", "", ""],
     [],
     ["4. Eligible ITC"],
     ["Details", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ...b.itc_elg.itc_avl.map((x) => [`(A) ITC Available — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
-    ...b.itc_elg.itc_rev.map((x) => [`(B) ITC Reversed — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
-    ["(C) Net ITC", b.itc_elg.itc_net.iamt, b.itc_elg.itc_net.camt, b.itc_elg.itc_net.samt, b.itc_elg.itc_net.csamt],
-    ...b.itc_elg.itc_inelg.map((x) => [`(D) Ineligible — ${x.ty}`, x.iamt, x.camt, x.samt, x.csamt]),
+    ["(A) ITC Available (whether in full or part)", "", "", "", ""],
+    ...b.itc_elg.itc_avl.map((x) => [
+      x.ty === "IMPG" ? "  (1) Import of goods" :
+      x.ty === "IMPS" ? "  (2) Import of services" :
+      x.ty === "ISRC" ? "  (3) Inward supplies liable to reverse charge (other than 1 & 2 above)" :
+      x.ty === "ISD"  ? "  (4) Inward supplies from ISD" :
+      "  (5) All other ITC",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
+    ["(B) ITC Reversed", "", "", "", ""],
+    ...b.itc_elg.itc_rev.map((x) => [
+      x.ty === "RUL" ? "  (1) As per rules 38, 42 & 43 of CGST Rules and section 17(5)" : "  (2) Others",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
+    ["(C) Net ITC available (A) - (B)", b.itc_elg.itc_net.iamt, b.itc_elg.itc_net.camt, b.itc_elg.itc_net.samt, b.itc_elg.itc_net.csamt],
+    ["(D) Other Details", "", "", "", ""],
+    ...b.itc_elg.itc_inelg.map((x) => [
+      x.ty === "RUL" ? "  (1) ITC reclaimed which was reversed under Table 4(B)(2) in earlier tax period" : "  (2) Ineligible ITC under section 16(4) and ITC restricted due to PoS provisions",
+      x.iamt, x.camt, x.samt, x.csamt,
+    ]),
     [],
-    ["5. Inward Exempt/Nil/Non-GST"],
-    ["Type", "Inter-state", "Intra-state"],
-    ...b.inward_sup.isup_details.map((x) => [x.ty, x.inter, x.intra]),
+    ["5. Values of exempt, nil-rated and non-GST inward supplies"],
+    ["Nature of Supplies", "Inter-State Supplies", "Intra-State Supplies"],
+    ...b.inward_sup.isup_details.map((x) => [
+      x.ty === "GST" ? "From a supplier under composition scheme, Exempt and Nil rated supply" : "Non GST supply",
+      x.inter, x.intra,
+    ]),
     [],
     ["6.1 Payment of tax"],
-    ["Description", "Tax Payable", "Net Cash Payable"],
-    ["Integrated Tax", b.tax_pmt.iamt, b.tax_pmt.iamt_payable],
-    ["Central Tax", b.tax_pmt.camt, b.tax_pmt.camt_payable],
-    ["State/UT Tax", b.tax_pmt.samt, b.tax_pmt.samt_payable],
-    ["Cess", 0, 0],
+    ["Description", "Total tax payable", "Tax paid through ITC — IGST", "CGST", "SGST/UTGST", "Cess", "Tax paid TDS./TCS", "Tax/Cess paid in cash", "Interest", "Late Fee"],
+    ["Integrated Tax", b.tax_pmt.iamt, 0, 0, 0, 0, 0, b.tax_pmt.iamt_payable, 0, 0],
+    ["Central Tax", b.tax_pmt.camt, 0, 0, 0, 0, 0, b.tax_pmt.camt_payable, 0, 0],
+    ["State/UT Tax", b.tax_pmt.samt, 0, 0, 0, 0, 0, b.tax_pmt.samt_payable, 0, 0],
+    ["Cess", 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [],
+    ["Verification (by Authorized signatory)"],
+    ["I hereby solemnly affirm and declare that the information given herein above is true and correct to the best of my knowledge and belief and nothing has been concealed therefrom."],
   ];
   return [{ name: "GSTR-3B", rows: summary }];
 }
