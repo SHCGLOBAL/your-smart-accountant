@@ -737,7 +737,7 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
 // ───────────────────── GSTR-3B builder ─────────────────────
 
 export interface BuiltGstr3B {
-  meta: { gstin: string; fp: string; from: string; to: string };
+  meta: { gstin: string; fp: string; from: string; to: string; legal_name?: string };
   sup_details: {
     osup_det: SupRow;
     osup_zero: SupRow;
