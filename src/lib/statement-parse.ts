@@ -191,10 +191,10 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
     if (headingHit) {
       currentSide = headingHit.side;
-      // Headings sometimes include a sub-total amount on the same line
-      // (e.g. "Capital Account 2,51,497.53"). We still skip them as a row
-      // because the individual ledgers below give the same total.
-      continue;
+      // Pure heading (no numbers) → skip. Otherwise this is a condensed
+      // balance-sheet line that doubles as both heading AND data row
+      // (e.g. "Bank Accounts 530.58") — fall through and emit it.
+      if (numericTokens.length === 0) continue;
     }
 
     if (numericTokens.length === 0) continue;
