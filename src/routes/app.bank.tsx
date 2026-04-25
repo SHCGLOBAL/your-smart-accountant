@@ -191,6 +191,17 @@ function BankRecPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {activeCompanyId && bankLedgerId && user && (
+        <BankOcrImportDialog
+          open={ocrOpen}
+          onOpenChange={setOcrOpen}
+          companyId={activeCompanyId}
+          bankLedgerId={bankLedgerId}
+          userId={user.id}
+          onPosted={loadLines}
+        />
+      )}
     </div>
   );
 }
