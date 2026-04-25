@@ -6,12 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Link2, X } from "lucide-react";
+import { Link2, X, FileScan } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useAuth } from "@/lib/auth-context";
 import { formatINR } from "@/lib/money";
 import { parseBankCsv, suggestMatch, type ParsedBankLine, type VoucherCandidate } from "@/lib/bank-rec";
+import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/bank")({
