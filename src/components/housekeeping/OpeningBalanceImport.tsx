@@ -248,6 +248,11 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             )}
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs">
+            {rawText && (
+              <Button size="sm" variant="outline" onClick={() => setShowRaw((v) => !v)}>
+                {showRaw ? "Hide" : "Show"} OCR text
+              </Button>
+            )}
             <Badge variant="outline">Rows: {stats.count}</Badge>
             <Badge variant="outline">Dr ₹{stats.dr.toFixed(2)}</Badge>
             <Badge variant="outline">Cr ₹{stats.cr.toFixed(2)}</Badge>
@@ -256,6 +261,15 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             </Badge>
           </div>
         </div>
+
+        {showRaw && rawText && (
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[11px] font-medium mb-1 text-muted-foreground">
+              Raw OCR text — copy any line that's missing from the table and use "+ Add row" to enter it manually.
+            </div>
+            <pre className="text-[11px] whitespace-pre-wrap max-h-[260px] overflow-auto font-mono">{rawText}</pre>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-3 min-h-[400px]">
           <div className="rounded-md border bg-muted/30 overflow-hidden">
