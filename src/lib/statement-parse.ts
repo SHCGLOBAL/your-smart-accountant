@@ -242,6 +242,10 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
     if (!amount || amount < 0.01) continue;
 
+    // Strip trailing Dr/Cr marker from name if present
+    name = name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
+    if (name.length < 2) continue;
+
     out.push({ account_name: name, amount, side });
   }
 
