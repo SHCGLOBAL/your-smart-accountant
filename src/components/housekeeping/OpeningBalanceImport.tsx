@@ -59,6 +59,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [rows, setRows] = useState<EditableRow[]>([]);
+  const [rawText, setRawText] = useState("");
+  const [showRaw, setShowRaw] = useState(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [posting, setPosting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
