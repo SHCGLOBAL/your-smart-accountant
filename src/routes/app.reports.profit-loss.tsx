@@ -8,6 +8,7 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
@@ -27,68 +28,53 @@ function ProfitLoss() {
     fetchLedgerBalances(activeCompanyId, to, from).then(setBalances);
   }, [activeCompanyId, from, to]);
 
-  const { incomes, expenses, totalInc, totalExp, profit } = useMemo(() => {
-    // Exclude direct income / direct expense — those belong to Trading A/c.
-    // Indirect items are P&L items.
-    const incomes = balances
-      .filter((b) => b.type === "income_indirect")
-      .map((b) => ({ ...b, value: -b.closing_paise }));
-    const expenses = balances
-      .filter((b) => b.type === "expense_indirect")
-      .map((b) => ({ ...b, value: b.closing_paise }));
-    const totalInc = incomes.reduce((s, x) => s + x.value, 0);
-    const totalExp = expenses.reduce((s, x) => s + x.value, 0);
-    return { incomes, expenses, totalInc, totalExp, profit: totalInc - totalExp };
-  }, [balances]);
+  // Use ONLY ledgers whose group is in the PL section (Indirect Income / Indirect Expenses)
+  const expenseBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => b.type === "expense_indirect"),
+      "PL",
+      (b) => b.closing_paise,
+    ),
+    [balances],
+  );
+  const incomeBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => b.type === "income_indirect"),
+      "PL",
+      (b) => -b.closing_paise,
+    ),
+    [balances],
+  );
 
-  // T-account rows
-  const expenseRows: TRow[] = expenses
-    .filter((e) => e.value)
-    .map((e) => ({
-      label: <>To {e.name}</>,
-      amount: formatINR(e.value),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
-    }));
-  if (profit > 0) {
-    expenseRows.push({
-      label: "To Net Profit c/d",
-      amount: formatINR(profit),
-      emphasis: "bold",
-    });
-  }
-  const incomeRows: TRow[] = incomes
-    .filter((e) => e.value)
-    .map((e) => ({
-      label: <>By {e.name}</>,
-      amount: formatINR(e.value),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
-    }));
-  if (profit < 0) {
-    incomeRows.push({
-      label: "By Net Loss c/d",
-      amount: formatINR(-profit),
-      emphasis: "bold",
-    });
-  }
-  const grandLeft = totalExp + Math.max(0, profit);
-  const grandRight = totalInc + Math.max(0, -profit);
+  const goLedger = (id: string) =>
+    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
 
-  // Plain export rows derived from source data (not JSX TRow.label).
-  type ExportRow = { label: string; paise: number };
-  const lExp = expenses.filter((e) => e.value);
-  const lInc = incomes.filter((e) => e.value);
-  const drExport: ExportRow[] = lExp.map((e) => ({ label: `To ${e.name}`, paise: e.value }));
-  if (profit > 0) drExport.push({ label: "To Net Profit c/d", paise: profit });
-  const crExport: ExportRow[] = lInc.map((e) => ({ label: `By ${e.name}`, paise: e.value }));
-  if (profit < 0) crExport.push({ label: "By Net Loss c/d", paise: -profit });
+  const exp = groupedTRows(expenseBuckets, goLedger);
+  const inc = groupedTRows(incomeBuckets, goLedger);
+
+  const profit = inc.totalPaise - exp.totalPaise;
+
+  const expenseRows: TRow[] = [...exp.rows];
+  const incomeRows: TRow[] = [...inc.rows];
+  if (profit > 0) expenseRows.push({ label: "To Net Profit c/d", amount: formatINR(profit), emphasis: "bold" });
+  if (profit < 0) incomeRows.push({ label: "By Net Loss c/d", amount: formatINR(-profit), emphasis: "bold" });
+
+  const grandLeft = exp.totalPaise + Math.max(0, profit);
+  const grandRight = inc.totalPaise + Math.max(0, -profit);
+
+  // Exports
+  const drExp = groupedExportRows(expenseBuckets, "To ");
+  const crExp = groupedExportRows(incomeBuckets, "By ");
+  if (profit > 0) drExp.push({ label: "  To Net Profit c/d", paise: profit, isSubtotal: true });
+  if (profit < 0) crExp.push({ label: "  By Net Loss c/d", paise: -profit, isSubtotal: true });
 
   const exportBody = (): (string | number)[][] => {
-    const max = Math.max(drExport.length, crExport.length);
+    const max = Math.max(drExp.length, crExp.length);
     return Array.from({ length: max }).map((_, i) => [
-      drExport[i]?.label ?? "",
-      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
-      crExport[i]?.label ?? "",
-      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+      drExp[i]?.label ?? "",
+      drExp[i] && !drExp[i].isHeader ? r(drExp[i].paise).toFixed(2) : "",
+      crExp[i]?.label ?? "",
+      crExp[i] && !crExp[i].isHeader ? r(crExp[i].paise).toFixed(2) : "",
     ]);
   };
 
@@ -129,7 +115,7 @@ function ProfitLoss() {
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Indirect Income & Indirect Expenses only. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.
+            Indirect Income &amp; Indirect Expenses, grouped per IT-norms. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.
           </p>
         </CardContent>
       </Card>
