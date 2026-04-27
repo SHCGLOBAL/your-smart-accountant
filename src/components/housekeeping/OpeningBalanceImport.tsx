@@ -275,6 +275,12 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             {documentTotals.applicationsTotal != null && <Badge variant="outline">BS Applications ₹{documentTotals.applicationsTotal.toFixed(2)}</Badge>}
             <Badge variant="outline">Dr ₹{stats.dr.toFixed(2)}</Badge>
             <Badge variant="outline">Cr ₹{stats.cr.toFixed(2)}</Badge>
+            {documentTotals.sourcesTotal != null && (
+              <Badge variant={Math.abs(stats.sourceDiff) < 0.5 ? "default" : "destructive"}>Sources Δ ₹{stats.sourceDiff.toFixed(2)}</Badge>
+            )}
+            {documentTotals.applicationsTotal != null && (
+              <Badge variant={Math.abs(stats.applicationDiff) < 0.5 ? "default" : "destructive"}>Applications Δ ₹{stats.applicationDiff.toFixed(2)}</Badge>
+            )}
             <Badge variant={Math.abs(stats.diff) < 0.5 ? "default" : "destructive"}>
               Diff ₹{stats.diff.toFixed(2)}
             </Badge>
