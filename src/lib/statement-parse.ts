@@ -204,8 +204,11 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
       const match = name.match(heading.rx);
       if (match) {
         side = heading.side;
-        name = name.slice(match[0].length).trim();
-        changed = true;
+        const rest = name.slice(match[0].length).trim();
+        if (rest) {
+          name = rest;
+          changed = true;
+        }
         break;
       }
     }
@@ -221,6 +224,27 @@ function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
     const key = `${row.account_name.toLowerCase()}|${row.amount.toFixed(2)}|${row.side}`;
     if (seen.has(key)) return false;
     seen.add(key);
+    return true;
+  });
+}
+
+function removeOpeningSubtotalRows(rows: ExtractedOpening[]): ExtractedOpening[] {
+  const tolerance = 0.75;
+  return rows.filter((row, index) => {
+    if (/^(grand\s+total|sub.?total|totals?)$/i.test(row.account_name)) return false;
+
+    let sum = 0;
+    let childCount = 0;
+    for (let i = index + 1; i < rows.length; i += 1) {
+      const next = rows[i];
+      if (next.side !== row.side || /^(grand\s+total|sub.?total|totals?)$/i.test(next.account_name)) break;
+      if (next.amount > row.amount + tolerance) break;
+      sum += next.amount;
+      childCount += 1;
+      if (Math.abs(sum - row.amount) <= tolerance) return childCount > 0;
+      if (sum > row.amount + tolerance) break;
+    }
+
     return true;
   });
 }
@@ -246,8 +270,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
     let name = stripped.name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
 
     if (!name || name.length < 2) continue;
-    if (/^(grand\s+total|sub.?total|total)$/i.test(name)) continue;
-    if (GROUP_HEADINGS.some((heading) => heading.rx.test(name))) continue;
+    if (/^(grand\s+total|sub.?total|totals?)$/i.test(name)) continue;
 
     const value = num(match[0]);
     if (!value || Math.abs(value) < 0.01) continue;
@@ -257,7 +280,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
     out.push({ account_name: name, amount: Math.abs(value), side });
   }
 
-  return dedupeOpenings(out);
+  return dedupeOpenings(removeOpeningSubtotalRows(out));
 }
 
 /**
