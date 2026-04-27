@@ -260,10 +260,12 @@ function LedgersPage() {
     const ob = parseFloat(parsed.data.opening_balance ?? "");
     const cl = parseFloat(parsed.data.credit_limit ?? "");
     const cd = parseInt(parsed.data.credit_days ?? "");
+    const groupCode = form.group_code || defaultGroupCodeForType(parsed.data.type as LedgerTypeValue);
     const payload = {
       company_id: activeCompanyId,
       name: parsed.data.name,
       type: parsed.data.type as LedgerTypeValue,
+      group_code: groupCode,
       gstin: parsed.data.gstin || null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
