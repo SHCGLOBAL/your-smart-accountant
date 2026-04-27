@@ -130,6 +130,7 @@ export interface ExtractedOpening {
 // detail rows that follow it.
 const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
   // Liabilities / Equity → Cr
+  { rx: /^(profit\s+for\s+the\s+period)\b/i, side: "Cr" },
   { rx: /^(capital(\s+account)?|reserves?(\s+&?\s*surplus)?|owners?\s+equity)\b/i, side: "Cr" },
   { rx: /^(current\s+liabilit(y|ies)|liabilit(y|ies))\b/i, side: "Cr" },
   { rx: /^(sundry\s+creditors?|creditors?|accounts?\s+payable|trade\s+payables?)\b/i, side: "Cr" },
@@ -146,6 +147,7 @@ const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
   { rx: /^(sundry\s+debtors?|debtors?|accounts?\s+receivable|trade\s+receivables?)\b/i, side: "Dr" },
   { rx: /^(loans?\s*&?\s*advances?(\s*\(?asset\)?)?)\b/i, side: "Dr" },
   { rx: /^(stock[\s-]*in[\s-]*hand|inventory|closing\s+stock|opening\s+stock)\b/i, side: "Dr" },
+  { rx: /^(profit\s*\/\s*loss\s+adjusted)\b/i, side: "Dr" },
   { rx: /^(misc(ellaneous)?\s+expenses?|profit\s*&?\s*loss\s+a\/c|loss\s+to\s+be\s+adjusted)\b/i, side: "Dr" },
   { rx: /^application(s)?\s+of\s+funds\b/i, side: "Dr" },
 ];
@@ -163,6 +165,7 @@ const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*
 const AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
 const AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN, "g");
 const FIRST_AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN);
+const OPENING_AMOUNT_TOKEN_RX = /-?\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})/g;
 
 function normaliseOpeningText(text: string): string {
   return text
