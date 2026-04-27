@@ -196,6 +196,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
               company_id: companyId,
               name: r.account_name.trim(),
               type: r.new_type,
+              group_code: r.group_code || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
@@ -208,6 +209,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           const { error } = await supabase
             .from("ledgers")
             .update({
+              group_code: r.group_code || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
