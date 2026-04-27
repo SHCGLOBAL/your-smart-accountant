@@ -168,6 +168,7 @@ const SKIP_LINE_RX =
 // Hard skip: standalone summary/total rows (no account name).
 const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*(dr|cr)?\.?\s*$/i;
 const AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
+const FULL_AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})+(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
 const AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN, "g");
 const FIRST_AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN);
 const OPENING_AMOUNT_TOKEN_RX = /-?\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})/g;
@@ -243,7 +244,7 @@ export function extractOpeningBalanceTotals(text: string): OpeningBalanceTotals 
     const start = sections[i].index ?? 0;
     const end = sections[i + 1]?.index ?? normalised.length;
     const chunk = normalised.slice(start, end);
-    const totalMatch = [...chunk.matchAll(/\bTotals?\s+(-?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?)/gi)].pop();
+    const totalMatch = [...chunk.matchAll(new RegExp(`\\bTotals?\\s+(${FULL_AMOUNT_TOKEN_PATTERN})`, "gi"))].pop();
     if (!totalMatch) continue;
     if (/source/i.test(sections[i][1])) totals.sourcesTotal = Math.abs(num(totalMatch[1]));
     else totals.applicationsTotal = Math.abs(num(totalMatch[1]));
