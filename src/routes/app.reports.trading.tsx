@@ -9,6 +9,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { supabase } from "@/integrations/supabase/client";
+import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 
 export const Route = createFileRoute("/app/reports/trading")({
   head: () => ({ meta: [{ title: "Trading Account — Reports" }] }),
@@ -30,8 +31,6 @@ function TradingAccount() {
     fetchLedgerBalances(activeCompanyId, to, from).then(setBalances);
   }, [activeCompanyId, from, to]);
 
-  // Opening stock: opening balances of stock_in_hand ledgers (or items opening * rate)
-  // Closing stock: items qty * rate (best estimate without inventory valuation engine)
   useEffect(() => {
     if (!activeCompanyId) return;
     Promise.all([
@@ -50,69 +49,66 @@ function TradingAccount() {
       const itemOp = ((items.data || []) as { opening_stock_qty: number; opening_stock_rate_paise: number }[])
         .reduce((s, it) => s + Math.round(it.opening_stock_qty * it.opening_stock_rate_paise), 0);
       setOpeningStock(ledOp || itemOp);
-      // Closing stock — without movement engine, treat as same as opening (manual value).
       setClosingStock(ledOp || itemOp);
     });
   }, [activeCompanyId]);
 
-  const { directIncome, directExp, totalSales, totalDirect, gp } = useMemo(() => {
-    // Direct income = Sales-like; direct expense = Purchase / Direct Exp.
-    const directIncome = balances.filter((b) => b.type === "income_direct").map((b) => ({ ...b, value: -b.closing_paise }));
-    const directExp = balances.filter((b) => b.type === "expense_direct").map((b) => ({ ...b, value: b.closing_paise }));
-    const totalSales = directIncome.reduce((s, x) => s + x.value, 0);
-    const totalDirect = directExp.reduce((s, x) => s + x.value, 0);
-    // Gross Profit = (Sales + Closing Stock) - (Opening Stock + Direct Exp)
-    const gp = (totalSales + closingStock) - (totalDirect + openingStock);
-    return { directIncome, directExp, totalSales, totalDirect, gp };
-  }, [balances, openingStock, closingStock]);
+  // Direct income (Sales / Direct Income) and direct expenses (Purchase / Direct Exp), grouped.
+  const drBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => b.type === "expense_direct"),
+      "TRADING",
+      (b) => b.closing_paise,
+    ),
+    [balances],
+  );
+  const crBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => b.type === "income_direct"),
+      "TRADING",
+      (b) => -b.closing_paise,
+    ),
+    [balances],
+  );
 
-  // Dr (left) — Opening stock, Purchases & direct exp, Gross Profit c/d (if positive)
+  const goLedger = (id: string) =>
+    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
+
+  const drGroup = groupedTRows(drBuckets, goLedger);
+  const crGroup = groupedTRows(crBuckets, goLedger);
+
+  const totalSales = crGroup.totalPaise;
+  const totalDirect = drGroup.totalPaise;
+  const gp = totalSales + closingStock - (totalDirect + openingStock);
+
+  // Build display rows with Opening Stock / Closing Stock additions.
   const drRows: TRow[] = [];
   if (openingStock) drRows.push({ label: "To Opening Stock", amount: formatINR(openingStock), emphasis: "bold" });
-  for (const e of directExp.filter((x) => x.value)) {
-    drRows.push({
-      label: <>To {e.name}</>,
-      amount: formatINR(e.value),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
-    });
-  }
+  drRows.push(...drGroup.rows);
   if (gp > 0) drRows.push({ label: "To Gross Profit c/d", amount: formatINR(gp), emphasis: "total" });
 
-  // Cr (right) — Sales, Closing Stock, Gross Loss c/d (if negative)
-  const crRows: TRow[] = [];
-  for (const e of directIncome.filter((x) => x.value)) {
-    crRows.push({
-      label: <>By {e.name}</>,
-      amount: formatINR(e.value),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } }),
-    });
-  }
+  const crRows: TRow[] = [...crGroup.rows];
   if (closingStock) crRows.push({ label: "By Closing Stock", amount: formatINR(closingStock), emphasis: "bold" });
   if (gp < 0) crRows.push({ label: "By Gross Loss c/d", amount: formatINR(-gp), emphasis: "total" });
 
   const grandLeft = openingStock + totalDirect + Math.max(0, gp);
   const grandRight = totalSales + closingStock + Math.max(0, -gp);
 
-  // Plain (string-only) export rows derived from source data,
-  // independent of the JSX TRow rendering used on screen.
-  type ExportRow = { label: string; paise: number };
-  const drExport: ExportRow[] = [];
-  if (openingStock) drExport.push({ label: "To Opening Stock", paise: openingStock });
-  for (const e of directExp.filter((x) => x.value)) drExport.push({ label: `To ${e.name}`, paise: e.value });
-  if (gp > 0) drExport.push({ label: "To Gross Profit c/d", paise: gp });
-
-  const crExport: ExportRow[] = [];
-  for (const e of directIncome.filter((x) => x.value)) crExport.push({ label: `By ${e.name}`, paise: e.value });
-  if (closingStock) crExport.push({ label: "By Closing Stock", paise: closingStock });
-  if (gp < 0) crExport.push({ label: "By Gross Loss c/d", paise: -gp });
+  // Exports
+  const drExp = groupedExportRows(drBuckets, "To ");
+  const crExp = groupedExportRows(crBuckets, "By ");
+  if (openingStock) drExp.unshift({ label: "To Opening Stock", paise: openingStock, isSubtotal: true });
+  if (closingStock) crExp.push({ label: "By Closing Stock", paise: closingStock, isSubtotal: true });
+  if (gp > 0) drExp.push({ label: "  To Gross Profit c/d", paise: gp, isSubtotal: true });
+  if (gp < 0) crExp.push({ label: "  By Gross Loss c/d", paise: -gp, isSubtotal: true });
 
   const exportBody = (): (string | number)[][] => {
-    const max = Math.max(drExport.length, crExport.length);
+    const max = Math.max(drExp.length, crExp.length);
     return Array.from({ length: max }).map((_, i) => [
-      drExport[i]?.label ?? "",
-      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
-      crExport[i]?.label ?? "",
-      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+      drExp[i]?.label ?? "",
+      drExp[i] && !drExp[i].isHeader ? r(drExp[i].paise).toFixed(2) : "",
+      crExp[i]?.label ?? "",
+      crExp[i] && !crExp[i].isHeader ? r(crExp[i].paise).toFixed(2) : "",
     ]);
   };
 
@@ -152,7 +148,7 @@ function TradingAccount() {
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Direct Income (Sales) and Direct Expenses (Purchase / Direct Exp) only. Gross Profit / Loss flows to the P&L account.
+            Sales, Purchases &amp; Direct Expenses grouped per IT-norms. Gross Profit / Loss flows to the P&amp;L account.
             Stock values are taken from <strong>Stock-in-Hand</strong> ledgers (or items opening) — adjust closing stock manually
             via a journal entry if needed.
           </p>

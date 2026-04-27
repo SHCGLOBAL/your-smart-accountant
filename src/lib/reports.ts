@@ -5,6 +5,7 @@ export interface LedgerBalance {
   id: string;
   name: string;
   type: string;
+  group_code: string | null;
   closing_paise: number; // signed: +Dr, -Cr
 }
 
@@ -15,7 +16,7 @@ export async function fetchLedgerBalances(
 ): Promise<LedgerBalance[]> {
   const { data: ledgers } = await supabase
     .from("ledgers")
-    .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
+    .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
     .eq("company_id", companyId);
 
   let q = supabase
@@ -34,7 +35,7 @@ export async function fetchLedgerBalances(
   return (ledgers || []).map((l) => {
     const ob = fromOpt ? 0 : (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
     const closing = ob + (movements.get(l.id) || 0);
-    return { id: l.id, name: l.name, type: l.type, closing_paise: closing };
+    return { id: l.id, name: l.name, type: l.type, group_code: l.group_code ?? null, closing_paise: closing };
   });
 }
 

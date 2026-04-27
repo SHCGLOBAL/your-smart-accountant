@@ -20,6 +20,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import { extractOpeningBalanceTotals, parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultLedgerTypeForGroup,
+  guessGroupCode,
+} from "@/lib/account-groups";
 
 type LedgerType = Database["public"]["Enums"]["ledger_type"];
 
@@ -48,6 +54,7 @@ interface EditableRow extends ExtractedOpening {
   _selected: boolean;
   ledger_id: string; // empty = create-new
   new_type: LedgerType;
+  group_code: string;
 }
 
 interface Props { companyId: string; disabled: boolean }
@@ -122,13 +129,17 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       setRawText(text);
       setDocumentTotals(extractOpeningBalanceTotals(text));
       const parsed = parseTrialBalanceText(text);
-      setRows(parsed.map((p, i) => ({
-        ...p,
-        _key: `r${i}`,
-        _selected: true,
-        ledger_id: autoMatch(p.account_name),
-        new_type: guessType(p.account_name, p.side),
-      })));
+      setRows(parsed.map((p, i) => {
+        const groupCode = guessGroupCode(p.account_name, p.side);
+        return {
+          ...p,
+          _key: `r${i}`,
+          _selected: true,
+          ledger_id: autoMatch(p.account_name),
+          new_type: defaultLedgerTypeForGroup(groupCode),
+          group_code: groupCode,
+        };
+      }));
       toast.success(`Extracted ${parsed.length} accounts. Click "Show OCR text" to see what was read.`);
     } catch (e) {
       const err = e as Error;
@@ -148,7 +159,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   function addBlank() {
     setRows((rs) => [...rs, {
       _key: `n${Date.now()}`, _selected: true, ledger_id: "", new_type: "current_asset",
-      account_name: "", amount: 0, side: "Dr",
+      account_name: "", amount: 0, side: "Dr", group_code: "CURRENT_ASSETS",
     }]);
   }
 
@@ -185,6 +196,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
               company_id: companyId,
               name: r.account_name.trim(),
               type: r.new_type,
+              group_code: r.group_code || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
@@ -197,6 +209,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           const { error } = await supabase
             .from("ledgers")
             .update({
+              group_code: r.group_code || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
@@ -366,15 +379,37 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
                           </SelectContent>
                         </Select>
                         {!r.ledger_id && (
-                          <Select value={r.new_type}
-                            onValueChange={(v) => update(r._key, { new_type: v as LedgerType })}>
-                            <SelectTrigger className="h-7 text-xs mt-1"><SelectValue /></SelectTrigger>
+                          <Select value={r.group_code}
+                            onValueChange={(v) => update(r._key, {
+                              group_code: v,
+                              new_type: defaultLedgerTypeForGroup(v),
+                            })}>
+                            <SelectTrigger className="h-7 text-xs mt-1">
+                              <SelectValue placeholder="Group (IT-norms)" />
+                            </SelectTrigger>
                             <SelectContent>
-                              {LEDGER_TYPES.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                              {(["BS_LIAB", "BS_ASSET", "TRADING", "PL"] as const).map((sec) => (
+                                <div key={sec}>
+                                  <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {sec === "BS_LIAB" ? "Liabilities"
+                                      : sec === "BS_ASSET" ? "Assets"
+                                      : sec === "TRADING" ? "Trading"
+                                      : "P&L"}
+                                  </div>
+                                  {ACCOUNT_GROUPS.filter((g) => g.section === sec)
+                                    .sort((a, b) => a.order - b.order)
+                                    .map((g) => (
+                                      <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                                    ))}
+                                </div>
                               ))}
                             </SelectContent>
                           </Select>
+                        )}
+                        {r.ledger_id && r.group_code && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            Group: {GROUP_BY_CODE[r.group_code]?.label ?? r.group_code}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>

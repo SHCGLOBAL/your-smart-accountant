@@ -42,6 +42,12 @@ import {
   LEDGER_TYPES,
   type LedgerTypeValue,
 } from "@/lib/constants";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultGroupCodeForType,
+  defaultLedgerTypeForGroup,
+} from "@/lib/account-groups";
 import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/app/ledgers")({
@@ -53,6 +59,7 @@ interface Ledger {
   id: string;
   name: string;
   type: LedgerTypeValue;
+  group_code: string | null;
   gstin: string | null;
   pan: string | null;
   state: string | null;
@@ -92,6 +99,7 @@ const schema = z.object({
 type FormState = {
   name: string;
   type: string;
+  group_code: string;
   gstin: string;
   pan: string;
   state_code: string;
@@ -108,6 +116,7 @@ type FormState = {
 const emptyForm: FormState = {
   name: "",
   type: "",
+  group_code: "",
   gstin: "",
   pan: "",
   state_code: "",
@@ -212,6 +221,7 @@ function LedgersPage() {
     setForm({
       name: l.name,
       type: l.type,
+      group_code: l.group_code ?? defaultGroupCodeForType(l.type),
       gstin: l.gstin ?? "",
       pan: l.pan ?? "",
       state_code: l.state_code ?? "",
@@ -250,10 +260,12 @@ function LedgersPage() {
     const ob = parseFloat(parsed.data.opening_balance ?? "");
     const cl = parseFloat(parsed.data.credit_limit ?? "");
     const cd = parseInt(parsed.data.credit_days ?? "");
+    const groupCode = form.group_code || defaultGroupCodeForType(parsed.data.type as LedgerTypeValue);
     const payload = {
       company_id: activeCompanyId,
       name: parsed.data.name,
       type: parsed.data.type as LedgerTypeValue,
+      group_code: groupCode,
       gstin: parsed.data.gstin || null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
@@ -333,7 +345,18 @@ function LedgersPage() {
                     <Label htmlFor="type">Type *</Label>
                     <Select
                       value={form.type}
-                      onValueChange={(v) => setForm({ ...form, type: v })}
+                      onValueChange={(v) => {
+                        const newType = v as LedgerTypeValue;
+                        // Auto-pick a sensible group when changing type, unless the
+                        // currently selected group is still valid for this type.
+                        const cur = form.group_code ? GROUP_BY_CODE[form.group_code] : undefined;
+                        const stillValid = cur?.ledgerTypes.includes(newType);
+                        setForm({
+                          ...form,
+                          type: v,
+                          group_code: stillValid ? form.group_code : defaultGroupCodeForType(newType),
+                        });
+                      }}
                     >
                       <SelectTrigger id="type">
                         <SelectValue placeholder="Select ledger type" />
@@ -343,6 +366,44 @@ function LedgersPage() {
                           <SelectItem key={t.value} value={t.value}>
                             {t.label}
                           </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="group_code">Group (Income-Tax / Schedule III) *</Label>
+                    <Select
+                      value={form.group_code}
+                      onValueChange={(v) => {
+                        // When group changes, also normalise the underlying ledger.type
+                        // so postings & legacy reports keep working.
+                        const grp = GROUP_BY_CODE[v];
+                        const compatible = grp && (grp.ledgerTypes.includes(form.type as LedgerTypeValue));
+                        setForm({
+                          ...form,
+                          group_code: v,
+                          type: compatible ? form.type : defaultLedgerTypeForGroup(v),
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="group_code">
+                        <SelectValue placeholder="Select group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(["BS_LIAB", "BS_ASSET", "TRADING", "PL"] as const).map((sec) => (
+                          <div key={sec}>
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                              {sec === "BS_LIAB" ? "Sources of Funds (Liabilities)"
+                                : sec === "BS_ASSET" ? "Application of Funds (Assets)"
+                                : sec === "TRADING" ? "Trading Account"
+                                : "Profit & Loss Account"}
+                            </div>
+                            {ACCOUNT_GROUPS.filter((g) => g.section === sec)
+                              .sort((a, b) => a.order - b.order)
+                              .map((g) => (
+                                <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                              ))}
+                          </div>
                         ))}
                       </SelectContent>
                     </Select>
@@ -494,6 +555,7 @@ function LedgersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Group</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>GSTIN</TableHead>
                     <TableHead>State</TableHead>
@@ -505,9 +567,14 @@ function LedgersPage() {
                   {filtered.map((l) => {
                     const typeLabel =
                       LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type;
+                    const groupCode = l.group_code ?? defaultGroupCodeForType(l.type);
+                    const groupLbl = GROUP_BY_CODE[groupCode]?.label ?? "—";
                     return (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
+                        <TableCell>
+                          <Badge className="text-[10px]">{groupLbl}</Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">
                             {typeLabel}

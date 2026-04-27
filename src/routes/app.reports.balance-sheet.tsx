@@ -7,14 +7,12 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import {
-  fetchLedgerBalances,
-  PL_INCOME,
-  PL_EXPENSE,
-  BS_ASSET,
-  BS_LIAB,
-  type LedgerBalance,
-} from "@/lib/reports";
+  groupBalances,
+  groupedTRows,
+  groupedExportRows,
+} from "@/lib/report-grouping";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
@@ -34,83 +32,78 @@ function BalanceSheet() {
     fetchLedgerBalances(activeCompanyId, to).then(setBalances);
   }, [activeCompanyId, to]);
 
-  const { assets, liabilities, totalA, totalL, profit } = useMemo(() => {
-    const assets = balances
-      .filter((b) => BS_ASSET.has(b.type))
-      .map((b) => ({ ...b, value: b.closing_paise }));
-    const liabilities = balances
-      .filter((b) => BS_LIAB.has(b.type))
-      .map((b) => ({ ...b, value: -b.closing_paise }));
-    const incomeTotal = balances.filter((b) => PL_INCOME.has(b.type)).reduce((s, b) => s + -b.closing_paise, 0);
-    const expenseTotal = balances.filter((b) => PL_EXPENSE.has(b.type)).reduce((s, b) => s + b.closing_paise, 0);
-    const profit = incomeTotal - expenseTotal;
-    const totalA = assets.reduce((s, x) => s + x.value, 0);
-    const totalL = liabilities.reduce((s, x) => s + x.value, 0);
-    return { assets, liabilities, totalA, totalL, profit };
+  // Period P/L flows into the BS to balance it (Net Profit on Liabilities, Loss on Assets).
+  const profitPaise = useMemo(() => {
+    const inc = balances.filter((b) => b.type === "income_direct" || b.type === "income_indirect")
+      .reduce((s, b) => s + -b.closing_paise, 0);
+    const exp = balances.filter((b) => b.type === "expense_direct" || b.type === "expense_indirect")
+      .reduce((s, b) => s + b.closing_paise, 0);
+    return inc - exp;
   }, [balances]);
 
-  const liabExtended = profit >= 0
-    ? [...liabilities.filter((x) => x.value), { id: "__pl", name: "Net Profit (current period)", type: "capital", value: profit }]
-    : liabilities.filter((x) => x.value);
-  const assetExtended = profit < 0
-    ? [...assets.filter((x) => x.value), { id: "__pl", name: "Net Loss (current period)", type: "current_asset", value: -profit }]
-    : assets.filter((x) => x.value);
-  const grandL = totalL + Math.max(0, profit);
-  const grandA = totalA + Math.max(0, -profit);
+  const liabBuckets = useMemo(
+    () => groupBalances(balances, "BS_LIAB", (b) => -b.closing_paise),
+    [balances],
+  );
+  const assetBuckets = useMemo(
+    () => groupBalances(balances, "BS_ASSET", (b) => b.closing_paise),
+    [balances],
+  );
 
-  const liabRows: TRow[] = liabExtended.map((x) => ({
-    label: x.name,
-    amount: formatINR(x.value),
-    onClick: x.id !== "__pl"
-      ? () => navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })
-      : undefined,
-    emphasis: x.id === "__pl" ? "bold" : "normal",
-  }));
-  const assetRows: TRow[] = assetExtended.map((x) => ({
-    label: x.name,
-    amount: formatINR(x.value),
-    onClick: x.id !== "__pl"
-      ? () => navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })
-      : undefined,
-    emphasis: x.id === "__pl" ? "bold" : "normal",
-  }));
+  const goLedger = (id: string) =>
+    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
 
-  const csvRows = (): (string | number)[][] => {
-    const max = Math.max(liabExtended.length, assetExtended.length);
-    return [
-      [`Balance Sheet as on ${to}`, "", "", ""],
-      ["Liabilities", "Amount (₹)", "Assets", "Amount (₹)"],
-      ...Array.from({ length: max }).map((_, i) => [
-        liabExtended[i]?.name ?? "",
-        liabExtended[i] ? (liabExtended[i].value / 100).toFixed(2) : "",
-        assetExtended[i]?.name ?? "",
-        assetExtended[i] ? (assetExtended[i].value / 100).toFixed(2) : "",
-      ]),
-      ["Total", (grandL / 100).toFixed(2), "Total", (grandA / 100).toFixed(2)],
-    ];
+  const liab = groupedTRows(liabBuckets, goLedger);
+  const asset = groupedTRows(assetBuckets, goLedger);
+
+  // Append P/L balancing row
+  const liabRows: TRow[] = [...liab.rows];
+  const assetRows: TRow[] = [...asset.rows];
+  if (profitPaise > 0) {
+    liabRows.push({ label: "Net Profit (current period)", amount: formatINR(profitPaise), emphasis: "bold" });
+  } else if (profitPaise < 0) {
+    assetRows.push({ label: "Net Loss (current period)", amount: formatINR(-profitPaise), emphasis: "bold" });
+  }
+  const grandL = liab.totalPaise + Math.max(0, profitPaise);
+  const grandA = asset.totalPaise + Math.max(0, -profitPaise);
+
+  // Exports
+  const liabExp = groupedExportRows(liabBuckets);
+  const assetExp = groupedExportRows(assetBuckets);
+  if (profitPaise > 0) liabExp.push({ label: "Net Profit (current period)", paise: profitPaise, isSubtotal: true });
+  if (profitPaise < 0) assetExp.push({ label: "Net Loss (current period)", paise: -profitPaise, isSubtotal: true });
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(liabExp.length, assetExp.length);
+    return Array.from({ length: max }).map((_, i) => [
+      liabExp[i]?.label ?? "",
+      liabExp[i] && !liabExp[i].isHeader ? r(liabExp[i].paise).toFixed(2) : "",
+      assetExp[i]?.label ?? "",
+      assetExp[i] && !assetExp[i].isHeader ? r(assetExp[i].paise).toFixed(2) : "",
+    ]);
   };
+
+  const csvRows = (): (string | number)[][] => [
+    [`Balance Sheet as on ${to}`, "", "", ""],
+    ["Liabilities (Sources of Funds)", "Amount (₹)", "Assets (Application of Funds)", "Amount (₹)"],
+    ...exportBody(),
+    ["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)],
+  ];
 
   const onExportCsv = () => downloadCsv(`balance-sheet-${to}.csv`, csvRows());
   const onExportXlsx = () =>
     downloadXlsx(`balance-sheet-${to}.xlsx`, [{ name: "Balance Sheet", rows: csvRows() }]);
-  const onExportPdf = () => {
-    const max = Math.max(liabExtended.length, assetExtended.length);
+  const onExportPdf = () =>
     downloadPdfTable({
       title: "Balance Sheet",
       subtitle: `As on ${to}`,
-      head: [["Liabilities", "Amount (₹)", "Assets", "Amount (₹)"]],
-      body: Array.from({ length: max }).map((_, i) => [
-        liabExtended[i]?.name ?? "",
-        liabExtended[i] ? r(liabExtended[i].value).toFixed(2) : "",
-        assetExtended[i]?.name ?? "",
-        assetExtended[i] ? r(assetExtended[i].value).toFixed(2) : "",
-      ]),
+      head: [["Liabilities (Sources of Funds)", "Amount (₹)", "Assets (Application of Funds)", "Amount (₹)"]],
+      body: exportBody(),
       foot: [["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)]],
       fileName: `balance-sheet-${to}.pdf`,
       orientation: "l",
       rightAlignCols: [1, 3],
     });
-  };
 
   return (
     <div className="space-y-3">
@@ -127,15 +120,17 @@ function BalanceSheet() {
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Closing position as on <strong>{to}</strong>. Net P/L for the period auto-balances the sheet.
+            Closing position as on <strong>{to}</strong>. Heads grouped per Income-Tax / Schedule III norms
+            (Capital, Reserves, Loans, Sundry Creditors, Duties &amp; Taxes, Current Liabilities;
+            Fixed Assets, Investments, Stock, Debtors, Cash, Bank, Loans &amp; Advances, Current Assets).
           </p>
         </CardContent>
       </Card>
       <TAccount
         title="Balance Sheet"
         subtitle={`as on ${to}`}
-        leftHeader="Liabilities"
-        rightHeader="Assets"
+        leftHeader="Liabilities (Sources of Funds)"
+        rightHeader="Assets (Application of Funds)"
         leftRows={liabRows}
         rightRows={assetRows}
         leftTotal={formatINR(grandL)}
