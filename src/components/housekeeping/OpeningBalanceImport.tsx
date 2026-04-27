@@ -18,7 +18,7 @@ import { Loader2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
-import { parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
+import { extractOpeningBalanceTotals, parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
 import type { Database } from "@/integrations/supabase/types";
 
 type LedgerType = Database["public"]["Enums"]["ledger_type"];
@@ -60,6 +60,10 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [rawText, setRawText] = useState("");
+  const [documentTotals, setDocumentTotals] = useState<{ sourcesTotal: number | null; applicationsTotal: number | null }>({
+    sourcesTotal: null,
+    applicationsTotal: null,
+  });
   const [showRaw, setShowRaw] = useState(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [posting, setPosting] = useState(false);
@@ -85,10 +89,11 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
 
   function autoMatch(name: string): string {
     const norm = name.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-    const exact = ledgers.find((l) => l.name.toLowerCase() === norm);
+    const normaliseLedger = (ledgerName: string) => ledgerName.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+    const exact = ledgers.find((l) => normaliseLedger(l.name) === norm);
     if (exact) return exact.id;
     const partial = ledgers.find((l) =>
-      l.name.toLowerCase().includes(norm) || norm.includes(l.name.toLowerCase()),
+      normaliseLedger(l.name).includes(norm) || norm.includes(normaliseLedger(l.name)),
     );
     return partial?.id ?? "";
   }
@@ -115,6 +120,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     try {
       const text = await extractTextFromFile(file, setProgress);
       setRawText(text);
+      setDocumentTotals(extractOpeningBalanceTotals(text));
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => ({
         ...p,
@@ -150,12 +156,23 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     const sel = rows.filter((r) => r._selected);
     const dr = sel.filter((r) => r.side === "Dr").reduce((a, r) => a + r.amount, 0);
     const cr = sel.filter((r) => r.side === "Cr").reduce((a, r) => a + r.amount, 0);
-    return { count: sel.length, dr, cr, diff: dr - cr };
-  }, [rows]);
+    const diff = dr - cr;
+    const sourceDiff = documentTotals.sourcesTotal == null ? 0 : cr - documentTotals.sourcesTotal;
+    const applicationDiff = documentTotals.applicationsTotal == null ? 0 : dr - documentTotals.applicationsTotal;
+    return { count: sel.length, dr, cr, diff, sourceDiff, applicationDiff };
+  }, [documentTotals, rows]);
 
   async function postOpenings() {
     const sel = rows.filter((r) => r._selected && r.account_name.trim() && r.amount > 0);
     if (!sel.length) { toast.error("Nothing to post"); return; }
+    if (Math.abs(stats.diff) >= 0.5) {
+      toast.error("Debit and Credit totals must match before posting opening balances.");
+      return;
+    }
+    if (Math.abs(stats.sourceDiff) >= 0.5 || Math.abs(stats.applicationDiff) >= 0.5) {
+      toast.error("Selected ledger heads must match the Balance Sheet Sources and Applications totals.");
+      return;
+    }
     setPosting(true);
     try {
       let created = 0, updated = 0;
@@ -231,7 +248,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             <Label className="text-xs">Document</Label>
             <div className="flex gap-2">
               <input ref={fileInput} type="file" accept=".pdf,image/*" className="hidden"
-                onChange={(e) => { setFile(e.target.files?.[0] ?? null); setRows([]); }} />
+                onChange={(e) => { setFile(e.target.files?.[0] ?? null); setRows([]); setRawText(""); setDocumentTotals({ sourcesTotal: null, applicationsTotal: null }); }} />
               <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()} disabled={disabled}>
                 Choose PDF / Image
               </Button>
@@ -254,8 +271,16 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
               </Button>
             )}
             <Badge variant="outline">Rows: {stats.count}</Badge>
+            {documentTotals.sourcesTotal != null && <Badge variant="outline">BS Sources ₹{documentTotals.sourcesTotal.toFixed(2)}</Badge>}
+            {documentTotals.applicationsTotal != null && <Badge variant="outline">BS Applications ₹{documentTotals.applicationsTotal.toFixed(2)}</Badge>}
             <Badge variant="outline">Dr ₹{stats.dr.toFixed(2)}</Badge>
             <Badge variant="outline">Cr ₹{stats.cr.toFixed(2)}</Badge>
+            {documentTotals.sourcesTotal != null && (
+              <Badge variant={Math.abs(stats.sourceDiff) < 0.5 ? "default" : "destructive"}>Sources Δ ₹{stats.sourceDiff.toFixed(2)}</Badge>
+            )}
+            {documentTotals.applicationsTotal != null && (
+              <Badge variant={Math.abs(stats.applicationDiff) < 0.5 ? "default" : "destructive"}>Applications Δ ₹{stats.applicationDiff.toFixed(2)}</Badge>
+            )}
             <Badge variant={Math.abs(stats.diff) < 0.5 ? "default" : "destructive"}>
               Diff ₹{stats.diff.toFixed(2)}
             </Badge>
@@ -268,6 +293,12 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
               Raw OCR text — copy any line that's missing from the table and use "+ Add row" to enter it manually.
             </div>
             <pre className="text-[11px] whitespace-pre-wrap max-h-[260px] overflow-auto font-mono">{rawText}</pre>
+          </div>
+        )}
+
+        {(documentTotals.sourcesTotal != null || documentTotals.applicationsTotal != null) && (
+          <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+            Balance Sheet check: selected Cr heads must equal Sources of Funds and selected Dr heads must equal Applications of Funds before posting.
           </div>
         )}
 
@@ -373,7 +404,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button onClick={postOpenings} disabled={posting || stats.count === 0 || disabled}>
+          <Button onClick={postOpenings} disabled={posting || stats.count === 0 || disabled || Math.abs(stats.diff) >= 0.5 || Math.abs(stats.sourceDiff) >= 0.5 || Math.abs(stats.applicationDiff) >= 0.5}>
             {posting ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Posting…</> : `Post ${stats.count} Opening Balance${stats.count === 1 ? "" : "s"}`}
           </Button>
         </div>
