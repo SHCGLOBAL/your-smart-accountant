@@ -20,6 +20,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import { extractOpeningBalanceTotals, parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultLedgerTypeForGroup,
+  guessGroupCode,
+} from "@/lib/account-groups";
 
 type LedgerType = Database["public"]["Enums"]["ledger_type"];
 
@@ -48,6 +54,7 @@ interface EditableRow extends ExtractedOpening {
   _selected: boolean;
   ledger_id: string; // empty = create-new
   new_type: LedgerType;
+  group_code: string;
 }
 
 interface Props { companyId: string; disabled: boolean }
