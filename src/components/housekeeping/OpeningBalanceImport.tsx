@@ -129,13 +129,17 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       setRawText(text);
       setDocumentTotals(extractOpeningBalanceTotals(text));
       const parsed = parseTrialBalanceText(text);
-      setRows(parsed.map((p, i) => ({
-        ...p,
-        _key: `r${i}`,
-        _selected: true,
-        ledger_id: autoMatch(p.account_name),
-        new_type: guessType(p.account_name, p.side),
-      })));
+      setRows(parsed.map((p, i) => {
+        const groupCode = guessGroupCode(p.account_name, p.side);
+        return {
+          ...p,
+          _key: `r${i}`,
+          _selected: true,
+          ledger_id: autoMatch(p.account_name),
+          new_type: defaultLedgerTypeForGroup(groupCode),
+          group_code: groupCode,
+        };
+      }));
       toast.success(`Extracted ${parsed.length} accounts. Click "Show OCR text" to see what was read.`);
     } catch (e) {
       const err = e as Error;
