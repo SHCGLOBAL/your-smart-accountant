@@ -248,7 +248,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             <Label className="text-xs">Document</Label>
             <div className="flex gap-2">
               <input ref={fileInput} type="file" accept=".pdf,image/*" className="hidden"
-                onChange={(e) => { setFile(e.target.files?.[0] ?? null); setRows([]); }} />
+                onChange={(e) => { setFile(e.target.files?.[0] ?? null); setRows([]); setRawText(""); setDocumentTotals({ sourcesTotal: null, applicationsTotal: null }); }} />
               <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()} disabled={disabled}>
                 Choose PDF / Image
               </Button>
@@ -271,6 +271,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
               </Button>
             )}
             <Badge variant="outline">Rows: {stats.count}</Badge>
+            {documentTotals.sourcesTotal != null && <Badge variant="outline">BS Sources ₹{documentTotals.sourcesTotal.toFixed(2)}</Badge>}
+            {documentTotals.applicationsTotal != null && <Badge variant="outline">BS Applications ₹{documentTotals.applicationsTotal.toFixed(2)}</Badge>}
             <Badge variant="outline">Dr ₹{stats.dr.toFixed(2)}</Badge>
             <Badge variant="outline">Cr ₹{stats.cr.toFixed(2)}</Badge>
             <Badge variant={Math.abs(stats.diff) < 0.5 ? "default" : "destructive"}>
@@ -390,7 +392,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button onClick={postOpenings} disabled={posting || stats.count === 0 || disabled}>
+          <Button onClick={postOpenings} disabled={posting || stats.count === 0 || disabled || Math.abs(stats.diff) >= 0.5 || Math.abs(stats.sourceDiff) >= 0.5 || Math.abs(stats.applicationDiff) >= 0.5}>
             {posting ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Posting…</> : `Post ${stats.count} Opening Balance${stats.count === 1 ? "" : "s"}`}
           </Button>
         </div>
