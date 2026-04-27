@@ -82,7 +82,9 @@ export async function extractTextFromFile(
         const page = await pdf.getPage(p);
         const canvas = await pageToImageData(page);
         const { data } = await w.recognize(canvas);
-        if ((pages[p - 1] ?? "").length < data.text.length) pages[p - 1] = data.text;
+        if (!isReadablePdfText(pages[p - 1] ?? "") || (pages[p - 1] ?? "").length < data.text.length) {
+          pages[p - 1] = data.text;
+        }
       }
     }
     onProgress?.({ stage: "done" });
