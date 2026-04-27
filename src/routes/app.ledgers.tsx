@@ -221,6 +221,7 @@ function LedgersPage() {
     setForm({
       name: l.name,
       type: l.type,
+      group_code: l.group_code ?? defaultGroupCodeForType(l.type),
       gstin: l.gstin ?? "",
       pan: l.pan ?? "",
       state_code: l.state_code ?? "",
