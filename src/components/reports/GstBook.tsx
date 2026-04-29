@@ -1,0 +1,208 @@
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { formatINR } from "@/lib/money";
+import { downloadCsv } from "@/lib/csv";
+import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
+
+interface Row {
+  id: string;
+  voucher_date: string;
+  voucher_number: string;
+  vendor_invoice_no: string | null;
+  vendor_invoice_date: string | null;
+  place_of_supply_code: string | null;
+  is_interstate: boolean;
+  subtotal_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
+  round_off_paise: number;
+  total_paise: number;
+  ledgers: { name: string; gstin: string | null; state: string | null; state_code: string | null } | null;
+}
+
+export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
+  const { activeCompanyId, activeMembership } = useCompany();
+  const initial = defaultFyRange();
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [rows, setRows] = useState<Row[]>([]);
+
+  const types = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    supabase
+      .from("vouchers")
+      .select(
+        "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code)",
+      )
+      .eq("company_id", activeCompanyId)
+      .in("voucher_type", types)
+      .gte("voucher_date", from)
+      .lte("voucher_date", to)
+      .order("voucher_date", { ascending: true })
+      .then(({ data }) => setRows((data || []) as unknown as Row[]));
+  }, [activeCompanyId, from, to, kind]);
+
+  const totals = useMemo(
+    () =>
+      rows.reduce(
+        (s, x) => ({
+          taxable: s.taxable + x.subtotal_paise,
+          cgst: s.cgst + x.cgst_paise,
+          sgst: s.sgst + x.sgst_paise,
+          igst: s.igst + x.igst_paise,
+          total: s.total + x.total_paise,
+        }),
+        { taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 },
+      ),
+    [rows],
+  );
+
+  const title = kind === "sales" ? "GST Sales Book (Output Tax)" : "GST Purchase Book (Input Tax)";
+  const partyLabel = kind === "sales" ? "Customer" : "Supplier";
+  const billLabel = kind === "sales" ? "Invoice No." : "Bill No.";
+  const billDateLabel = kind === "sales" ? "Invoice Date" : "Bill Date";
+
+  const tableRows = rows.map((x) => [
+    x.voucher_date,
+    kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number),
+    kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date),
+    x.ledgers?.name || "—",
+    x.ledgers?.gstin || "—",
+    x.place_of_supply_code || x.ledgers?.state_code || "—",
+    x.is_interstate ? "Inter" : "Intra",
+    r(x.subtotal_paise),
+    r(x.cgst_paise),
+    r(x.sgst_paise),
+    r(x.igst_paise),
+    r(x.total_paise),
+  ]);
+
+  const headers = [
+    "Date",
+    billLabel,
+    billDateLabel,
+    partyLabel,
+    "GSTIN",
+    "POS",
+    "Type",
+    "Taxable",
+    "CGST",
+    "SGST",
+    "IGST",
+    "Invoice Total",
+  ];
+
+  const onCsv = () => {
+    const csv = [headers.join(","), ...tableRows.map((r2) => r2.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+    downloadCsv(csv, `${title.replace(/\s+/g, "_")}_${from}_to_${to}.csv`);
+  };
+  const onXlsx = () => {
+    downloadXlsx(`${title.replace(/\s+/g, "_")}_${from}_to_${to}.xlsx`, [
+      { name: kind === "sales" ? "Sales Book" : "Purchase Book", rows: [headers, ...tableRows] },
+    ]);
+  };
+  const onPdf = () => {
+    downloadPdfTable({
+      fileName: `${title.replace(/\s+/g, "_")}_${from}_to_${to}.pdf`,
+      title,
+      subtitle: `${activeMembership?.companies.name ?? ""} · ${from} to ${to}`,
+      head: [headers],
+      body: tableRows,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <Card>
+        <CardContent className="p-3 print:hidden">
+          <ReportToolbar
+            title={title}
+            from={from}
+            to={to}
+            onChange={(f, t) => {
+              setFrom(f);
+              setTo(t);
+            }}
+            onCsv={onCsv}
+            onXlsx={onXlsx}
+            onPdf={onPdf}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>{billLabel}</TableHead>
+                  <TableHead>{billDateLabel}</TableHead>
+                  <TableHead>{partyLabel}</TableHead>
+                  <TableHead>GSTIN</TableHead>
+                  <TableHead>POS</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">Invoice Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                      No entries in this period.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((x) => (
+                    <TableRow key={x.id}>
+                      <TableCell className="whitespace-nowrap">{x.voucher_date}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date}
+                      </TableCell>
+                      <TableCell>{x.ledgers?.name || "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
+                      <TableCell className="text-xs">{x.place_of_supply_code || x.ledgers?.state_code || "—"}</TableCell>
+                      <TableCell className="text-xs">{x.is_interstate ? "Inter" : "Intra"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(x.subtotal_paise)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(x.cgst_paise)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(x.sgst_paise)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(x.igst_paise)}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{formatINR(x.total_paise)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <TableRow className="font-semibold border-t-2">
+                    <TableCell colSpan={7} className="text-right">Totals</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totals.taxable)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totals.cgst)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totals.sgst)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totals.igst)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatINR(totals.total)}</TableCell>
+                  </TableRow>
+                </tfoot>
+              )}
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
