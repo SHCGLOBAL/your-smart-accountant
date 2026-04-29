@@ -245,6 +245,7 @@ export type Database = {
           gst_registered: boolean
           gstin: string | null
           id: string
+          inventory_enabled: boolean
           logo_url: string | null
           name: string
           pan: string | null
@@ -269,6 +270,7 @@ export type Database = {
           gst_registered?: boolean
           gstin?: string | null
           id?: string
+          inventory_enabled?: boolean
           logo_url?: string | null
           name: string
           pan?: string | null
@@ -293,6 +295,7 @@ export type Database = {
           gst_registered?: boolean
           gstin?: string | null
           id?: string
+          inventory_enabled?: boolean
           logo_url?: string | null
           name?: string
           pan?: string | null

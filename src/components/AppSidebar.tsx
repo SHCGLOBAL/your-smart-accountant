@@ -108,6 +108,8 @@ const SECTIONS: NavSection[] = [
       { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
       { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes },
       { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt },
+      { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt },
+      { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt },
     ],
   },
   {
@@ -125,6 +127,13 @@ const SECTIONS: NavSection[] = [
 const GST_URLS = new Set([
   "/app/reports/gstr1",
   "/app/einvoice",
+  "/app/reports/gst-sales-book",
+  "/app/reports/gst-purchase-book",
+]);
+
+const INVENTORY_URLS = new Set([
+  "/app/items",
+  "/app/reports/stock-summary",
 ]);
 
 export function AppSidebar() {
@@ -133,10 +142,15 @@ export function AppSidebar() {
   const location = useLocation();
   const { activeMembership } = useCompany();
   const gstEnabled = activeMembership?.companies?.gst_registered ?? false;
+  const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
 
   const visibleSections = SECTIONS.map((s) => ({
     ...s,
-    items: s.items.filter((i) => gstEnabled || !GST_URLS.has(i.url)),
+    items: s.items.filter(
+      (i) =>
+        (gstEnabled || !GST_URLS.has(i.url)) &&
+        (inventoryEnabled || !INVENTORY_URLS.has(i.url)),
+    ),
   })).filter((s) => s.items.length > 0);
 
   const isActive = (url: string) =>
