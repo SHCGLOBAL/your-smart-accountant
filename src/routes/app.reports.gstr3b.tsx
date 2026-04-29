@@ -132,7 +132,7 @@ function GSTR3BPage() {
                 </tr>
                 <tr>
                   <td className="font-medium">Legal name of the registered person</td>
-                  <td>{company?.legal_name || company?.name || ""}</td>
+                  <td>{company?.name || ""}</td>
                   <td className="font-medium">Month</td>
                   <td>{period.fp.slice(0, 2)}/{period.fp.slice(2)}</td>
                 </tr>
