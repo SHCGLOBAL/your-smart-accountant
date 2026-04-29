@@ -72,6 +72,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bank_statement_lines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bank_statement_lines_matched_entry_id_fkey"
             columns: ["matched_entry_id"]
             isOneToOne: false
@@ -146,6 +153,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bank_statements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bill_allocations: {
@@ -185,6 +199,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bill_allocations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bill_allocations_invoice_voucher_id_fkey"
             columns: ["invoice_voucher_id"]
             isOneToOne: false
@@ -209,6 +230,8 @@ export type Database = {
       }
       companies: {
         Row: {
+          access_password_hash: string | null
+          access_password_set_at: string | null
           address: string | null
           bank_account_no: string | null
           bank_branch: string | null
@@ -229,6 +252,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_password_hash?: string | null
+          access_password_set_at?: string | null
           address?: string | null
           bank_account_no?: string | null
           bank_branch?: string | null
@@ -249,6 +274,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_password_hash?: string | null
+          access_password_set_at?: string | null
           address?: string | null
           bank_account_no?: string | null
           bank_branch?: string | null
@@ -298,6 +325,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
         ]
@@ -362,6 +396,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       einvoice_api_log: {
@@ -407,6 +448,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "einvoice_api_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
           {
@@ -491,6 +539,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "einvoice_details_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "einvoice_details_voucher_id_fkey"
             columns: ["voucher_id"]
             isOneToOne: true
@@ -553,6 +608,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gst_api_credentials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       gstr2b_imports: {
@@ -595,6 +657,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gstr2b_imports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
         ]
@@ -663,6 +732,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gstr2b_lines_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gstr2b_lines_import_id_fkey"
             columns: ["import_id"]
             isOneToOne: false
@@ -717,6 +793,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "gstr3b_inward_summary_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       gstr3b_itc_reversal: {
@@ -762,6 +845,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gstr3b_itc_reversal_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
         ]
@@ -821,6 +911,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
         ]
@@ -909,6 +1006,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ledgers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payment_reminders: {
@@ -951,6 +1055,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reminders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
           {
@@ -1054,6 +1165,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_invoices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
             referencedColumns: ["id"]
           },
           {
@@ -1219,6 +1337,13 @@ export type Database = {
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "voucher_number_seq_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
         ]
       }
       vouchers: {
@@ -1339,6 +1464,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vouchers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vouchers_original_voucher_id_fkey"
             columns: ["original_voucher_id"]
             isOneToOne: false
@@ -1356,7 +1488,24 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      companies_picker: {
+        Row: {
+          has_password: boolean | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          has_password?: never
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          has_password?: never
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       can_write_company: {
@@ -1381,6 +1530,14 @@ export type Database = {
           _type: Database["public"]["Enums"]["voucher_type"]
         }
         Returns: string
+      }
+      set_company_password: {
+        Args: { _company_id: string; _new_password: string }
+        Returns: undefined
+      }
+      verify_company_password: {
+        Args: { _attempt: string; _company_id: string }
+        Returns: boolean
       }
       voucher_company_id: { Args: { _voucher_id: string }; Returns: string }
     }
