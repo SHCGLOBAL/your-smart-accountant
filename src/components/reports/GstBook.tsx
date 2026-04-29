@@ -7,6 +7,9 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
+import type { Database } from "@/integrations/supabase/types";
+
+type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
 interface Row {
   id: string;
@@ -32,7 +35,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const [to, setTo] = useState(initial.to);
   const [rows, setRows] = useState<Row[]>([]);
 
-  const types = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
+  const types: VoucherType[] = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -100,8 +103,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   ];
 
   const onCsv = () => {
-    const csv = [headers.join(","), ...tableRows.map((r2) => r2.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    downloadCsv(csv, `${title.replace(/\s+/g, "_")}_${from}_to_${to}.csv`);
+    downloadCsv(`${title.replace(/\s+/g, "_")}_${from}_to_${to}.csv`, [headers, ...tableRows]);
   };
   const onXlsx = () => {
     downloadXlsx(`${title.replace(/\s+/g, "_")}_${from}_to_${to}.xlsx`, [
@@ -122,17 +124,16 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3 print:hidden">
+          <div className="mb-2 text-base font-semibold">{title}</div>
           <ReportToolbar
-            title={title}
             from={from}
             to={to}
-            onChange={(f, t) => {
-              setFrom(f);
-              setTo(t);
-            }}
-            onCsv={onCsv}
-            onXlsx={onXlsx}
-            onPdf={onPdf}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onCsv}
+            onExportXlsx={onXlsx}
+            onExportPdf={onPdf}
+            onPrint={() => window.print()}
           />
         </CardContent>
       </Card>
