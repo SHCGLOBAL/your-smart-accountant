@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileJson, Printer, Plus, Trash2, BookOpen } from "lucide-react";
+import { Calculator } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import {
