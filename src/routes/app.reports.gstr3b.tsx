@@ -655,3 +655,283 @@ function InputOutputCalculator({ built, eligibleOverride }: { built: BuiltGstr3B
     </Card>
   );
 }
+
+// ============================================================
+// Purchase & Expense Ledger — Section 17(5), Rule 42/43, Sec 16
+// ============================================================
+
+type ItcCategory = "general" | "capital" | "expense";
+type ItcSubcategory =
+  | "raw_material" | "trading_stock" | "office_supplies"
+  | "machinery" | "computers" | "furniture" | "vehicles_passenger" | "vehicles_goods"
+  | "office_rent" | "professional_fees" | "telecom" | "staff_welfare" | "food_catering" | "travel" | "repairs";
+
+type EligibilityStatus = "eligible" | "blocked" | "partial" | "capital_reminder";
+
+interface PurchaseRow {
+  id: string;
+  date: string;
+  invoice_no: string;
+  category: ItcCategory;
+  sub: ItcSubcategory;
+  taxable: number;
+  igst: number;
+  cgst: number;
+  sgst: number;
+  business_pct: number; // 0-100
+  sold_quarters?: number; // for capital goods reversal
+}
+
+const SUB_OPTIONS: Record<ItcCategory, { value: ItcSubcategory; label: string }[]> = {
+  general: [
+    { value: "raw_material", label: "Raw Material" },
+    { value: "trading_stock", label: "Trading Stock" },
+    { value: "office_supplies", label: "Office Supplies" },
+  ],
+  capital: [
+    { value: "machinery", label: "Plant & Machinery" },
+    { value: "computers", label: "Computers / IT Equipment" },
+    { value: "furniture", label: "Furniture & Fixtures" },
+    { value: "vehicles_passenger", label: "Passenger Vehicles" },
+    { value: "vehicles_goods", label: "Goods Transport Vehicles" },
+  ],
+  expense: [
+    { value: "office_rent", label: "Office Rent" },
+    { value: "professional_fees", label: "Professional Fees" },
+    { value: "telecom", label: "Telecom / Internet" },
+    { value: "repairs", label: "Repairs & Maintenance" },
+    { value: "staff_welfare", label: "Staff Welfare / Insurance" },
+    { value: "food_catering", label: "Food / Catering" },
+    { value: "travel", label: "Employee Travel" },
+  ],
+};
+
+const RULE_REF: Record<ItcSubcategory, { rule: string; text: string }> = {
+  raw_material: { rule: "Sec 16(1)", text: "ITC fully eligible if used in course or furtherance of business." },
+  trading_stock: { rule: "Sec 16(1)", text: "ITC eligible on goods held for resale." },
+  office_supplies: { rule: "Sec 16(1)", text: "ITC eligible if exclusively for business use." },
+  machinery: { rule: "Sec 16(3) + Rule 43", text: "Capital goods ITC eligible. Depreciation must NOT be claimed on tax component." },
+  computers: { rule: "Sec 16(3) + Rule 43", text: "Capital goods ITC eligible. Depreciation must NOT be claimed on tax component." },
+  furniture: { rule: "Sec 16(3) + Rule 43", text: "Capital goods ITC eligible. Depreciation must NOT be claimed on tax component." },
+  vehicles_passenger: { rule: "Sec 17(5)(a)", text: "BLOCKED — ITC on motor vehicles for passenger transport (≤13 seats) is not allowed except for resale, transport of passengers, driving school." },
+  vehicles_goods: { rule: "Sec 17(5)(a) proviso", text: "ITC eligible on goods transport vehicles." },
+  office_rent: { rule: "Sec 16(1)", text: "ITC eligible on rent of premises used for business." },
+  professional_fees: { rule: "Sec 16(1)", text: "ITC eligible on professional services availed for business." },
+  telecom: { rule: "Sec 16(1)", text: "ITC eligible on telecom/internet used for business." },
+  repairs: { rule: "Sec 17(5)(c)/(d) proviso", text: "Eligible if not capitalised to immovable property." },
+  staff_welfare: { rule: "Sec 17(5)(b)", text: "BLOCKED — ITC on staff welfare, insurance, health services not allowed (unless statutorily obligatory)." },
+  food_catering: { rule: "Sec 17(5)(b)(i)", text: "BLOCKED — ITC on food, beverages, outdoor catering not allowed." },
+  travel: { rule: "Sec 17(5)(b)(iii)", text: "BLOCKED — ITC on employee travel benefits (LTC/holiday) not allowed." },
+};
+
+function evalEligibility(row: PurchaseRow): EligibilityStatus {
+  const blocked: ItcSubcategory[] = ["staff_welfare", "food_catering", "travel", "vehicles_passenger"];
+  if (blocked.includes(row.sub)) return "blocked";
+  if (row.category === "capital") {
+    if (row.business_pct < 100) return "partial";
+    return "capital_reminder";
+  }
+  if (row.business_pct < 100) return "partial";
+  return "eligible";
+}
+
+function eligibleAmounts(row: PurchaseRow): { i: number; c: number; s: number; ineligible_i: number; ineligible_c: number; ineligible_s: number } {
+  const status = evalEligibility(row);
+  if (status === "blocked") {
+    return { i: 0, c: 0, s: 0, ineligible_i: row.igst, ineligible_c: row.cgst, ineligible_s: row.sgst };
+  }
+  let factor = Math.max(0, Math.min(100, row.business_pct)) / 100;
+  // Capital goods sold within 5 yrs — reverse 5% per remaining quarter (Rule 40(2)/44(6))
+  if (row.category === "capital" && row.sold_quarters && row.sold_quarters > 0) {
+    const used = Math.min(row.sold_quarters, 20);
+    const retained = Math.max(0, 1 - 0.05 * (20 - used));
+    factor = factor * retained;
+  }
+  const i = row.igst * factor, c = row.cgst * factor, s = row.sgst * factor;
+  return { i, c, s, ineligible_i: row.igst - i, ineligible_c: row.cgst - c, ineligible_s: row.sgst - s };
+}
+
+function PurchaseExpenseLedger({
+  onEligibleItcChange,
+  ineligibleTotals,
+  setIneligibleTotals,
+}: {
+  onEligibleItcChange: (v: { i: number; c: number; s: number } | null) => void;
+  ineligibleTotals: { i: number; c: number; s: number };
+  setIneligibleTotals: (v: { i: number; c: number; s: number }) => void;
+}) {
+  const [rows, setRows] = useState<PurchaseRow[]>([]);
+  const [showRuleFor, setShowRuleFor] = useState<ItcSubcategory | null>(null);
+
+  const addRow = () => {
+    setRows((r) => [...r, {
+      id: crypto.randomUUID(), date: new Date().toISOString().slice(0, 10), invoice_no: "",
+      category: "general", sub: "raw_material",
+      taxable: 0, igst: 0, cgst: 0, sgst: 0, business_pct: 100,
+    }]);
+  };
+
+  const update = (id: string, patch: Partial<PurchaseRow>) => {
+    setRows((rs) => rs.map((r) => {
+      if (r.id !== id) return r;
+      const merged = { ...r, ...patch };
+      // If category changed, reset sub to first available
+      if (patch.category && patch.category !== r.category) {
+        merged.sub = SUB_OPTIONS[patch.category][0].value;
+      }
+      // Capital goods reminder
+      if (patch.category === "capital") {
+        toast.info("Capital Goods: ensure depreciation is NOT claimed on the tax component (Sec 16(3)).");
+      }
+      return merged;
+    }));
+  };
+
+  const remove = (id: string) => setRows((rs) => rs.filter((r) => r.id !== id));
+
+  const totals = useMemo(() => {
+    const t = { i: 0, c: 0, s: 0, ni: 0, nc: 0, ns: 0 };
+    rows.forEach((r) => {
+      const a = eligibleAmounts(r);
+      t.i += a.i; t.c += a.c; t.s += a.s;
+      t.ni += a.ineligible_i; t.nc += a.ineligible_c; t.ns += a.ineligible_s;
+    });
+    return t;
+  }, [rows]);
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      onEligibleItcChange(null);
+      setIneligibleTotals({ i: 0, c: 0, s: 0 });
+      return;
+    }
+    onEligibleItcChange({ i: totals.i, c: totals.c, s: totals.s });
+    setIneligibleTotals({ i: totals.ni, c: totals.nc, s: totals.ns });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totals.i, totals.c, totals.s, totals.ni, totals.nc, totals.ns, rows.length]);
+
+  const statusBadge = (s: EligibilityStatus) => {
+    const map = {
+      eligible: { cls: "bg-green-100 text-green-800 border-green-300", label: "Eligible" },
+      blocked: { cls: "bg-red-100 text-red-800 border-red-300", label: "Blocked" },
+      partial: { cls: "bg-orange-100 text-orange-800 border-orange-300", label: "Partial" },
+      capital_reminder: { cls: "bg-blue-100 text-blue-800 border-blue-300", label: "Eligible (Capital)" },
+    } as const;
+    const m = map[s];
+    return <span className={`inline-block rounded border px-2 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
+  };
+
+  return (
+    <Card className="print:hidden">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div>
+            <div className="font-medium">Purchase &amp; Expense Ledger — ITC Eligibility</div>
+            <div className="text-xs text-muted-foreground">Section 17(5), Rule 42/43 of CGST Rules · Eligible ITC feeds into the Offset Calculator above.</div>
+          </div>
+          <Button size="sm" variant="outline" onClick={addRow}><Plus className="mr-1 h-3.5 w-3.5" />Add Invoice</Button>
+        </div>
+
+        <div className="grid gap-4 p-4 md:grid-cols-[1fr_280px]">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date / Invoice</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Sub-category</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">Bus %</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 && (
+                  <TableRow><TableCell colSpan={10} className="py-6 text-center text-sm text-muted-foreground">No inward supplies entered. Click <span className="font-medium">Add Invoice</span> to begin.</TableCell></TableRow>
+                )}
+                {rows.map((r) => {
+                  const status = evalEligibility(r);
+                  const rowCls = status === "blocked" ? "bg-red-50/60" : status === "partial" ? "bg-orange-50/60" : status === "capital_reminder" ? "bg-blue-50/40" : "bg-green-50/30";
+                  return (
+                    <TableRow key={r.id} className={rowCls}>
+                      <TableCell className="space-y-1">
+                        <Input type="date" className="h-7 text-xs" value={r.date} onChange={(e) => update(r.id, { date: e.target.value })} />
+                        <Input className="h-7 text-xs" placeholder="Invoice #" value={r.invoice_no} onChange={(e) => update(r.id, { invoice_no: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Select value={r.category} onValueChange={(v) => update(r.id, { category: v as ItcCategory })}>
+                          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="general">General Input</SelectItem>
+                            <SelectItem value="capital">Capital Goods</SelectItem>
+                            <SelectItem value="expense">Business Expense</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Select value={r.sub} onValueChange={(v) => { update(r.id, { sub: v as ItcSubcategory }); setShowRuleFor(v as ItcSubcategory); }}>
+                          <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SUB_OPTIONS[r.category].map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell><Input type="number" className="h-8 w-24 text-right text-xs" value={r.taxable} onChange={(e) => update(r.id, { taxable: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.igst} onChange={(e) => update(r.id, { igst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.cgst} onChange={(e) => update(r.id, { cgst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.sgst} onChange={(e) => update(r.id, { sgst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" min={0} max={100} className="h-8 w-16 text-right text-xs" value={r.business_pct} onChange={(e) => update(r.id, { business_pct: Math.max(0, Math.min(100, +e.target.value)) })} /></TableCell>
+                      <TableCell>{statusBadge(status)}</TableCell>
+                      <TableCell><Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+
+            {rows.length > 0 && (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <div className="rounded border border-green-300 bg-green-50/50 p-3">
+                  <div className="text-xs font-semibold text-green-800">Eligible ITC (feeds Offset Calculator)</div>
+                  <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
+                    <div>IGST: <span className="font-mono font-semibold">₹{totals.i.toFixed(2)}</span></div>
+                    <div>CGST: <span className="font-mono font-semibold">₹{totals.c.toFixed(2)}</span></div>
+                    <div>SGST: <span className="font-mono font-semibold">₹{totals.s.toFixed(2)}</span></div>
+                  </div>
+                </div>
+                <div className="rounded border border-red-300 bg-red-50/50 p-3">
+                  <div className="text-xs font-semibold text-red-800">Ineligible ITC — Sec 17(5) Restrictions</div>
+                  <div className="mt-1 grid grid-cols-3 gap-2 text-xs">
+                    <div>IGST: <span className="font-mono font-semibold">₹{ineligibleTotals.i.toFixed(2)}</span></div>
+                    <div>CGST: <span className="font-mono font-semibold">₹{ineligibleTotals.c.toFixed(2)}</span></div>
+                    <div>SGST: <span className="font-mono font-semibold">₹{ineligibleTotals.s.toFixed(2)}</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <aside className="rounded border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4" />Rule Reference</div>
+            {showRuleFor ? (
+              <div className="space-y-2 text-xs">
+                <div className="font-semibold text-primary">{RULE_REF[showRuleFor].rule}</div>
+                <div className="text-muted-foreground">{RULE_REF[showRuleFor].text}</div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Select a sub-category in any row to see the relevant CGST Section / Rule here.</div>
+            )}
+            <div className="mt-4 space-y-1 text-[10px] text-muted-foreground">
+              <div>🟢 Eligible · 🟠 Partial · 🔴 Blocked · 🔵 Capital Goods</div>
+              <div>Capital goods sold: ITC reverses 5% per quarter of unused life (Rule 40(2)/44(6)).</div>
+            </div>
+          </aside>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
