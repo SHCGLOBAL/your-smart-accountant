@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon } from "lucide-react";
 import {
   exportAllCompaniesBackup,
   exportCompanyBackup,
@@ -77,6 +77,46 @@ function SettingsPage() {
   const [savingSetu, setSavingSetu] = useState(false);
 
   const isAdmin = activeMembership?.role === "admin";
+
+  // ---- Company access password ----
+  const [hasCompanyPwd, setHasCompanyPwd] = useState<boolean>(false);
+  const [newCompanyPwd, setNewCompanyPwd] = useState("");
+  const [savingCompanyPwd, setSavingCompanyPwd] = useState(false);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("companies_picker")
+        .select("has_password")
+        .eq("id", activeCompanyId)
+        .maybeSingle();
+      setHasCompanyPwd(!!data?.has_password);
+    })();
+  }, [activeCompanyId]);
+
+  const saveCompanyPwd = async (clear: boolean) => {
+    if (!activeCompanyId) return;
+    if (!clear && newCompanyPwd.length < 4) {
+      toast.error("Password must be at least 4 characters");
+      return;
+    }
+    setSavingCompanyPwd(true);
+    try {
+      const { error } = await supabase.rpc("set_company_password", {
+        _company_id: activeCompanyId,
+        _new_password: clear ? "" : newCompanyPwd,
+      });
+      if (error) throw error;
+      toast.success(clear ? "Password removed" : "Password set");
+      setHasCompanyPwd(!clear);
+      setNewCompanyPwd("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save password");
+    } finally {
+      setSavingCompanyPwd(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -286,6 +326,47 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <LockIcon className="h-4 w-4" /> Company access password
+              {hasCompanyPwd ? (
+                <span className="text-xs font-normal text-primary">● Set</span>
+              ) : (
+                <span className="text-xs font-normal text-muted-foreground">Not set (opens directly)</span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Optional. When set, this company will prompt for a password on the start screen before opening.
+              Other companies are unaffected. Forgot password? An admin can clear it here.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[200px] space-y-1.5">
+                <Label>{hasCompanyPwd ? "New password" : "Set password"}</Label>
+                <Input
+                  type="password"
+                  value={newCompanyPwd}
+                  onChange={(e) => setNewCompanyPwd(e.target.value)}
+                  placeholder="Min 4 characters"
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button onClick={() => saveCompanyPwd(false)} disabled={savingCompanyPwd || !newCompanyPwd}>
+                <Save className="mr-2 h-4 w-4" /> {hasCompanyPwd ? "Change password" : "Set password"}
+              </Button>
+              {hasCompanyPwd && (
+                <Button variant="outline" onClick={() => saveCompanyPwd(true)} disabled={savingCompanyPwd}>
+                  Remove password
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Invoice customization</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -391,7 +472,7 @@ function SettingsPage() {
             </TableBody>
           </Table>
           <p className="text-xs text-muted-foreground">
-            Users must sign up first; once they have an account, you can add them by email.
+            Multi-user invites are disabled in this build. Use Company access password above to control who can open this company.
           </p>
         </CardContent>
       </Card>
