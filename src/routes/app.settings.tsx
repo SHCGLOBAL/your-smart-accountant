@@ -105,7 +105,7 @@ function SettingsPage() {
     try {
       const { error } = await supabase.rpc("set_company_password", {
         _company_id: activeCompanyId,
-        _new_password: clear ? null : newCompanyPwd,
+        _new_password: clear ? "" : newCompanyPwd,
       });
       if (error) throw error;
       toast.success(clear ? "Password removed" : "Password set");
