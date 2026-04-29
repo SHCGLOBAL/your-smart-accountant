@@ -172,6 +172,8 @@ function GSTR3BPage() {
             }}
           />
 
+          <InputOutputCalculator built={built} />
+
           <Card>
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
