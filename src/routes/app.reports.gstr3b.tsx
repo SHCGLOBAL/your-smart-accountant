@@ -42,6 +42,7 @@ function GSTR3BPage() {
   const [reversal, setReversal] = useState<ItcReversalRow[]>([]);
   const [eligibleItc, setEligibleItc] = useState<{ i: number; c: number; s: number } | null>(null);
   const [ineligible, setIneligible] = useState<{ i: number; c: number; s: number }>({ i: 0, c: 0, s: 0 });
+  const [calcOpen, setCalcOpen] = useState(false);
 
   const period = useMemo(() => {
     const r = monthRange(month);
@@ -120,6 +121,9 @@ function GSTR3BPage() {
                 window.print();
               }}>
                 <Printer className="mr-1 h-4 w-4" /> Print
+              </Button>
+              <Button variant="default" size="sm" disabled={!built} onClick={() => setCalcOpen(true)}>
+                <Calculator className="mr-1 h-4 w-4" /> GST Calculator
               </Button>
             </div>
           </div>
