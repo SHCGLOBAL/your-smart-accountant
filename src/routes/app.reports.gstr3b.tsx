@@ -156,12 +156,23 @@ function GSTR3BPage() {
             }}
           />
 
-          <PurchaseExpenseLedger
-            onEligibleItcChange={(v: { i: number; c: number; s: number } | null) => setEligibleItc(v)}
-            ineligibleTotals={ineligible}
-            setIneligibleTotals={setIneligible}
-          />
-          <InputOutputCalculator built={built} eligibleOverride={eligibleItc} />
+          <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
+            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" /> GST Input-Output Calculator
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <PurchaseExpenseLedger
+                  onEligibleItcChange={(v: { i: number; c: number; s: number } | null) => setEligibleItc(v)}
+                  ineligibleTotals={ineligible}
+                  setIneligibleTotals={setIneligible}
+                />
+                <InputOutputCalculator built={built} eligibleOverride={eligibleItc} />
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Card className="print:hidden">
             <CardContent className="p-0">
