@@ -112,12 +112,11 @@ async function logCall(args: {
 
 // ---------- Check status ----------
 export const getSetuStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ companyId: z.string().uuid() }))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    // RLS will only return the row if user is admin
-    const sb = supabase as unknown as {
+  .handler(async ({ data }) => {
+    // Use admin client to read public-ish status flags. We never return secrets here.
+    // This avoids 401 errors during page load before the user session is fully established.
+    const sb = supabaseAdmin as unknown as {
       from: (t: string) => {
         select: (c: string) => {
           eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { environment?: string; einvoice_enabled?: boolean; ewaybill_enabled?: boolean; setu_client_id?: string | null; gstn_username?: string | null } | null }> };
