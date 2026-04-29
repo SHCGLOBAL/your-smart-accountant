@@ -134,7 +134,10 @@ function GSTR3BPage() {
                   <td className="font-medium">Legal name of the registered person</td>
                   <td>{company?.name || ""}</td>
                   <td className="font-medium">Month</td>
-                  <td>{period.fp.slice(0, 2)}/{period.fp.slice(2)}</td>
+                  <td>{(() => {
+                    const names = ["", "January","February","March","April","May","June","July","August","September","October","November","December"];
+                    return `${names[Number(period.fp.slice(0,2))] || period.fp.slice(0,2)} ${period.fp.slice(2)}`;
+                  })()}</td>
                 </tr>
               </tbody>
             </table>
