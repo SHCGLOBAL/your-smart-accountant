@@ -122,7 +122,7 @@ function GSTR3BPage() {
               }}>
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>
-              <Button variant="default" size="sm" disabled={!built} onClick={() => setCalcOpen(true)}>
+              <Button variant="default" size="sm" onClick={() => setCalcOpen(true)}>
                 <Calculator className="mr-1 h-4 w-4" /> GST Calculator
               </Button>
             </div>
@@ -130,6 +130,28 @@ function GSTR3BPage() {
           <p className="mt-2 text-xs text-muted-foreground">Period: <strong>{period.from}</strong> to <strong>{period.to}</strong> · FP <code>{period.fp}</code></p>
         </CardContent>
       </Card>
+
+      <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" /> GST Input-Output Calculator
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <PurchaseExpenseLedger
+              onEligibleItcChange={(v: { i: number; c: number; s: number } | null) => setEligibleItc(v)}
+              ineligibleTotals={ineligible}
+              setIneligibleTotals={setIneligible}
+            />
+            {built ? (
+              <InputOutputCalculator built={built} eligibleOverride={eligibleItc} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Select a return period to view the offset calculator output.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {built && (
         <>
@@ -155,24 +177,6 @@ function GSTR3BPage() {
               setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r }));
             }}
           />
-
-          <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
-            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5" /> GST Input-Output Calculator
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <PurchaseExpenseLedger
-                  onEligibleItcChange={(v: { i: number; c: number; s: number } | null) => setEligibleItc(v)}
-                  ineligibleTotals={ineligible}
-                  setIneligibleTotals={setIneligible}
-                />
-                <InputOutputCalculator built={built} eligibleOverride={eligibleItc} />
-              </div>
-            </DialogContent>
-          </Dialog>
 
           <Card className="print:hidden">
             <CardContent className="p-0">
