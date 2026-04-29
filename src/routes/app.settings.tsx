@@ -472,7 +472,7 @@ function SettingsPage() {
             </TableBody>
           </Table>
           <p className="text-xs text-muted-foreground">
-            Users must sign up first; once they have an account, you can add them by email.
+            Multi-user invites are disabled in this build. Use Company access password above to control who can open this company.
           </p>
         </CardContent>
       </Card>
