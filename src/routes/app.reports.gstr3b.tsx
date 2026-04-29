@@ -11,9 +11,8 @@ import { toast } from "sonner";
 import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { downloadXlsx } from "@/lib/exporters";
 import {
-  buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson, gstr3bToXlsxSheets,
+  buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson,
   monthRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
   type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
