@@ -151,7 +151,7 @@ function GSTR3BPage() {
           />
 
           <PurchaseExpenseLedger
-            onEligibleItcChange={(v) => setEligibleItc(v)}
+            onEligibleItcChange={(v: { i: number; c: number; s: number } | null) => setEligibleItc(v)}
             ineligibleTotals={ineligible}
             setIneligibleTotals={setIneligible}
           />
