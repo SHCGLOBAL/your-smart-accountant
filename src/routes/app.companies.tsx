@@ -333,6 +333,19 @@ function CompaniesPage() {
                   <p className="text-xs text-muted-foreground">
                     When off, Items / Stock and Stock Summary are hidden from the menu.
                   </p>
+                  <div className="mt-3 space-y-1.5">
+                    <Label className="text-xs">Annual Turnover (₹ in Lakhs)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 250 for ₹2.5 Cr"
+                      value={form.annual_turnover_lakhs}
+                      onChange={(e) => setForm({ ...form, annual_turnover_lakhs: e.target.value })}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
+                    </p>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
