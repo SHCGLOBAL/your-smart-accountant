@@ -64,6 +64,45 @@ function readBuffer(f: File | Blob): Promise<ArrayBuffer> {
   });
 }
 
+/**
+ * Smart text decoder. Detects UTF-16 LE/BE, UTF-8 BOM, or NUL-heavy data
+ * (common in Tally XML exports) and decodes accordingly. Strips BOM + stray NULs.
+ */
+export async function decodeFileSmart(f: File | Blob): Promise<string> {
+  const buf = await readBuffer(f);
+  const bytes = new Uint8Array(buf);
+  let encoding: "utf-16le" | "utf-16be" | "utf-8" = "utf-8";
+  let sliceFrom = 0;
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    encoding = "utf-16le";
+    sliceFrom = 2;
+  } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    encoding = "utf-16be";
+    sliceFrom = 2;
+  } else if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    encoding = "utf-8";
+    sliceFrom = 3;
+  } else {
+    // Heuristic: lots of NULs at even indices → UTF-16LE; odd → UTF-16BE
+    const sample = bytes.subarray(0, Math.min(2048, bytes.length));
+    let nulEven = 0, nulOdd = 0;
+    for (let i = 0; i < sample.length; i++) {
+      if (sample[i] === 0) (i % 2 === 0 ? nulOdd : nulEven)++;
+    }
+    if (nulEven > sample.length * 0.2) encoding = "utf-16le";
+    else if (nulOdd > sample.length * 0.2) encoding = "utf-16be";
+  }
+  const view = sliceFrom > 0 ? bytes.subarray(sliceFrom) : bytes;
+  const decoded = new TextDecoder(encoding, { fatal: false }).decode(view);
+  // Strip residual NULs and BOM character.
+  return decoded.replace(/\u0000/g, "").replace(/^\uFEFF/, "");
+}
+
+/** Utility: yield to the browser so the UI can paint between heavy batches. */
+export function yieldToUI(): Promise<void> {
+  return new Promise((res) => setTimeout(res, 0));
+}
+
 // ---------------- Parsing ----------------
 
 /** Row record + originating sheet name (helps classify CSV/Excel). */
