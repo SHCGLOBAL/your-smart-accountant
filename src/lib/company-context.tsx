@@ -16,6 +16,7 @@ export interface CompanyMembership {
     gst_registered: boolean;
     gst_filing_frequency: "monthly" | "quarterly" | "iff";
     inventory_enabled: boolean;
+    annual_turnover_paise: number;
   };
 }
 
@@ -47,7 +48,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("company_members")
-      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled)")
+      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise)")
       .order("created_at", { ascending: true });
 
     if (error) {
