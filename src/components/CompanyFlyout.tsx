@@ -74,6 +74,7 @@ export function CompanyFlyout() {
   const navigate = useNavigate();
   const { memberships, activeCompanyId, setActiveCompanyId } = useCompany();
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"menu" | "list">("menu");
   const [hideTimer, setHideTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (hideTimer) clearTimeout(hideTimer); }, [hideTimer]);
@@ -83,17 +84,19 @@ export function CompanyFlyout() {
     setOpen(true);
   };
   const scheduleHide = () => {
-    const t = setTimeout(() => setOpen(false), 180);
+    const t = setTimeout(() => { setOpen(false); setView("menu"); }, 200);
     setHideTimer(t);
   };
 
   const onNew = () => {
     setOpen(false);
+    setView("menu");
     navigate({ to: "/app/companies", search: { new: 1 } as never });
   };
   const onPick = (id: string) => {
     setActiveCompanyId(id);
     setOpen(false);
+    setView("menu");
     navigate({ to: "/app" });
   };
 
@@ -121,33 +124,57 @@ export function CompanyFlyout() {
           onMouseEnter={show}
           onMouseLeave={scheduleHide}
         >
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Companies
-            </div>
-            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setOpen(false); navigate({ to: "/app/settings" }); }}>
-              <Settings className="mr-1 h-3.5 w-3.5" /> Settings
-            </Button>
-          </div>
-
-          <Button size="sm" className="mb-3 w-full justify-start" onClick={onNew}>
-            <Plus className="mr-1.5 h-4 w-4" /> New company
-          </Button>
-
-          {memberships.length === 0 ? (
-            <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
-              No companies yet.
+          {view === "menu" ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={onNew}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <Plus className="h-4 w-4" />
+                <span>New company</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <Building2 className="h-4 w-4" />
+                <span>Existing companies</span>
+                <span className="ml-auto text-xs text-muted-foreground">{memberships.length}</span>
+                <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+              </button>
             </div>
           ) : (
-            <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1">
-              {memberships.map((m) => (
-                <CompanyMiniCard
-                  key={m.company_id}
-                  m={m}
-                  isActive={m.company_id === activeCompanyId}
-                  onPick={onPick}
-                />
-              ))}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setView("menu")}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setOpen(false); setView("menu"); navigate({ to: "/app/settings" }); }}>
+                  <Settings className="mr-1 h-3.5 w-3.5" /> Settings
+                </Button>
+              </div>
+              {memberships.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                  No companies yet.
+                </div>
+              ) : (
+                <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1">
+                  {memberships.map((m) => (
+                    <CompanyMiniCard
+                      key={m.company_id}
+                      m={m}
+                      isActive={m.company_id === activeCompanyId}
+                      onPick={onPick}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
