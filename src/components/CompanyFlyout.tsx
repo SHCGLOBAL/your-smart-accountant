@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
 
@@ -17,10 +16,12 @@ function CompanyMiniCard({
   m,
   isActive,
   onPick,
+  onEdit,
 }: {
   m: CompanyMembership;
   isActive: boolean;
   onPick: (id: string) => void;
+  onEdit: (id: string) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
@@ -39,7 +40,20 @@ function CompanyMiniCard({
               {m.companies.gst_registered ? "GST" : "Unreg."} • {m.role}
             </div>
           </div>
-          {isActive && <Check className="h-4 w-4 shrink-0 text-primary" />}
+          <div className="flex shrink-0 items-center gap-1">
+            {isActive && <Check className="h-4 w-4 text-primary" />}
+            {m.role === "admin" && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onEdit(m.company_id); }}
+                className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Edit company"
+                title="Edit"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center justify-between rounded-md border bg-muted/40 px-1.5 py-1">
           <button
