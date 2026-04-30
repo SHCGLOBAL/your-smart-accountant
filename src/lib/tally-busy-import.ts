@@ -179,11 +179,11 @@ export async function parseTallyXml(xml: string): Promise<ParsedRow[]> {
 export async function parseAnyFile(f: File | Blob, name: string): Promise<ParsedRow[]> {
   const lname = name.toLowerCase();
   if (lname.endsWith(".xml")) {
-    const text = await readText(f);
+    const text = await decodeFileSmart(f);
     return await parseTallyXml(text);
   }
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
-    const text = await readText(f);
+    const text = await decodeFileSmart(f);
     const Papa = (await import("papaparse")).default;
     const out = Papa.parse<Record<string, unknown>>(text, {
       header: true,
