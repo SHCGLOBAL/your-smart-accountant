@@ -440,13 +440,16 @@ export async function classifyAndMap(
 export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>(
     (existing || []).map((l) => [lc(l.name), l.id]),
   );
   let created = 0, updated = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
     if (!r.name) { skipped++; continue; }
     const payload = {
@@ -464,25 +467,36 @@ export async function postLedgers(
     const id = map.get(lc(r.name));
     if (id) {
       const { error } = await supabase.from("ledgers").update(payload).eq("id", id);
-      if (error) skipped++; else updated++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
     } else {
       const { data, error } = await supabase
         .from("ledgers").insert(payload).select("id").single();
-      if (error || !data) { skipped++; }
-      else { created++; map.set(lc(r.name), data.id); }
+      if (error || !data) {
+        skipped++;
+        failed.push({ name: r.name, reason: error?.message || "insert failed" });
+      } else { created++; map.set(lc(r.name), data.id); }
+    }
+    done++;
+    if (done % 25 === 0) {
+      onProgress?.(done, rows.length, "Posting ledgers");
+      await yieldToUI();
     }
   }
-  return { created, updated, skipped };
+  onProgress?.(rows.length, rows.length, "Posting ledgers");
+  return { created, updated, skipped, failed };
 }
 
 export async function postItems(
   companyId: string,
   rows: ItemRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("items").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>((existing || []).map((x) => [lc(x.name), x.id]));
   let created = 0, updated = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
     if (!r.name) { skipped++; continue; }
     const payload = {
@@ -499,19 +513,26 @@ export async function postItems(
     const id = map.get(lc(r.name));
     if (id) {
       const { error } = await supabase.from("items").update(payload).eq("id", id);
-      if (error) skipped++; else updated++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
     } else {
       const { error } = await supabase.from("items").insert(payload);
-      if (error) skipped++; else created++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else created++;
+    }
+    done++;
+    if (done % 25 === 0) {
+      onProgress?.(done, rows.length, "Posting items");
+      await yieldToUI();
     }
   }
-  return { created, updated, skipped };
+  onProgress?.(rows.length, rows.length, "Posting items");
+  return { created, updated, skipped, failed };
 }
 
 export async function postVouchers(
   companyId: string,
   rows: VoucherRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Sign in required");
   const { data: ledgers } = await supabase
@@ -531,7 +552,10 @@ export async function postVouchers(
   }
 
   let created = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
+    try {
     let partyId: string | null = null;
     if (r.party) {
       const inferredType: LedgerType = (
@@ -567,7 +591,11 @@ export async function postVouchers(
         total_paise: totalP,
         created_by: user.id,
       }).select("id").single();
-    if (vErr || !vch) { skipped++; continue; }
+    if (vErr || !vch) {
+      skipped++;
+      failed.push({ name: `${r.voucher_no} (${r.date})`, reason: vErr?.message || "insert failed" });
+      continue;
+    }
 
     const entries: { ledger_id: string; debit_paise: number; credit_paise: number; line_no: number; voucher_id: string }[] = [];
     if (r.vtype === "sales" || r.vtype === "debit_note") {
@@ -585,6 +613,17 @@ export async function postVouchers(
     }
     if (entries.length > 0) await supabase.from("voucher_entries").insert(entries);
     created++;
+    } catch (err) {
+      const e = err as { message?: string };
+      skipped++;
+      failed.push({ name: `${r.voucher_no} (${r.date})`, reason: e.message || "unknown" });
+    }
+    done++;
+    if (done % 10 === 0) {
+      onProgress?.(done, rows.length, "Posting vouchers");
+      await yieldToUI();
+    }
   }
-  return { created, updated: 0, skipped };
+  onProgress?.(rows.length, rows.length, "Posting vouchers");
+  return { created, updated: 0, skipped, failed };
 }
