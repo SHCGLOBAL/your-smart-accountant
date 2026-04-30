@@ -18,6 +18,8 @@ import {
   isCompanyUnlocked,
   markCompanyUnlocked,
 } from "@/lib/tech-user";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,6 +39,7 @@ interface PickerCompany {
 
 function StartScreen() {
   const navigate = useNavigate();
+  const { t, lang, setLang } = useI18n();
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<PickerCompany[]>([]);
   const [pendingCompany, setPendingCompany] = useState<PickerCompany | null>(null);
@@ -63,6 +66,10 @@ function StartScreen() {
   }, []);
 
   const openCompany = async (c: PickerCompany) => {
+    // Apply this company's preferred language (if any), else save current global as its preference
+    const cl = getCompanyLang(c.id);
+    if (cl) setLang(cl);
+    else setCompanyLang(c.id, lang);
     if (!c.has_password || isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
       markCompanyUnlocked(c.id);
@@ -90,6 +97,7 @@ function StartScreen() {
       }
       markCompanyUnlocked(pendingCompany.id);
       localStorage.setItem("ym_active_company_id", pendingCompany.id);
+      setCompanyLang(pendingCompany.id, lang);
       setPendingCompany(null);
       navigate({ to: "/app" });
     } catch (err) {
@@ -118,41 +126,42 @@ function StartScreen() {
               म
             </div>
             <div className="leading-tight">
-              <div className="text-base font-semibold tracking-tight">Your Mehtaji</div>
+              <div className="text-base font-semibold tracking-tight">{t("app.title")}</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Open a company
+                {t("app.subtitle")}
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => window.close()} className="hidden md:inline-flex">
-            <ExitIcon className="mr-2 h-4 w-4" /> Exit
-          </Button>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher compact />
+            <Button variant="ghost" size="sm" onClick={() => window.close()} className="hidden md:inline-flex">
+              <ExitIcon className="mr-2 h-4 w-4" /> {t("common.exit")}
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
         <div className="mb-6 flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Select a company</h1>
-            <p className="text-sm text-muted-foreground">
-              Click a company to open it. Locked companies will ask for a password.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t("company.select")}</h1>
+            <p className="text-sm text-muted-foreground">{t("company.select.desc")}</p>
           </div>
           <Button onClick={newCompany}>
-            <Plus className="mr-2 h-4 w-4" /> New company
+            <Plus className="mr-2 h-4 w-4" /> {t("company.new")}
           </Button>
         </div>
 
         {loading ? (
           <div className="rounded-xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">
-            Loading…
+            {t("common.loading")}
           </div>
         ) : companies.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-12 text-center">
             <Building2 className="h-10 w-10 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No companies yet. Create your first one.</p>
+            <p className="text-sm text-muted-foreground">{t("company.none")}</p>
             <Button onClick={newCompany}>
-              <Plus className="mr-2 h-4 w-4" /> Create company
+              <Plus className="mr-2 h-4 w-4" /> {t("company.create")}
             </Button>
           </div>
         ) : (
@@ -176,7 +185,7 @@ function StartScreen() {
                     )}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {c.has_password ? "Password protected" : "No password — opens directly"}
+                    {c.has_password ? t("company.passwordProtected") : t("company.opensDirectly")}
                   </div>
                 </div>
               </button>
@@ -188,26 +197,26 @@ function StartScreen() {
       <Dialog open={!!pendingCompany} onOpenChange={(o) => !o && setPendingCompany(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Open “{pendingCompany?.name}”</DialogTitle>
+            <DialogTitle>{t("common.open")} “{pendingCompany?.name}”</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitPassword} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="cpwd">Company password</Label>
+              <Label htmlFor="cpwd">{t("company.password")}</Label>
               <Input
                 id="cpwd"
                 type="password"
                 autoFocus
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
-                placeholder="Enter password"
+                placeholder={t("company.passwordPlaceholder")}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setPendingCompany(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={verifying || !pwd}>
-                {verifying ? "Checking…" : "Open"}
+                {verifying ? t("common.checking") : t("common.open")}
               </Button>
             </DialogFooter>
           </form>

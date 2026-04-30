@@ -2,6 +2,7 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { AuthProvider } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { I18nProvider } from "@/lib/i18n";
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
@@ -79,12 +80,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <CompanyProvider>
-          <Outlet />
-          <Toaster richColors position="top-right" />
-        </CompanyProvider>
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <CompanyProvider>
+            <Outlet />
+            <Toaster richColors position="top-right" />
+          </CompanyProvider>
+        </AuthProvider>
+      </I18nProvider>
     </ThemeProvider>
   );
 }
