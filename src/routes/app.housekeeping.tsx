@@ -37,6 +37,7 @@ import {
   HardDrive,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
+import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +61,8 @@ function HousekeepingPage() {
   const { activeCompanyId, activeMembership } = useCompany();
   const isAdmin = activeMembership?.role === "admin";
   const companyName = activeMembership?.companies?.name ?? "company";
+  const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
+  const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
 
   return (
     <div className="space-y-4">
@@ -86,10 +89,15 @@ function HousekeepingPage() {
       )}
 
       <Tabs defaultValue="opening" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-8">
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
           </TabsTrigger>
+          {inventoryEnabled && (
+            <TabsTrigger value="opening_stock">
+              <Upload className="mr-1 h-3.5 w-3.5" /> Opening Stock
+            </TabsTrigger>
+          )}
           <TabsTrigger value="backup">
             <HardDrive className="mr-1 h-3.5 w-3.5" /> Backup / Restore
           </TabsTrigger>
@@ -115,6 +123,13 @@ function HousekeepingPage() {
             <OpeningBalanceImport companyId={activeCompanyId} disabled={!isAdmin} />
           ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
         </TabsContent>
+        {inventoryEnabled && (
+          <TabsContent value="opening_stock">
+            {activeCompanyId ? (
+              <OpeningStockImport companyId={activeCompanyId} disabled={!isAdmin} annualTurnoverPaise={turnoverPaise} />
+            ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
+          </TabsContent>
+        )}
         <TabsContent value="backup">
           {activeCompanyId ? (
             <BackupRestoreTool companyId={activeCompanyId} companyName={companyName} disabled={!isAdmin} />

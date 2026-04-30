@@ -57,6 +57,7 @@ const schema = z.object({
   gst_registered: z.boolean(),
   gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
   inventory_enabled: z.boolean(),
+  annual_turnover_lakhs: z.string().optional(),
 });
 
 interface FormState {
@@ -77,6 +78,7 @@ interface FormState {
   gst_registered: boolean;
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
+  annual_turnover_lakhs: string;
 }
 
 const empty: FormState = {
@@ -97,6 +99,7 @@ const empty: FormState = {
   gst_registered: false,
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
+  annual_turnover_lakhs: "",
 };
 
 function CompaniesPage() {
@@ -151,6 +154,7 @@ function CompaniesPage() {
       gst_registered: data.gst_registered ?? (data.gstin ? true : false),
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
+      annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
     });
     setOpen(true);
   };
@@ -210,6 +214,7 @@ function CompaniesPage() {
       gst_registered: parsed.data.gst_registered,
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
+      annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
     };
 
     if (editingId) {
@@ -328,6 +333,19 @@ function CompaniesPage() {
                   <p className="text-xs text-muted-foreground">
                     When off, Items / Stock and Stock Summary are hidden from the menu.
                   </p>
+                  <div className="mt-3 space-y-1.5">
+                    <Label className="text-xs">Annual Turnover (₹ in Lakhs)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 250 for ₹2.5 Cr"
+                      value={form.annual_turnover_lakhs}
+                      onChange={(e) => setForm({ ...form, annual_turnover_lakhs: e.target.value })}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
+                    </p>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
