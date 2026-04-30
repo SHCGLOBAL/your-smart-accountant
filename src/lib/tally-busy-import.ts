@@ -64,6 +64,48 @@ function readBuffer(f: File | Blob): Promise<ArrayBuffer> {
   });
 }
 
+/**
+ * Smart text decoder. Detects UTF-16 LE/BE, UTF-8 BOM, or NUL-heavy data
+ * (common in Tally XML exports) and decodes accordingly. Strips BOM + stray NULs.
+ */
+export async function decodeFileSmart(f: File | Blob): Promise<string> {
+  const buf = await readBuffer(f);
+  const bytes = new Uint8Array(buf);
+  let encoding: "utf-16le" | "utf-16be" | "utf-8" = "utf-8";
+  let sliceFrom = 0;
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    encoding = "utf-16le";
+    sliceFrom = 2;
+  } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    encoding = "utf-16be";
+    sliceFrom = 2;
+  } else if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    encoding = "utf-8";
+    sliceFrom = 3;
+  } else {
+    // Heuristic: lots of NULs at even indices → UTF-16LE; odd → UTF-16BE
+    const sample = bytes.subarray(0, Math.min(2048, bytes.length));
+    let nulEven = 0, nulOdd = 0;
+    for (let i = 0; i < sample.length; i++) {
+      if (sample[i] === 0) {
+        if (i % 2 === 0) nulOdd++;
+        else nulEven++;
+      }
+    }
+    if (nulEven > sample.length * 0.2) encoding = "utf-16le";
+    else if (nulOdd > sample.length * 0.2) encoding = "utf-16be";
+  }
+  const view = sliceFrom > 0 ? bytes.subarray(sliceFrom) : bytes;
+  const decoded = new TextDecoder(encoding, { fatal: false }).decode(view);
+  // Strip residual NULs and BOM character.
+  return decoded.replace(/\u0000/g, "").replace(/^\uFEFF/, "");
+}
+
+/** Utility: yield to the browser so the UI can paint between heavy batches. */
+export function yieldToUI(): Promise<void> {
+  return new Promise((res) => setTimeout(res, 0));
+}
+
 // ---------------- Parsing ----------------
 
 /** Row record + originating sheet name (helps classify CSV/Excel). */
@@ -137,11 +179,11 @@ export async function parseTallyXml(xml: string): Promise<ParsedRow[]> {
 export async function parseAnyFile(f: File | Blob, name: string): Promise<ParsedRow[]> {
   const lname = name.toLowerCase();
   if (lname.endsWith(".xml")) {
-    const text = await readText(f);
+    const text = await decodeFileSmart(f);
     return await parseTallyXml(text);
   }
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
-    const text = await readText(f);
+    const text = await decodeFileSmart(f);
     const Papa = (await import("papaparse")).default;
     const out = Papa.parse<Record<string, unknown>>(text, {
       header: true,
@@ -342,16 +384,72 @@ export function mapVoucher(r: ParsedRow): VoucherRecord | null {
 
 export interface PostResult { created: number; updated: number; skipped: number }
 
+export interface PostResultEx extends PostResult {
+  failed: { name: string; reason: string }[];
+}
+
+export type ProgressCb = (done: number, total: number, label?: string) => void;
+
+/** Estimated parse-time band (used by the UI to warn about big files). */
+export function estimateBand(sizeBytes: number): {
+  band: "tiny" | "small" | "medium" | "large" | "huge";
+  label: string;
+  warn: boolean;
+} {
+  const mb = sizeBytes / (1024 * 1024);
+  if (mb < 2) return { band: "tiny", label: "A few seconds", warn: false };
+  if (mb < 10) return { band: "small", label: "5–30 seconds", warn: false };
+  if (mb < 50) return { band: "medium", label: "30 seconds to 2 minutes — keep this tab open", warn: true };
+  if (mb < 200) return { band: "large", label: "2–5 minutes — keep this tab open and your laptop plugged in", warn: true };
+  return { band: "huge", label: "Several minutes — large files may stress the browser", warn: true };
+}
+
+export interface ClassifiedBatch {
+  ledgers: LedgerRecord[];
+  items: ItemRecord[];
+  vouchers: VoucherRecord[];
+  unknown: number;
+}
+
+/** Classify + map rows in chunks, yielding to the UI between batches. */
+export async function classifyAndMap(
+  rows: ParsedRow[],
+  onProgress?: ProgressCb,
+  chunkSize = 2000,
+): Promise<ClassifiedBatch> {
+  const out: ClassifiedBatch = { ledgers: [], items: [], vouchers: [], unknown: 0 };
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, rows.length);
+    for (let j = i; j < end; j++) {
+      const row = rows[j];
+      const kind = classifyRow(row);
+      if (kind === "ledger") {
+        const x = mapLedger(row); if (x) out.ledgers.push(x); else out.unknown++;
+      } else if (kind === "item") {
+        const x = mapItem(row); if (x) out.items.push(x); else out.unknown++;
+      } else if (kind === "voucher") {
+        const x = mapVoucher(row); if (x) out.vouchers.push(x); else out.unknown++;
+      } else { out.unknown++; }
+    }
+    onProgress?.(end, rows.length, "Classifying records");
+    await yieldToUI();
+  }
+  return out;
+}
+
 export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>(
     (existing || []).map((l) => [lc(l.name), l.id]),
   );
   let created = 0, updated = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
     if (!r.name) { skipped++; continue; }
     const payload = {
@@ -369,25 +467,36 @@ export async function postLedgers(
     const id = map.get(lc(r.name));
     if (id) {
       const { error } = await supabase.from("ledgers").update(payload).eq("id", id);
-      if (error) skipped++; else updated++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
     } else {
       const { data, error } = await supabase
         .from("ledgers").insert(payload).select("id").single();
-      if (error || !data) { skipped++; }
-      else { created++; map.set(lc(r.name), data.id); }
+      if (error || !data) {
+        skipped++;
+        failed.push({ name: r.name, reason: error?.message || "insert failed" });
+      } else { created++; map.set(lc(r.name), data.id); }
+    }
+    done++;
+    if (done % 25 === 0) {
+      onProgress?.(done, rows.length, "Posting ledgers");
+      await yieldToUI();
     }
   }
-  return { created, updated, skipped };
+  onProgress?.(rows.length, rows.length, "Posting ledgers");
+  return { created, updated, skipped, failed };
 }
 
 export async function postItems(
   companyId: string,
   rows: ItemRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("items").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>((existing || []).map((x) => [lc(x.name), x.id]));
   let created = 0, updated = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
     if (!r.name) { skipped++; continue; }
     const payload = {
@@ -404,19 +513,26 @@ export async function postItems(
     const id = map.get(lc(r.name));
     if (id) {
       const { error } = await supabase.from("items").update(payload).eq("id", id);
-      if (error) skipped++; else updated++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
     } else {
       const { error } = await supabase.from("items").insert(payload);
-      if (error) skipped++; else created++;
+      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else created++;
+    }
+    done++;
+    if (done % 25 === 0) {
+      onProgress?.(done, rows.length, "Posting items");
+      await yieldToUI();
     }
   }
-  return { created, updated, skipped };
+  onProgress?.(rows.length, rows.length, "Posting items");
+  return { created, updated, skipped, failed };
 }
 
 export async function postVouchers(
   companyId: string,
   rows: VoucherRecord[],
-): Promise<PostResult> {
+  onProgress?: ProgressCb,
+): Promise<PostResultEx> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Sign in required");
   const { data: ledgers } = await supabase
@@ -436,7 +552,10 @@ export async function postVouchers(
   }
 
   let created = 0, skipped = 0;
+  const failed: { name: string; reason: string }[] = [];
+  let done = 0;
   for (const r of rows) {
+    try {
     let partyId: string | null = null;
     if (r.party) {
       const inferredType: LedgerType = (
@@ -472,7 +591,11 @@ export async function postVouchers(
         total_paise: totalP,
         created_by: user.id,
       }).select("id").single();
-    if (vErr || !vch) { skipped++; continue; }
+    if (vErr || !vch) {
+      skipped++;
+      failed.push({ name: `${r.voucher_no} (${r.date})`, reason: vErr?.message || "insert failed" });
+      continue;
+    }
 
     const entries: { ledger_id: string; debit_paise: number; credit_paise: number; line_no: number; voucher_id: string }[] = [];
     if (r.vtype === "sales" || r.vtype === "debit_note") {
@@ -490,6 +613,17 @@ export async function postVouchers(
     }
     if (entries.length > 0) await supabase.from("voucher_entries").insert(entries);
     created++;
+    } catch (err) {
+      const e = err as { message?: string };
+      skipped++;
+      failed.push({ name: `${r.voucher_no} (${r.date})`, reason: e.message || "unknown" });
+    }
+    done++;
+    if (done % 10 === 0) {
+      onProgress?.(done, rows.length, "Posting vouchers");
+      await yieldToUI();
+    }
   }
-  return { created, updated: 0, skipped };
+  onProgress?.(rows.length, rows.length, "Posting vouchers");
+  return { created, updated: 0, skipped, failed };
 }
