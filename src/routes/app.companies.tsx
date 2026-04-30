@@ -154,6 +154,7 @@ function CompaniesPage() {
       gst_registered: data.gst_registered ?? (data.gstin ? true : false),
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
+      annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
     });
     setOpen(true);
   };
@@ -213,6 +214,7 @@ function CompaniesPage() {
       gst_registered: parsed.data.gst_registered,
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
+      annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
     };
 
     if (editingId) {
