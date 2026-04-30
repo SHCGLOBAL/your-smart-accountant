@@ -1,7 +1,5 @@
-// Import masters (Ledgers, Items) and Vouchers from Tally / Busy / generic
-// CSV / Excel / XML exports. Designed to be tolerant of column-naming
-// differences across accounting packages.
-import { useMemo, useRef, useState } from "react";
+// Tally / Busy import UI: All-in-One file plus separate Ledgers / Items / Vouchers tabs.
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,152 +10,30 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileText, Database as DbIcon, Boxes, Receipt } from "lucide-react";
+import { Loader2, Upload, Database as DbIcon, Boxes, Receipt, Layers } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { XMLParser } from "fast-xml-parser";
-import * as XLSX from "xlsx";
-import Papa from "papaparse";
-import { guessGroupCode, defaultLedgerTypeForGroup, GROUP_BY_CODE } from "@/lib/account-groups";
-import type { Database } from "@/integrations/supabase/types";
-
-type LedgerType = Database["public"]["Enums"]["ledger_type"];
-type VoucherType = Database["public"]["Enums"]["voucher_type"];
+import { GROUP_BY_CODE } from "@/lib/account-groups";
+import {
+  parseFileOrZip, classifyRow, mapLedger, mapItem, mapVoucher,
+  postLedgers, postItems, postVouchers,
+  type LedgerRecord, type ItemRecord, type VoucherRecord,
+} from "@/lib/tally-busy-import";
 
 interface Props { companyId: string; disabled: boolean }
 
-// ---------- Generic helpers ----------
-function lc(s: unknown): string { return String(s ?? "").trim().toLowerCase(); }
-function num(s: unknown): number {
-  if (typeof s === "number") return s;
-  const v = String(s ?? "").replace(/[, ₹]/g, "").trim();
-  if (!v) return 0;
-  // Tally exports negative as "(123.00)" or with " Cr"/" Dr" suffix
-  const cr = / cr$/i.test(v);
-  const dr = / dr$/i.test(v);
-  const cleaned = v.replace(/\s*(cr|dr)$/i, "").replace(/^\((.*)\)$/, "-$1");
-  const n = parseFloat(cleaned);
-  if (isNaN(n)) return 0;
-  return cr ? -Math.abs(n) : dr ? Math.abs(n) : n;
-}
-function paise(rupees: number): number { return Math.round(rupees * 100); }
+type Selectable<T> = T & { _key: string; _selected: boolean };
 
-function pickField(row: Record<string, unknown>, candidates: string[]): string {
-  for (const k of Object.keys(row)) {
-    const lk = lc(k).replace(/[_\s.-]/g, "");
-    for (const c of candidates) {
-      if (lk === c.replace(/[_\s.-]/g, "").toLowerCase()) return String(row[k] ?? "").trim();
-    }
-  }
-  // partial match
-  for (const k of Object.keys(row)) {
-    const lk = lc(k);
-    for (const c of candidates) {
-      if (lk.includes(lc(c))) return String(row[k] ?? "").trim();
-    }
-  }
-  return "";
+function toggle<T extends { _key: string; _selected: boolean }>(
+  rows: T[], idx: number, value: boolean,
+): T[] {
+  return rows.map((r, i) => (i === idx ? { ...r, _selected: value } : r));
 }
 
-async function readFileAsText(f: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result || ""));
-    r.onerror = () => rej(r.error);
-    r.readAsText(f);
-  });
-}
-async function readFileAsArrayBuffer(f: File): Promise<ArrayBuffer> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result as ArrayBuffer);
-    r.onerror = () => rej(r.error);
-    r.readAsArrayBuffer(f);
-  });
-}
-
-async function parseAnyFile(f: File): Promise<Record<string, unknown>[]> {
-  const name = f.name.toLowerCase();
-  if (name.endsWith(".xml")) {
-    const text = await readFileAsText(f);
-    return parseTallyXml(text);
-  }
-  if (name.endsWith(".csv") || name.endsWith(".txt")) {
-    const text = await readFileAsText(f);
-    const out = Papa.parse<Record<string, unknown>>(text, {
-      header: true, skipEmptyLines: true, dynamicTyping: false,
-    });
-    return (out.data || []).filter((r) => r && Object.keys(r).length > 0);
-  }
-  // Excel
-  const buf = await readFileAsArrayBuffer(f);
-  const wb = XLSX.read(buf, { type: "array" });
-  const rows: Record<string, unknown>[] = [];
-  for (const sheet of wb.SheetNames) {
-    const ws = wb.Sheets[sheet];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "", raw: false });
-    rows.push(...json);
-  }
-  return rows;
-}
-
-/** Flatten Tally XML (Masters export or Daybook) into row-shaped records. */
-function parseTallyXml(xml: string): Record<string, unknown>[] {
-  const parser = new XMLParser({
-    ignoreAttributes: false, attributeNamePrefix: "@_",
-    parseTagValue: false, trimValues: true,
-  });
-  const tree = parser.parse(xml) as Record<string, unknown>;
-  const rows: Record<string, unknown>[] = [];
-  // Walk and collect all <LEDGER>, <STOCKITEM>, <VOUCHER> nodes
-  function walk(node: unknown) {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) { for (const x of node) walk(x); return; }
-    const obj = node as Record<string, unknown>;
-    for (const [k, v] of Object.entries(obj)) {
-      const key = k.toUpperCase();
-      if (["LEDGER", "STOCKITEM", "VOUCHER"].includes(key)) {
-        const arr = Array.isArray(v) ? v : [v];
-        for (const item of arr) {
-          if (item && typeof item === "object") {
-            const flat = flattenObject(item as Record<string, unknown>);
-            flat.__tally_kind = key;
-            rows.push(flat);
-          }
-        }
-      } else {
-        walk(v);
-      }
-    }
-  }
-  walk(tree);
-  return rows;
-}
-
-function flattenObject(obj: Record<string, unknown>, prefix = ""): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      Object.assign(out, flattenObject(v as Record<string, unknown>, key));
-    } else if (Array.isArray(v)) {
-      out[key] = v.map((x) => (typeof x === "object" ? JSON.stringify(x) : String(x))).join(" | ");
-    } else {
-      out[key] = v;
-    }
-  }
-  // Tally puts ledger name in attribute @_NAME
-  if (obj["@_NAME"]) out["NAME"] = String(obj["@_NAME"]);
-  return out;
-}
-
-// ============================================================================
-// Component
-// ============================================================================
+// =====================================================================
 export function TallyBusyImport({ companyId, disabled }: Props) {
   return (
     <Card>
@@ -166,26 +42,38 @@ export function TallyBusyImport({ companyId, disabled }: Props) {
           <DbIcon className="h-4 w-4" /> Import from Tally / Busy / other software
         </CardTitle>
         <CardDescription>
-          Upload Tally XML exports (Masters / Daybook) or CSV / Excel exports from Busy or any other
-          accounting package. The importer auto-detects column names and lets you preview each row
-          before posting.
+          Upload a Tally XML, Busy backup, CSV, Excel, or ZIP file. The "All-in-One" tab handles a
+          single file containing everything; the other tabs let you import one type at a time.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="ledgers">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="all">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="all"><Layers className="mr-1 h-3.5 w-3.5" /> All-in-One</TabsTrigger>
             <TabsTrigger value="ledgers"><DbIcon className="mr-1 h-3.5 w-3.5" /> Ledgers</TabsTrigger>
             <TabsTrigger value="items"><Boxes className="mr-1 h-3.5 w-3.5" /> Items</TabsTrigger>
             <TabsTrigger value="vouchers"><Receipt className="mr-1 h-3.5 w-3.5" /> Vouchers</TabsTrigger>
           </TabsList>
+          <TabsContent value="all" className="pt-4">
+            <CombinedImporter companyId={companyId} disabled={disabled} />
+          </TabsContent>
           <TabsContent value="ledgers" className="pt-4">
-            <LedgerImporter companyId={companyId} disabled={disabled} />
+            <SingleImporter
+              companyId={companyId} disabled={disabled} kind="ledger"
+              hint="Tally: Gateway → Display → List of Accounts → Export (XML). Busy: Display → Account Books → Ledgers → Export (Excel/CSV)."
+            />
           </TabsContent>
           <TabsContent value="items" className="pt-4">
-            <ItemImporter companyId={companyId} disabled={disabled} />
+            <SingleImporter
+              companyId={companyId} disabled={disabled} kind="item"
+              hint="Tally: Gateway → Display → Inventory Books → Stock Items → Export (XML). Busy: Display → Inventory → Items → Export."
+            />
           </TabsContent>
           <TabsContent value="vouchers" className="pt-4">
-            <VoucherImporter companyId={companyId} disabled={disabled} />
+            <SingleImporter
+              companyId={companyId} disabled={disabled} kind="voucher"
+              hint="Tally: Display → Day Book → Alt+E → XML. Busy: Display → Account Books → Day Book → Export. Each row becomes one voucher with a basic two-leg posting."
+            />
           </TabsContent>
         </Tabs>
       </CardContent>
@@ -193,552 +81,368 @@ export function TallyBusyImport({ companyId, disabled }: Props) {
   );
 }
 
-// ---------- Ledger importer ----------
-interface LedgerRow {
-  _key: string;
-  _selected: boolean;
-  name: string;
-  type: LedgerType;
-  group_code: string;
-  gstin: string;
-  state: string;
-  email: string;
-  phone: string;
-  opening: number;       // signed rupees (+ Dr / - Cr)
-}
-
-function LedgerImporter({ companyId, disabled }: Props) {
+// =====================================================================
+// Single-type tab: only keeps rows of the selected kind.
+// =====================================================================
+function SingleImporter({
+  companyId, disabled, kind, hint,
+}: Props & { kind: "ledger" | "item" | "voucher"; hint: string }) {
   const [busy, setBusy] = useState(false);
-  const [rows, setRows] = useState<LedgerRow[]>([]);
   const [posting, setPosting] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const [ledgers, setLedgers] = useState<Selectable<LedgerRecord>[]>([]);
+  const [items, setItems] = useState<Selectable<ItemRecord>[]>([]);
+  const [vouchers, setVouchers] = useState<Selectable<VoucherRecord>[]>([]);
 
   async function onFile(f: File | null) {
     if (!f) return;
     setBusy(true);
     try {
-      const data = await parseAnyFile(f);
-      const mapped: LedgerRow[] = data
-        .map((r, i) => {
-          const name = pickField(r, ["NAME", "Ledger Name", "Account Name", "Party Name", "Name"]);
-          if (!name) return null;
-          const groupName = pickField(r, ["PARENT", "Group", "Under Group", "Group Name"]);
-          const opening = num(pickField(r, ["OPENINGBALANCE", "Opening Balance", "Opening Bal", "Op Bal"]));
-          const isCr = / cr$/i.test(pickField(r, ["OPENINGBALANCE", "Opening Balance"]));
-          const signed = isCr ? -Math.abs(opening) : opening;
-          const sideHint: "Dr" | "Cr" = signed >= 0 ? "Dr" : "Cr";
-          const groupCode = guessGroupCode(groupName || name, sideHint);
-          const type = (defaultLedgerTypeForGroup(groupCode) ?? "current_asset") as LedgerType;
-          return {
-            _key: `r${i}`, _selected: true, name,
-            type, group_code: groupCode,
-            gstin: pickField(r, ["GSTIN", "GST IN", "GSTNo", "GST Number"]),
-            state: pickField(r, ["STATE", "State"]),
-            email: pickField(r, ["EMAIL", "Email"]),
-            phone: pickField(r, ["PHONE", "Mobile", "Contact", "Phone"]),
-            opening: signed,
-          } as LedgerRow;
-        })
-        .filter((x): x is LedgerRow => x !== null);
-      setRows(mapped);
-      toast.success(`Parsed ${mapped.length} ledger rows`);
+      const data = await parseFileOrZip(f);
+      let count = 0;
+      if (kind === "ledger") {
+        const out = data.map(mapLedger).filter((x): x is LedgerRecord => x !== null)
+          .map((x, i) => ({ ...x, _key: `l${i}`, _selected: true }));
+        setLedgers(out); count = out.length;
+      } else if (kind === "item") {
+        const out = data.map(mapItem).filter((x): x is ItemRecord => x !== null)
+          .map((x, i) => ({ ...x, _key: `i${i}`, _selected: true }));
+        setItems(out); count = out.length;
+      } else {
+        const out = data.map(mapVoucher).filter((x): x is VoucherRecord => x !== null)
+          .map((x, i) => ({ ...x, _key: `v${i}`, _selected: true }));
+        setVouchers(out); count = out.length;
+      }
+      toast.success(`Parsed ${count} ${kind} rows`);
     } catch (err) {
       const e = err as { message?: string };
-      toast.error(`Failed to parse file: ${e.message || "unknown"}`);
-    } finally {
-      setBusy(false);
-    }
+      toast.error(`Parse failed: ${e.message || "unknown"}`);
+    } finally { setBusy(false); }
   }
 
-  async function postLedgers() {
-    const sel = rows.filter((r) => r._selected && r.name);
-    if (sel.length === 0) { toast.error("No rows selected"); return; }
+  async function onPost() {
     setPosting(true);
     try {
-      const { data: existing } = await supabase
-        .from("ledgers").select("id, name").eq("company_id", companyId);
-      const existingMap = new Map<string, string>(
-        (existing || []).map((l) => [lc(l.name), l.id]),
-      );
-      let created = 0, updated = 0;
-      for (const r of sel) {
-        const payload = {
-          company_id: companyId,
-          name: r.name,
-          type: r.type,
-          group_code: r.group_code,
-          gstin: r.gstin || null,
-          state: r.state || null,
-          email: r.email || null,
-          phone: r.phone || null,
-          opening_balance_paise: Math.abs(paise(r.opening)),
-          opening_balance_is_debit: r.opening >= 0,
-        };
-        const id = existingMap.get(lc(r.name));
-        if (id) {
-          const { error } = await supabase.from("ledgers").update(payload).eq("id", id);
-          if (!error) updated++;
-        } else {
-          const { error } = await supabase.from("ledgers").insert(payload);
-          if (!error) created++;
-        }
+      let res;
+      if (kind === "ledger") {
+        res = await postLedgers(companyId, ledgers.filter((r) => r._selected));
+        setLedgers([]);
+      } else if (kind === "item") {
+        res = await postItems(companyId, items.filter((r) => r._selected));
+        setItems([]);
+      } else {
+        res = await postVouchers(companyId, vouchers.filter((r) => r._selected));
+        setVouchers([]);
       }
-      toast.success(`Ledgers imported — ${created} created, ${updated} updated`);
-      setRows([]);
+      toast.success(`Imported — ${res.created} created${res.updated ? `, ${res.updated} updated` : ""}${res.skipped ? `, ${res.skipped} skipped` : ""}`);
     } catch (err) {
       const e = err as { message?: string };
       toast.error(`Posting failed: ${e.message || "unknown"}`);
-    } finally {
-      setPosting(false);
-    }
+    } finally { setPosting(false); }
   }
-
-  const selected = rows.filter((r) => r._selected).length;
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="grow space-y-1">
-          <Label>Tally XML, CSV, or Excel file</Label>
-          <Input
-            ref={fileInput} type="file" accept=".xml,.csv,.txt,.xlsx,.xls"
-            disabled={disabled || busy}
-            onChange={(e) => onFile(e.target.files?.[0] || null)}
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Tally: Gateway → Display → List of Accounts → Export (XML). Busy: Display → Account Books → Ledgers → Export (Excel/CSV).
-          </p>
-        </div>
-        {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+      <div className="space-y-1">
+        <Label>Tally XML, CSV, Excel, or ZIP</Label>
+        <Input type="file" accept=".xml,.csv,.txt,.xlsx,.xls,.zip"
+          disabled={disabled || busy}
+          onChange={(e) => onFile(e.target.files?.[0] || null)} />
+        <p className="text-[11px] text-muted-foreground">{hint}</p>
       </div>
+      {busy && <Loader2 className="h-5 w-5 animate-spin" />}
+      {kind === "ledger" && ledgers.length > 0 && (
+        <SectionPreview
+          title="Ledgers" rows={ledgers} setRows={setLedgers}
+          onPost={onPost} posting={posting} disabled={disabled}
+          render={(r) => <LedgerCols r={r} />}
+          headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
+        />
+      )}
+      {kind === "item" && items.length > 0 && (
+        <SectionPreview
+          title="Items" rows={items} setRows={setItems}
+          onPost={onPost} posting={posting} disabled={disabled}
+          render={(r) => <ItemCols r={r} />}
+          headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
+        />
+      )}
+      {kind === "voucher" && vouchers.length > 0 && (
+        <SectionPreview
+          title="Vouchers" rows={vouchers} setRows={setVouchers}
+          onPost={onPost} posting={posting} disabled={disabled}
+          render={(r) => <VoucherCols r={r} />}
+          headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
+        />
+      )}
+    </div>
+  );
+}
 
-      {rows.length > 0 && (
+// =====================================================================
+// Combined "All-in-One" importer
+// =====================================================================
+function CombinedImporter({ companyId, disabled }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [ledgers, setLedgers] = useState<Selectable<LedgerRecord>[]>([]);
+  const [items, setItems] = useState<Selectable<ItemRecord>[]>([]);
+  const [vouchers, setVouchers] = useState<Selectable<VoucherRecord>[]>([]);
+  const [unknownCount, setUnknownCount] = useState(0);
+  const [progress, setProgress] = useState("");
+
+  async function onFile(f: File | null) {
+    if (!f) return;
+    setBusy(true);
+    try {
+      const data = await parseFileOrZip(f);
+      const ls: LedgerRecord[] = [], its: ItemRecord[] = [], vs: VoucherRecord[] = [];
+      let unk = 0;
+      for (const row of data) {
+        const kind = classifyRow(row);
+        if (kind === "ledger") {
+          const x = mapLedger(row); if (x) ls.push(x); else unk++;
+        } else if (kind === "item") {
+          const x = mapItem(row); if (x) its.push(x); else unk++;
+        } else if (kind === "voucher") {
+          const x = mapVoucher(row); if (x) vs.push(x); else unk++;
+        } else { unk++; }
+      }
+      setLedgers(ls.map((x, i) => ({ ...x, _key: `l${i}`, _selected: true })));
+      setItems(its.map((x, i) => ({ ...x, _key: `i${i}`, _selected: true })));
+      setVouchers(vs.map((x, i) => ({ ...x, _key: `v${i}`, _selected: true })));
+      setUnknownCount(unk);
+      toast.success(`Parsed: ${ls.length} ledgers, ${its.length} items, ${vs.length} vouchers${unk ? ` (${unk} unrecognized)` : ""}`);
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(`Parse failed: ${e.message || "unknown"}`);
+    } finally { setBusy(false); }
+  }
+
+  async function importAll() {
+    const selL = ledgers.filter((r) => r._selected);
+    const selI = items.filter((r) => r._selected);
+    const selV = vouchers.filter((r) => r._selected);
+    if (selL.length + selI.length + selV.length === 0) {
+      toast.error("Nothing selected"); return;
+    }
+    setPosting(true);
+    try {
+      let summary = "";
+      if (selL.length > 0) {
+        setProgress(`Posting ${selL.length} ledgers…`);
+        const r = await postLedgers(companyId, selL);
+        summary += `Ledgers: ${r.created} created, ${r.updated} updated. `;
+      }
+      if (selI.length > 0) {
+        setProgress(`Posting ${selI.length} items…`);
+        const r = await postItems(companyId, selI);
+        summary += `Items: ${r.created} created, ${r.updated} updated. `;
+      }
+      if (selV.length > 0) {
+        setProgress(`Posting ${selV.length} vouchers…`);
+        const r = await postVouchers(companyId, selV);
+        summary += `Vouchers: ${r.created} created${r.skipped ? `, ${r.skipped} skipped` : ""}.`;
+      }
+      toast.success(summary || "Done");
+      setLedgers([]); setItems([]); setVouchers([]); setUnknownCount(0);
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(`Posting failed: ${e.message || "unknown"}`);
+    } finally { setPosting(false); setProgress(""); }
+  }
+
+  const selL = ledgers.filter((r) => r._selected).length;
+  const selI = items.filter((r) => r._selected).length;
+  const selV = vouchers.filter((r) => r._selected).length;
+  const total = ledgers.length + items.length + vouchers.length;
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <Label>Single Tally / Busy export (XML, ZIP, Excel, CSV)</Label>
+        <Input type="file" accept=".xml,.csv,.txt,.xlsx,.xls,.zip"
+          disabled={disabled || busy}
+          onChange={(e) => onFile(e.target.files?.[0] || null)} />
+        <p className="text-[11px] text-muted-foreground">
+          Tally: Gateway → Display → Day Book + Masters → Export → XML (gives one combined file).
+          Busy: Administration → Backup → save as a ZIP, then upload the ZIP here. The importer
+          classifies every record automatically.
+        </p>
+      </div>
+      {busy && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Parsing…</div>}
+
+      {total > 0 && (
         <>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {selected} of {rows.length} selected
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 p-3">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary"><DbIcon className="mr-1 h-3 w-3" /> {selL} / {ledgers.length} ledgers</Badge>
+              <Badge variant="secondary"><Boxes className="mr-1 h-3 w-3" /> {selI} / {items.length} items</Badge>
+              <Badge variant="secondary"><Receipt className="mr-1 h-3 w-3" /> {selV} / {vouchers.length} vouchers</Badge>
+              {unknownCount > 0 && <Badge variant="outline">{unknownCount} unrecognized</Badge>}
             </div>
-            <Button onClick={postLedgers} disabled={posting || disabled || selected === 0}>
-              {posting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Posting…</> : <><Upload className="mr-1 h-4 w-4" /> Import {selected}</>}
+            <Button onClick={importAll} disabled={posting || disabled || (selL + selI + selV === 0)}>
+              {posting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> {progress || "Posting…"}</> : <><Upload className="mr-1 h-4 w-4" /> Import everything</>}
             </Button>
           </div>
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>GSTIN</TableHead>
-                  <TableHead className="text-right">Opening</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r, idx) => (
-                  <TableRow key={r._key}>
-                    <TableCell>
-                      <input
-                        type="checkbox" checked={r._selected}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setRows((rs) => rs.map((x, i) => i === idx ? { ...x, _selected: v } : x));
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {GROUP_BY_CODE[r.group_code]?.label || r.group_code}
-                    </TableCell>
-                    <TableCell><Badge variant="secondary" className="text-[10px]">{r.type}</Badge></TableCell>
-                    <TableCell className="font-mono text-xs">{r.gstin}</TableCell>
-                    <TableCell className="text-right font-mono text-xs">
-                      {r.opening !== 0 ? `${Math.abs(r.opening).toFixed(2)} ${r.opening >= 0 ? "Dr" : "Cr"}` : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+
+          <Accordion type="multiple" defaultValue={["L", "I", "V"]} className="rounded-md border">
+            {ledgers.length > 0 && (
+              <AccordionItem value="L">
+                <AccordionTrigger className="px-3">
+                  <span className="flex items-center gap-2 text-sm">
+                    <DbIcon className="h-4 w-4" /> Ledgers ({selL} / {ledgers.length})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <PreviewTable
+                    rows={ledgers} setRows={setLedgers}
+                    headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
+                    render={(r) => <LedgerCols r={r} />}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {items.length > 0 && (
+              <AccordionItem value="I">
+                <AccordionTrigger className="px-3">
+                  <span className="flex items-center gap-2 text-sm">
+                    <Boxes className="h-4 w-4" /> Items ({selI} / {items.length})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <PreviewTable
+                    rows={items} setRows={setItems}
+                    headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
+                    render={(r) => <ItemCols r={r} />}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            )}
+            {vouchers.length > 0 && (
+              <AccordionItem value="V">
+                <AccordionTrigger className="px-3">
+                  <span className="flex items-center gap-2 text-sm">
+                    <Receipt className="h-4 w-4" /> Vouchers ({selV} / {vouchers.length})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <PreviewTable
+                    rows={vouchers} setRows={setVouchers}
+                    headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
+                    render={(r) => <VoucherCols r={r} />}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            )}
+          </Accordion>
         </>
       )}
     </div>
   );
 }
 
-// ---------- Item importer ----------
-interface ItemRow {
-  _key: string;
-  _selected: boolean;
-  name: string;
-  hsn: string;
-  unit: string;
-  gst_rate: number;
-  opening_qty: number;
-  opening_rate: number;  // rupees
-  sale_price: number;
-  purchase_price: number;
-}
-
-function ItemImporter({ companyId, disabled }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const [rows, setRows] = useState<ItemRow[]>([]);
-
-  async function onFile(f: File | null) {
-    if (!f) return;
-    setBusy(true);
-    try {
-      const data = await parseAnyFile(f);
-      const mapped: ItemRow[] = data
-        .map((r, i) => {
-          const name = pickField(r, ["NAME", "Item Name", "Stock Item", "Product"]);
-          if (!name) return null;
-          return {
-            _key: `i${i}`, _selected: true, name,
-            hsn: pickField(r, ["HSNCODE", "HSN", "HSN Code", "HSN/SAC"]),
-            unit: pickField(r, ["BASEUNITS", "Unit", "UOM", "Units"]) || "NOS",
-            gst_rate: num(pickField(r, ["GSTRATE", "GST Rate", "Tax Rate", "GST %"])),
-            opening_qty: num(pickField(r, ["OPENINGBALANCE", "Opening Qty", "Opening Stock"])),
-            opening_rate: num(pickField(r, ["OPENINGRATE", "Opening Rate", "Rate"])),
-            sale_price: num(pickField(r, ["SALESPRICE", "Sale Price", "Selling Price", "MRP"])),
-            purchase_price: num(pickField(r, ["PURCHASEPRICE", "Purchase Price", "Cost"])),
-          } as ItemRow;
-        })
-        .filter((x): x is ItemRow => x !== null);
-      setRows(mapped);
-      toast.success(`Parsed ${mapped.length} item rows`);
-    } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Failed to parse: ${e.message || "unknown"}`);
-    } finally { setBusy(false); }
-  }
-
-  async function postItems() {
-    const sel = rows.filter((r) => r._selected && r.name);
-    if (sel.length === 0) { toast.error("No rows selected"); return; }
-    setPosting(true);
-    try {
-      const { data: existing } = await supabase
-        .from("items").select("id, name").eq("company_id", companyId);
-      const map = new Map<string, string>((existing || []).map((x) => [lc(x.name), x.id]));
-      let created = 0, updated = 0;
-      for (const r of sel) {
-        const payload = {
-          company_id: companyId,
-          name: r.name,
-          hsn_code: r.hsn || null,
-          unit: r.unit || "NOS",
-          gst_rate: r.gst_rate || 0,
-          opening_stock_qty: r.opening_qty || 0,
-          opening_stock_rate_paise: paise(r.opening_rate),
-          sale_price_paise: paise(r.sale_price),
-          purchase_price_paise: paise(r.purchase_price),
-        };
-        const id = map.get(lc(r.name));
-        if (id) {
-          const { error } = await supabase.from("items").update(payload).eq("id", id);
-          if (!error) updated++;
-        } else {
-          const { error } = await supabase.from("items").insert(payload);
-          if (!error) created++;
-        }
-      }
-      toast.success(`Items imported — ${created} created, ${updated} updated`);
-      setRows([]);
-    } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Posting failed: ${e.message || "unknown"}`);
-    } finally { setPosting(false); }
-  }
-
-  const selected = rows.filter((r) => r._selected).length;
-
+// =====================================================================
+// Shared preview table & per-kind cells
+// =====================================================================
+function PreviewTable<T extends { _key: string; _selected: boolean }>(props: {
+  rows: T[];
+  setRows: (r: T[]) => void;
+  headers: React.ReactNode;
+  render: (r: T) => React.ReactNode;
+}) {
+  const { rows, setRows, headers, render } = props;
   return (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>Tally XML, CSV, or Excel file</Label>
-        <Input type="file" accept=".xml,.csv,.txt,.xlsx,.xls" disabled={disabled || busy}
-          onChange={(e) => onFile(e.target.files?.[0] || null)} />
-        <p className="text-[11px] text-muted-foreground">
-          Tally: Gateway → Display → Inventory Books → Stock Items → Export (XML). Busy: Display → Inventory → Items → Export.
-        </p>
-      </div>
-      {busy && <Loader2 className="h-5 w-5 animate-spin" />}
-      {rows.length > 0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">{selected} of {rows.length} selected</div>
-            <Button onClick={postItems} disabled={posting || disabled || selected === 0}>
-              {posting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Posting…</> : <><Upload className="mr-1 h-4 w-4" /> Import {selected}</>}
-            </Button>
-          </div>
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>HSN</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">GST %</TableHead>
-                  <TableHead className="text-right">Op. Qty</TableHead>
-                  <TableHead className="text-right">Op. Rate</TableHead>
-                  <TableHead className="text-right">Sale ₹</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r, idx) => (
-                  <TableRow key={r._key}>
-                    <TableCell>
-                      <input type="checkbox" checked={r._selected}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setRows((rs) => rs.map((x, i) => i === idx ? { ...x, _selected: v } : x));
-                        }} />
-                    </TableCell>
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.hsn}</TableCell>
-                    <TableCell className="text-xs">{r.unit}</TableCell>
-                    <TableCell className="text-right text-xs">{r.gst_rate}</TableCell>
-                    <TableCell className="text-right text-xs">{r.opening_qty}</TableCell>
-                    <TableCell className="text-right text-xs">{r.opening_rate.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-xs">{r.sale_price.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      )}
+    <div className="max-h-[360px] overflow-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-8">
+              <input
+                type="checkbox"
+                checked={rows.every((r) => r._selected)}
+                onChange={(e) => setRows(rows.map((r) => ({ ...r, _selected: e.target.checked })))}
+              />
+            </TableHead>
+            {headers}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, idx) => (
+            <TableRow key={r._key}>
+              <TableCell>
+                <input
+                  type="checkbox" checked={r._selected}
+                  onChange={(e) => setRows(toggle(rows, idx, e.target.checked))}
+                />
+              </TableCell>
+              {render(r)}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-// ---------- Voucher importer (sales / purchase / receipt / payment / journal) ----------
-interface VoucherRowParsed {
-  _key: string;
-  _selected: boolean;
-  date: string;          // YYYY-MM-DD
-  voucher_no: string;
-  vtype: VoucherType;
-  party: string;
-  narration: string;
-  total: number;         // rupees
-}
-
-function normalizeDate(s: string): string {
-  if (!s) return "";
-  const t = s.trim();
-  // 20240415 -> 2024-04-15
-  if (/^\d{8}$/.test(t)) return `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}`;
-  // dd/mm/yyyy or dd-mm-yyyy
-  const m = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-  if (m) {
-    let [, d, mo, y] = m;
-    if (y.length === 2) y = (parseInt(y) > 50 ? "19" : "20") + y;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-  // already ISO
-  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
-  const d = new Date(t);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-}
-
-function detectVoucherType(s: string): VoucherType {
-  const x = lc(s);
-  if (x.includes("sale")) return "sales";
-  if (x.includes("purch")) return "purchase";
-  if (x.includes("receipt")) return "receipt";
-  if (x.includes("payment")) return "payment";
-  if (x.includes("contra")) return "contra";
-  if (x.includes("credit")) return "credit_note";
-  if (x.includes("debit")) return "debit_note";
-  return "journal";
-}
-
-function VoucherImporter({ companyId, disabled }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const [rows, setRows] = useState<VoucherRowParsed[]>([]);
-
-  async function onFile(f: File | null) {
-    if (!f) return;
-    setBusy(true);
-    try {
-      const data = await parseAnyFile(f);
-      const mapped: VoucherRowParsed[] = data
-        .map((r, i) => {
-          const date = normalizeDate(pickField(r, ["DATE", "Voucher Date", "Date", "Dt"]));
-          const vno = pickField(r, ["VOUCHERNUMBER", "Voucher Number", "Voucher No", "Vch No", "Bill No"]);
-          const vtype = detectVoucherType(pickField(r, ["VOUCHERTYPENAME", "Voucher Type", "Type"]));
-          const party = pickField(r, ["PARTYLEDGERNAME", "PARTYNAME", "Party", "Party Name", "Account", "Ledger"]);
-          const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Net Amount"]));
-          if (!date || !vno) return null;
-          return {
-            _key: `v${i}`, _selected: true, date, voucher_no: vno, vtype, party,
-            narration: pickField(r, ["NARRATION", "Narration", "Description", "Particulars"]),
-            total: Math.abs(total),
-          } as VoucherRowParsed;
-        })
-        .filter((x): x is VoucherRowParsed => x !== null);
-      setRows(mapped);
-      toast.success(`Parsed ${mapped.length} voucher rows`);
-    } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Failed to parse: ${e.message || "unknown"}`);
-    } finally { setBusy(false); }
-  }
-
-  async function postVouchers() {
-    const sel = rows.filter((r) => r._selected);
-    if (sel.length === 0) { toast.error("No rows selected"); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { toast.error("Sign in required"); return; }
-    setPosting(true);
-    try {
-      const { data: ledgers } = await supabase
-        .from("ledgers").select("id, name, type").eq("company_id", companyId);
-      const ledgerMap = new Map<string, { id: string; type: string }>(
-        (ledgers || []).map((l) => [lc(l.name), { id: l.id, type: l.type }]),
-      );
-      // System ledgers we may need to auto-create
-      async function ensureLedger(name: string, type: LedgerType): Promise<string> {
-        const k = lc(name);
-        const hit = ledgerMap.get(k);
-        if (hit) return hit.id;
-        const { data, error } = await supabase
-          .from("ledgers").insert({ company_id: companyId, name, type }).select("id").single();
-        if (error) throw error;
-        ledgerMap.set(k, { id: data.id, type });
-        return data.id;
-      }
-
-      let created = 0, skipped = 0;
-      for (const r of sel) {
-        // Resolve party ledger (auto-create if missing)
-        let partyId: string | null = null;
-        if (r.party) {
-          const sideHint: "Dr" | "Cr" =
-            r.vtype === "sales" || r.vtype === "receipt" || r.vtype === "credit_note" ? "Dr" : "Cr";
-          const guessCode = guessGroupCode(r.party, sideHint);
-          const inferredType: LedgerType = (
-            r.vtype === "sales" || r.vtype === "receipt" || r.vtype === "credit_note"
-              ? "sundry_debtor"
-              : r.vtype === "purchase" || r.vtype === "payment" || r.vtype === "debit_note"
-              ? "sundry_creditor"
-              : (defaultLedgerTypeForGroup(guessCode) ?? "current_asset")
-          ) as LedgerType;
-          partyId = await ensureLedger(r.party, inferredType);
-        }
-        // Counter ledger (Sales / Purchase / Cash etc.)
-        let counterId: string;
-        if (r.vtype === "sales") counterId = await ensureLedger("Sales A/c", "income_direct");
-        else if (r.vtype === "purchase") counterId = await ensureLedger("Purchase A/c", "expense_direct");
-        else if (r.vtype === "credit_note") counterId = await ensureLedger("Sales Return A/c", "income_direct");
-        else if (r.vtype === "debit_note") counterId = await ensureLedger("Purchase Return A/c", "expense_direct");
-        else if (r.vtype === "receipt") counterId = await ensureLedger("Cash A/c", "cash");
-        else if (r.vtype === "payment") counterId = await ensureLedger("Cash A/c", "cash");
-        else { skipped++; continue; }
-
-        if (!partyId) { skipped++; continue; }
-
-        const totalP = paise(r.total);
-        const { data: vch, error: vErr } = await supabase
-          .from("vouchers").insert({
-            company_id: companyId,
-            voucher_type: r.vtype,
-            voucher_number: r.voucher_no,
-            voucher_date: r.date,
-            party_ledger_id: partyId,
-            narration: r.narration || null,
-            subtotal_paise: totalP,
-            total_paise: totalP,
-            created_by: user.id,
-          }).select("id").single();
-        if (vErr || !vch) { skipped++; continue; }
-
-        // Build entries
-        const entries: { ledger_id: string; debit_paise: number; credit_paise: number; line_no: number; voucher_id: string }[] = [];
-        if (r.vtype === "sales" || r.vtype === "debit_note") {
-          entries.push({ voucher_id: vch.id, ledger_id: partyId, debit_paise: totalP, credit_paise: 0, line_no: 1 });
-          entries.push({ voucher_id: vch.id, ledger_id: counterId, debit_paise: 0, credit_paise: totalP, line_no: 2 });
-        } else if (r.vtype === "purchase" || r.vtype === "credit_note") {
-          entries.push({ voucher_id: vch.id, ledger_id: counterId, debit_paise: totalP, credit_paise: 0, line_no: 1 });
-          entries.push({ voucher_id: vch.id, ledger_id: partyId, debit_paise: 0, credit_paise: totalP, line_no: 2 });
-        } else if (r.vtype === "receipt") {
-          entries.push({ voucher_id: vch.id, ledger_id: counterId, debit_paise: totalP, credit_paise: 0, line_no: 1 });
-          entries.push({ voucher_id: vch.id, ledger_id: partyId, debit_paise: 0, credit_paise: totalP, line_no: 2 });
-        } else if (r.vtype === "payment") {
-          entries.push({ voucher_id: vch.id, ledger_id: partyId, debit_paise: totalP, credit_paise: 0, line_no: 1 });
-          entries.push({ voucher_id: vch.id, ledger_id: counterId, debit_paise: 0, credit_paise: totalP, line_no: 2 });
-        }
-        if (entries.length > 0) await supabase.from("voucher_entries").insert(entries);
-        created++;
-      }
-      toast.success(`Vouchers imported — ${created} created${skipped ? `, ${skipped} skipped` : ""}`);
-      setRows([]);
-    } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Posting failed: ${e.message || "unknown"}`);
-    } finally { setPosting(false); }
-  }
-
-  const selected = rows.filter((r) => r._selected).length;
-
+function SectionPreview<T extends { _key: string; _selected: boolean }>(props: {
+  title: string; rows: T[]; setRows: (r: T[]) => void;
+  onPost: () => void; posting: boolean; disabled: boolean;
+  headers: React.ReactNode; render: (r: T) => React.ReactNode;
+}) {
+  const sel = props.rows.filter((r) => r._selected).length;
   return (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>Tally XML / Daybook export, CSV, or Excel</Label>
-        <Input type="file" accept=".xml,.csv,.txt,.xlsx,.xls" disabled={disabled || busy}
-          onChange={(e) => onFile(e.target.files?.[0] || null)} />
-        <p className="text-[11px] text-muted-foreground">
-          Tally: Display → Day Book → Alt+E (Export) → XML. Busy: Display → Account Books → Day Book → Export. Each row becomes one voucher with a basic two-leg posting (party vs Sales / Purchase / Cash). For complex multi-line vouchers, edit them after import.
-        </p>
+    <>
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">{sel} of {props.rows.length} selected</div>
+        <Button onClick={props.onPost} disabled={props.posting || props.disabled || sel === 0}>
+          {props.posting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Posting…</> : <><Upload className="mr-1 h-4 w-4" /> Import {sel}</>}
+        </Button>
       </div>
-      {busy && <Loader2 className="h-5 w-5 animate-spin" />}
-      {rows.length > 0 && (
-        <>
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">{selected} of {rows.length} selected</div>
-            <Button onClick={postVouchers} disabled={posting || disabled || selected === 0}>
-              {posting ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" /> Posting…</> : <><Upload className="mr-1 h-4 w-4" /> Import {selected}</>}
-            </Button>
-          </div>
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Vch No</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead className="text-right">Amount ₹</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r, idx) => (
-                  <TableRow key={r._key}>
-                    <TableCell>
-                      <input type="checkbox" checked={r._selected}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setRows((rs) => rs.map((x, i) => i === idx ? { ...x, _selected: v } : x));
-                        }} />
-                    </TableCell>
-                    <TableCell className="text-xs">{r.date}</TableCell>
-                    <TableCell><Badge variant="secondary" className="text-[10px]">{r.vtype}</Badge></TableCell>
-                    <TableCell className="font-mono text-xs">{r.voucher_no}</TableCell>
-                    <TableCell className="text-sm">{r.party}</TableCell>
-                    <TableCell className="text-right font-mono text-xs">{r.total.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      )}
-    </div>
+      <div className="rounded-md border">
+        <PreviewTable rows={props.rows} setRows={props.setRows} headers={props.headers} render={props.render} />
+      </div>
+    </>
+  );
+}
+
+function LedgerCols({ r }: { r: LedgerRecord }) {
+  return (
+    <>
+      <TableCell className="font-medium">{r.name}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {GROUP_BY_CODE[r.group_code]?.label || r.group_code}
+      </TableCell>
+      <TableCell><Badge variant="secondary" className="text-[10px]">{r.type}</Badge></TableCell>
+      <TableCell className="font-mono text-xs">{r.gstin}</TableCell>
+      <TableCell className="text-right font-mono text-xs">
+        {r.opening !== 0 ? `${Math.abs(r.opening).toFixed(2)} ${r.opening >= 0 ? "Dr" : "Cr"}` : "—"}
+      </TableCell>
+    </>
+  );
+}
+
+function ItemCols({ r }: { r: ItemRecord }) {
+  return (
+    <>
+      <TableCell className="font-medium">{r.name}</TableCell>
+      <TableCell className="font-mono text-xs">{r.hsn}</TableCell>
+      <TableCell className="text-xs">{r.unit}</TableCell>
+      <TableCell className="text-right text-xs">{r.gst_rate}</TableCell>
+      <TableCell className="text-right text-xs">{r.opening_qty}</TableCell>
+      <TableCell className="text-right text-xs">{r.opening_rate.toFixed(2)}</TableCell>
+      <TableCell className="text-right text-xs">{r.sale_price.toFixed(2)}</TableCell>
+    </>
+  );
+}
+
+function VoucherCols({ r }: { r: VoucherRecord }) {
+  return (
+    <>
+      <TableCell className="text-xs">{r.date}</TableCell>
+      <TableCell><Badge variant="secondary" className="text-[10px]">{r.vtype}</Badge></TableCell>
+      <TableCell className="font-mono text-xs">{r.voucher_no}</TableCell>
+      <TableCell className="text-sm">{r.party}</TableCell>
+      <TableCell className="text-right font-mono text-xs">{r.total.toFixed(2)}</TableCell>
+    </>
   );
 }
