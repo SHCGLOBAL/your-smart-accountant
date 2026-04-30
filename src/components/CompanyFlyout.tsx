@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,23 @@ export function CompanyFlyout() {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "list">("menu");
   const [hideTimer, setHideTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const r = triggerRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.top, left: r.right + 8 });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   useEffect(() => () => { if (hideTimer) clearTimeout(hideTimer); }, [hideTimer]);
 
@@ -109,6 +126,7 @@ export function CompanyFlyout() {
       onBlur={scheduleHide}
     >
       <button
+        ref={triggerRef}
         type="button"
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         onClick={() => setOpen((v) => !v)}
@@ -120,7 +138,8 @@ export function CompanyFlyout() {
 
       {open && (
         <div
-          className="absolute left-full top-0 z-50 ml-2 w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+          className="fixed z-[100] w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+          style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
           onMouseLeave={scheduleHide}
         >
