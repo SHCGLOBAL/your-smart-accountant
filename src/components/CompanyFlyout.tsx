@@ -130,6 +130,17 @@ export function CompanyFlyout() {
     setView("menu");
     navigate({ to: "/app" });
   };
+  const onEdit = (id: string) => {
+    setActiveCompanyId(id);
+    setOpen(false);
+    setView("menu");
+    navigate({ to: "/app/companies", search: { edit: id } as never });
+  };
+  const onSettings = () => {
+    setOpen(false);
+    setView("menu");
+    navigate({ to: "/app/settings" });
+  };
 
   return (
     <div
@@ -177,6 +188,14 @@ export function CompanyFlyout() {
                 <span className="ml-auto text-xs text-muted-foreground">{memberships.length}</span>
                 <ChevronRight className="h-3.5 w-3.5 opacity-60" />
               </button>
+              <button
+                type="button"
+                onClick={onSettings}
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Company settings</span>
+              </button>
             </div>
           ) : (
             <div>
@@ -188,9 +207,9 @@ export function CompanyFlyout() {
                 >
                   <ChevronLeft className="h-3.5 w-3.5" /> Back
                 </button>
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setOpen(false); setView("menu"); navigate({ to: "/app/settings" }); }}>
-                  <Settings className="mr-1 h-3.5 w-3.5" /> Settings
-                </Button>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Click pencil to edit
+                </span>
               </div>
               {memberships.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
@@ -204,6 +223,7 @@ export function CompanyFlyout() {
                       m={m}
                       isActive={m.company_id === activeCompanyId}
                       onPick={onPick}
+                      onEdit={onEdit}
                     />
                   ))}
                 </div>
