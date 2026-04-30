@@ -418,3 +418,90 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
   return dedupeOpenings(out);
 }
+
+// ============================================================================
+// Opening Stock parser — Item name, HSN, Qty, Unit, Rate, Value
+// ============================================================================
+export interface ExtractedStockItem {
+  name: string;
+  hsn_code: string;
+  qty: number;
+  unit: string;
+  rate: number;   // ₹ per unit
+  value: number;  // ₹ total
+}
+
+const KNOWN_UNITS = [
+  "NOS", "PCS", "KGS", "KG", "GMS", "GM", "LTR", "LTRS", "L", "MTR", "MTRS", "M",
+  "BOX", "PKT", "BAG", "BTL", "DOZ", "ROL", "SET", "SQM", "SQF", "TON", "UNT",
+];
+const UNIT_RX = new RegExp(`\\b(${KNOWN_UNITS.join("|")})\\b`, "i");
+
+function normUnit(u: string): string {
+  const x = u.toUpperCase();
+  if (x === "KG") return "KGS";
+  if (x === "GM") return "GMS";
+  if (x === "L" || x === "LTRS") return "LTR";
+  if (x === "M" || x === "MTRS") return "MTR";
+  return x;
+}
+
+/**
+ * Heuristic line parser for an opening-stock / item summary document.
+ * Each non-empty line is treated as one item. We pull:
+ *   - HSN: first 4-8 digit pure numeric token
+ *   - Unit: first matching unit token
+ *   - Numeric tail: last 3 numbers → qty, rate, value (or last 2 → qty + value)
+ *   - Name: text before the HSN / first numeric / unit token
+ */
+export function parseStockOpeningText(text: string): ExtractedStockItem[] {
+  const out: ExtractedStockItem[] = [];
+  const lines = text.split(/\n+/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+
+  for (const raw of lines) {
+    // Skip header-ish lines
+    if (/^(s\.?\s*no|sr\.?\s*no|item|particulars|description|hsn|qty|quantity|rate|value|amount|total)\b/i.test(raw)) continue;
+    if (!/\d/.test(raw)) continue;
+
+    // HSN: 4, 6 or 8 digit standalone number — pick the first that isn't an obvious amount.
+    let hsn = "";
+    const hsnMatch = raw.match(/\b(\d{4}|\d{6}|\d{8})\b/);
+    if (hsnMatch) hsn = hsnMatch[1];
+
+    // Unit
+    let unit = "NOS";
+    const um = raw.match(UNIT_RX);
+    if (um) unit = normUnit(um[1]);
+
+    // Numeric amounts (qty / rate / value) — capture tokens like 1,234.50 or 12.000
+    const numTokens = raw.match(/-?\d{1,3}(?:,\d{2,3})*(?:\.\d+)?|-?\d+\.\d+|-?\d+/g) || [];
+    // Drop the HSN token from numeric amounts (HSN is usually integer 4/6/8 digits with no comma/decimal)
+    const amounts = numTokens
+      .filter((t) => t !== hsn)
+      .map(num)
+      .filter((n) => isFinite(n) && n !== 0);
+    if (amounts.length < 2) continue;
+
+    let qty = 0, rate = 0, value = 0;
+    if (amounts.length >= 3) {
+      [qty, rate, value] = amounts.slice(-3);
+    } else {
+      qty = amounts[amounts.length - 2];
+      value = amounts[amounts.length - 1];
+      rate = qty > 0 ? value / qty : 0;
+    }
+    if (qty <= 0 || value <= 0) continue;
+
+    // Name: strip HSN, unit, and trailing numeric tokens
+    let name = raw;
+    if (hsn) name = name.replace(new RegExp(`\\b${hsn}\\b`), " ");
+    name = name.replace(UNIT_RX, " ");
+    // remove trailing run of "<num> <num> <num>"
+    name = name.replace(/(\s-?\d[\d,\.]*){2,}\s*$/, "").trim();
+    name = name.replace(/[\|\.]+$/, "").replace(/\s{2,}/g, " ").trim();
+    if (name.length < 2) continue;
+
+    out.push({ name, hsn_code: hsn, qty: Math.abs(qty), unit, rate: Math.abs(rate), value: Math.abs(value) });
+  }
+  return out;
+}
