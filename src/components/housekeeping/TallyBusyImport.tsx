@@ -226,8 +226,8 @@ function LedgerImporter({ companyId, disabled }: Props) {
           const opening = num(pickField(r, ["OPENINGBALANCE", "Opening Balance", "Opening Bal", "Op Bal"]));
           const isCr = / cr$/i.test(pickField(r, ["OPENINGBALANCE", "Opening Balance"]));
           const signed = isCr ? -Math.abs(opening) : opening;
-          const guess = guessGroupCode(groupName || name) || guessGroupCode(name);
-          const groupCode = guess?.code ?? "SUNDRY_DEBTORS";
+          const sideHint: "Dr" | "Cr" = signed >= 0 ? "Dr" : "Cr";
+          const groupCode = guessGroupCode(groupName || name, sideHint);
           const type = (defaultLedgerTypeForGroup(groupCode) ?? "current_asset") as LedgerType;
           return {
             _key: `r${i}`, _selected: true, name,
@@ -619,13 +619,15 @@ function VoucherImporter({ companyId, disabled }: Props) {
         // Resolve party ledger (auto-create if missing)
         let partyId: string | null = null;
         if (r.party) {
-          const guess = guessGroupCode(r.party);
+          const sideHint: "Dr" | "Cr" =
+            r.vtype === "sales" || r.vtype === "receipt" || r.vtype === "credit_note" ? "Dr" : "Cr";
+          const guessCode = guessGroupCode(r.party, sideHint);
           const inferredType: LedgerType = (
             r.vtype === "sales" || r.vtype === "receipt" || r.vtype === "credit_note"
               ? "sundry_debtor"
               : r.vtype === "purchase" || r.vtype === "payment" || r.vtype === "debit_note"
               ? "sundry_creditor"
-              : (defaultLedgerTypeForGroup(guess?.code ?? "") ?? "current_asset")
+              : (defaultLedgerTypeForGroup(guessCode) ?? "current_asset")
           ) as LedgerType;
           partyId = await ensureLedger(r.party, inferredType);
         }
