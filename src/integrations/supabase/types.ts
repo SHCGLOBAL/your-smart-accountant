@@ -1146,6 +1146,90 @@ export type Database = {
           },
         ]
       }
+      period_lock_audit: {
+        Row: {
+          action: string
+          company_id: string
+          id: string
+          performed_at: string
+          performed_by: string
+          period: string
+          period_lock_id: string | null
+          reason: string
+          return_type: string
+        }
+        Insert: {
+          action: string
+          company_id: string
+          id?: string
+          performed_at?: string
+          performed_by: string
+          period: string
+          period_lock_id?: string | null
+          reason: string
+          return_type: string
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          id?: string
+          performed_at?: string
+          performed_by?: string
+          period?: string
+          period_lock_id?: string | null
+          reason?: string
+          return_type?: string
+        }
+        Relationships: []
+      }
+      period_locks: {
+        Row: {
+          company_id: string
+          created_at: string
+          filed_reference: string | null
+          id: string
+          is_active: boolean
+          locked_at: string
+          locked_by: string
+          notes: string | null
+          period: string
+          period_end: string
+          period_start: string
+          return_type: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          filed_reference?: string | null
+          id?: string
+          is_active?: boolean
+          locked_at?: string
+          locked_by: string
+          notes?: string | null
+          period: string
+          period_end: string
+          period_start: string
+          return_type: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          filed_reference?: string | null
+          id?: string
+          is_active?: boolean
+          locked_at?: string
+          locked_by?: string
+          notes?: string | null
+          period?: string
+          period_end?: string
+          period_start?: string
+          return_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1590,6 +1674,22 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      is_period_locked: {
+        Args: { _company_id: string; _date: string }
+        Returns: boolean
+      }
+      lock_period: {
+        Args: {
+          _company_id: string
+          _filed_reference?: string
+          _notes?: string
+          _period: string
+          _period_end: string
+          _period_start: string
+          _return_type: string
+        }
+        Returns: string
+      }
       next_voucher_number: {
         Args: {
           _company_id: string
@@ -1599,6 +1699,15 @@ export type Database = {
       }
       set_company_password: {
         Args: { _company_id: string; _new_password: string }
+        Returns: undefined
+      }
+      unlock_period: {
+        Args: {
+          _company_id: string
+          _period: string
+          _reason: string
+          _return_type: string
+        }
         Returns: undefined
       }
       verify_company_password: {

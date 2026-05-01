@@ -17,6 +17,7 @@ import {
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
+import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 
 export const Route = createFileRoute("/app/reports/gstr1")({
   head: () => ({ meta: [{ title: "GSTR-1 — Reports" }] }),
@@ -182,6 +183,18 @@ function GSTR1Page() {
       {built && (
         <>
           <ValidationPanel issues={validateGstr1(built)} />
+
+          <PeriodLockCard
+            returnType="GSTR1"
+            period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
+            periodStart={period.from}
+            periodEnd={period.to}
+            periodLabel={
+              cadence === "quarterly"
+                ? `Q${quarter} ${year}`
+                : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })
+            }
+          />
 
           <SectionTable title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2b.map((x) => [x.ctin, x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt")), money(sumLine(x.itms, "camt")), money(sumLine(x.itms, "samt"))])} />
