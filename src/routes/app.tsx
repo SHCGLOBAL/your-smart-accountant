@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Lock, Building2 } from "lucide-react";
+import { Lock, Building2, HardDriveDownload, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   SidebarProvider,
   SidebarTrigger,
@@ -11,6 +12,7 @@ import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
@@ -19,6 +21,7 @@ import {
   isCompanyUnlocked,
   lockWorkspace,
 } from "@/lib/tech-user";
+import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -32,6 +35,51 @@ function AppLayout() {
   const { loading: companyLoading, memberships, activeCompanyId, activeMembership } = useCompany();
   const { t } = useI18n();
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [savingMirror, setSavingMirror] = useState(false);
+  const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
+
+  const isTrial = activeMembership?.companies?.mode === "trial_local";
+  const lastSaveAt = activeCompanyId ? getLastLocalMirror(activeCompanyId) : null;
+  void lastSaveTick;
+
+  // Manual "Backup now" handler
+  const onBackupNow = async () => {
+    if (!activeCompanyId || !activeMembership) return;
+    setSavingMirror(true);
+    try {
+      const r = await writeLocalMirror(activeCompanyId, activeMembership.companies.name);
+      if (r.isDesktop) {
+        toast.success("Local copy saved", {
+          description: `${r.jsonFile} + ${r.xlsxFile}`,
+          duration: 5000,
+        });
+      } else {
+        toast.success("Local copy downloaded", {
+          description: "Browsers cannot write silently to disk — JSON + Excel were downloaded to your Downloads folder.",
+          duration: 6000,
+        });
+      }
+      setLastSaveTick((n) => n + 1);
+    } catch (e) {
+      toast.error((e as Error).message || "Local save failed");
+    } finally {
+      setSavingMirror(false);
+    }
+  };
+
+  // Auto-save on app close for Trial / Local-only companies (best-effort).
+  // Browsers do NOT allow async work in beforeunload — we only attempt a sync
+  // best-effort flush. The Electron `before-quit` hook (in main.cjs) is the
+  // reliable path; the renderer informs it which company is active.
+  useEffect(() => {
+    if (!isTrial || !activeCompanyId || !activeMembership) return;
+    const handler = () => {
+      // Fire and forget — we cannot await in beforeunload.
+      void writeLocalMirror(activeCompanyId, activeMembership.companies.name).catch(() => undefined);
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isTrial, activeCompanyId, activeMembership]);
 
   // Auto sign-in (silent) so RLS works. No user-visible login.
   useEffect(() => {
@@ -130,6 +178,24 @@ function AppLayout() {
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
               <LanguageSwitcher compact />
+              {isTrial && (
+                <>
+                  <Badge variant="outline" className="hidden border-amber-500/60 bg-amber-500/10 text-amber-700 sm:inline-flex dark:text-amber-300" title="This company is kept as a continuous local copy on this PC.">
+                    Trial / Local-only
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onBackupNow}
+                    disabled={savingMirror}
+                    className="gap-1.5"
+                    title={lastSaveAt ? `Last local save: ${new Date(lastSaveAt).toLocaleString()}` : "Save a JSON + Excel copy to your PC now"}
+                  >
+                    {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
+                  </Button>
+                </>
+              )}
               {activeMembership && (
                 <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
                   <Building2 className="h-3.5 w-3.5" />
