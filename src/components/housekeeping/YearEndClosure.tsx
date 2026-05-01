@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, rupeesToPaise } from "@/lib/money";
+import type { LedgerTypeValue } from "@/lib/constants";
 
 interface YearEndClosureProps {
   companyId: string | null;
@@ -97,7 +98,7 @@ function fyDefault(hint?: string | null) {
 async function ensureLedger(
   companyId: string,
   name: string,
-  type: string,
+  type: LedgerTypeValue,
 ): Promise<{ id: string; name: string }> {
   const { data: existing } = await supabase
     .from("ledgers")
