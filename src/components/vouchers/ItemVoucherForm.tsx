@@ -299,7 +299,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           activeCompanyId,
           voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
           partyId,
-          totals,
+          { ...totals, round_off_paise: roundOffPaise },
         );
         const entryRows = postings.map((p) => ({
           voucher_id: vData.id,
