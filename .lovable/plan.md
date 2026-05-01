@@ -1,89 +1,127 @@
-## Goal
 
-Stop the white screen on big Tally / Busy files (your `Master.xml` is ~416k lines / UTF-16) and make the importer comfortably handle very large exports — tens of thousands of ledgers / items / vouchers — with clear feedback at every step.
+# Accounting Integrity Audit — Findings & Fix Plan
 
-## What the user will see
+I did a focused audit of the highest-risk areas: double-entry posting, GST rounding, opening-balance import, group classification, and company delete. Below is a ranked list of real bugs found, with the exact fix for each. Nothing here is cosmetic — every item can cause a wrong Trial Balance, GST return, or audit failure.
 
-1. **Before parsing** — as soon as a file is picked, a small info card shows:
-   - File name, size in MB, detected type (XML / ZIP / Excel / CSV)
-   - Estimated load time band ("Small <5s", "Medium 5–30s", "Large 30s–2 min", "Very large 2+ min — please keep this tab open")
-   - A confirm button for files >10 MB so users don't accidentally freeze the tab.
+## Severity legend
+- **P0** — wrong numbers in books / GST returns. Fix immediately.
+- **P1** — usability or data-quality issues that lead to wrong numbers if user is not careful.
+- **P2** — robustness / future-proofing.
 
-2. **During parsing** — a progress card replaces the spinner:
-   - Stage label ("Decoding file…", "Parsing XML…", "Classifying records…", "Building preview…")
-   - Progress bar (% where measurable, indeterminate otherwise)
-   - Live counters: ledgers / items / vouchers found so far
-   - Cancel button.
+---
 
-3. **After parsing** — summary card always shows totals first:
-   - "Found 12,431 ledgers, 8,902 items, 47,118 vouchers"
-   - Preview tables show only the first 200 rows of each kind with a "Showing 200 of N — use search to find more" note and a search box. Selection ("import all / none / only filtered") works on the full set, not just the visible slice.
-   - For >5,000 rows the preview switches to a virtualized list so the DOM stays small.
+## P0-1 — Round-off breaks Trial Balance on every invoice
 
-4. **During posting** — progress bar with "Posted 3,400 / 12,431 ledgers" and ETA. Errors don't abort the whole batch; failed rows are collected and shown at the end with a "Download failed rows as CSV" button.
+**Where:** `src/components/vouchers/ItemVoucherForm.tsx` (line 254–314) + `src/lib/voucher-postings.ts`.
 
-5. **Safety net** — if anything still crashes, a local error boundary shows a friendly card ("Import ran into a problem — file was too large or malformed") instead of a blank screen, with a "Reset" button.
+**What happens today:**
+- The voucher header stores `total_paise = subtotal + GST` (no round-off added).
+- A separate `round_off_paise` is stored on the header and printed on the invoice/PDF.
+- The double-entry posts the **same `totals.total_paise`** to the party ledger.
+- Result: if invoice is rounded from ₹1,234.56 → ₹1,235, the round-off of ₹0.44 appears on the printed invoice but is **never posted to any ledger**, so Sales + Output GST ≠ Party Receivable. Trial Balance is out by the round-off amount on every invoice — silently.
 
-## Technical plan
+**Fix:**
+1. Decide one model and apply it everywhere: store `vouchers.total_paise = subtotal + GST + round_off`. Keep `round_off_paise` on the header for display.
+2. Get-or-create a **"Round Off"** system ledger (type `expense_indirect` for Dr round-off, `income_indirect` for Cr — single ledger, side decided per voucher).
+3. Update `buildItemVoucherPostings` to accept `round_off_paise` and append the round-off entry on the side opposite the party so debits = credits exactly.
+4. Update PDF (`src/lib/invoice-pdf.ts`) and on-screen totals so the rounded total = party receivable.
 
-### A. Robust file decoding (`src/lib/tally-busy-import.ts`)
-- New `decodeFileSmart(file)` that:
-  - Reads first 4 bytes to detect BOM: UTF-16 LE (`FF FE`), UTF-16 BE (`FE FF`), UTF-8 BOM (`EF BB BF`).
-  - Falls back to heuristic: if >30% of first 1 KB are NUL bytes → treat as UTF-16LE.
-  - Uses `TextDecoder('utf-16le' | 'utf-16be' | 'utf-8')` on the full ArrayBuffer.
-  - Strips stray NULs and the BOM from the resulting string.
-- Replace direct `readText` calls in `parseAnyFile` and `parseTallyXml` with `decodeFileSmart`.
+---
 
-### B. Streaming-style XML parsing
-- Keep `fast-xml-parser` (already a dep) but run it inside a Web Worker so the main thread stays responsive on 50–500 MB strings.
-- New file `src/workers/tally-parser.worker.ts` exposing `parse({ buffer, filename })` → returns `{ rows, stats }` and posts periodic `{ stage, percent, counts }` progress messages.
-- New `parseFileOrZipWithProgress(file, onProgress, signal)` wrapper around the worker; falls back to in-thread parsing if Workers are unavailable (Electron edge case).
-- ZIP path: iterate entries one-by-one and emit progress per entry instead of awaiting all.
+## P0-2 — Opening Balance Import: created ledgers may violate group ↔ type contract
 
-### C. Chunked classification & mapping
-- After parsing, run `classifyRow` / `mapLedger` / `mapItem` / `mapVoucher` in batches of 2,000 using `requestIdleCallback` (or `setTimeout(0)` fallback) so the UI can paint progress between batches.
+**Where:** `src/components/housekeeping/OpeningBalanceImport.tsx` (insert at line 193–205).
 
-### D. Virtualized, paginated preview (`TallyBusyImport.tsx`)
-- Add `react-window` (small dep, ~6 KB) for the preview tables. When `rows.length > 500`, render with `FixedSizeList`; otherwise keep the current `<Table>`.
-- Add a search input above each preview that filters the underlying full array (not the slice).
-- Selection state stored as a `Set<string>` of keys instead of cloning the whole array on each toggle — fixes O(N) re-renders on big lists.
+**What happens today:**
+- We save both `group_code` (from section heading) and `type` (from `defaultLedgerTypeForGroup(groupCode)` initially).
+- But the user can change `new_type` independently in the row (the `LEDGER_TYPES` Select), and we never re-validate that `type` is actually one of `GROUP_BY_CODE[group_code].ledgerTypes`.
+- Result: a ledger can be saved as `group_code = SUNDRY_CREDITORS` with `type = bank`, which then displays in Bank Accounts on the Balance Sheet but in Sundry Creditors on Group Ledger. Two different reports, two different answers.
 
-### E. Pre-flight + progress UI
-- New component `src/components/housekeeping/ImportProgressCard.tsx` showing file metadata, size band, estimated time, current stage, percent, counts, and Cancel.
-- Size bands (rough rule of thumb):
-  - <2 MB → "A few seconds"
-  - 2–10 MB → "5–30 seconds"
-  - 10–50 MB → "30 seconds to 2 minutes — keep this tab open"
-  - >50 MB → "Several minutes — keep this tab open and your laptop plugged in"
-- For files >10 MB show a confirm dialog before parsing starts.
+**Fix:**
+1. On every group change → reset `new_type` to `defaultLedgerTypeForGroup(group_code)`.
+2. On every type change → if the new type is not in `GROUP_BY_CODE[group_code].ledgerTypes`, also auto-update `group_code` to `defaultGroupCodeForType(type)` (or constrain the Type dropdown to types valid for the chosen group).
+3. Add a pre-post validation: refuse to insert when `type ∉ group.ledgerTypes` and toast the offending row.
 
-### F. Chunked posting (`postLedgers` / `postItems` / `postVouchers`)
-- Update each poster to:
-  - Insert in chunks of 500 rows (Supabase REST limit-friendly).
-  - Accept an `onProgress(done, total)` callback.
-  - Catch per-chunk errors, accumulate failed rows, and return `{ created, updated, skipped, failed: FailedRow[] }`.
-- UI shows the progress bar and offers a CSV download of failed rows.
+---
 
-### G. Error boundary
-- New `src/components/housekeeping/ImportErrorBoundary.tsx` (class component) wrapping `TallyBusyImport`'s content. On error: friendly message, "Reset" button that clears state, and a "Copy diagnostics" button (file name, size, stage, error message) so the user can paste it back to support.
+## P0-3 — Section-hint regex misses very common Tally headings
 
-### H. Documentation hint update
-- Update the helper text on the All-in-One tab to:
-  - Recommend exporting **separate** XML files (Masters, Day Book) for very large companies.
-  - Mention that .001 / TDBK files are Tally binary backups and must be restored in Tally first.
+**Where:** `src/lib/statement-parse.ts` `GROUP_HEADINGS` (line 139–163).
 
-## Files to add
-- `src/workers/tally-parser.worker.ts`
-- `src/components/housekeeping/ImportProgressCard.tsx`
-- `src/components/housekeeping/ImportErrorBoundary.tsx`
+**Issues found while reading the regex set:**
+- `Duties & Taxes` heading rx is `/^(duties\s*(ies)?\s*&?\s*taxes|gst\s+payable)\b/i` — the `(ies)?` group is leftover and prevents matching `Duties & Taxes` cleanly when OCR returns `Duties&Taxes` (no spaces) or `Duties Taxes`.
+- No heading for **Branch / Divisions**, **Deposits (Asset)**, **Suspense A/c**, **Cash & Bank** (combined heading), **Loans & Advances (Liability)**, **Stock-in-Hand** typo `Stock In Hand`.
+- `Bank OD A/c` is mapped to `BANK_ACCOUNTS` (assets, Dr) but a true overdraft is a **Secured Loan (Cr)**. Mis-classifies CC/OD limits.
 
-## Files to edit
-- `src/lib/tally-busy-import.ts` — `decodeFileSmart`, worker wrapper, chunked posters.
-- `src/components/housekeeping/TallyBusyImport.tsx` — pre-flight, progress, virtualized preview, search, error boundary, Set-based selection.
+**Fix:**
+1. Tighten / expand the heading regex set; remove the broken `(ies)?` token.
+2. Add explicit headings for Bank OD/CC → `SECURED_LOANS`, "Loans (Liability)" → `UNSECURED_LOANS`, "Deposits" → `CURRENT_ASSETS`, "Suspense" → `CURRENT_LIABILITIES`.
+3. Add a unit test fixture (small text snippet → expected rows) so regressions are caught.
 
-## New dependency
-- `react-window` (and `@types/react-window`) for virtualization.
+---
 
-## Out of scope (can do later if you want)
-- Resuming interrupted imports across page reloads.
-- Server-side parsing via an edge function (would also fix the issue, but Tally exports are private and processing client-side keeps your data on your machine).
+## P0-4 — `guessGroupCode` override path picks the wrong group
+
+**Where:** `src/lib/account-groups.ts` line 220–230.
+
+**Problem:** When section hint = `CAPITAL_ACCOUNT` and the row name contains the word `bank` (e.g. "Kaushik Bank Loan A/c" listed under Capital by mistake in the source PDF), the code finds an `overrideMatch = BANK_ACCOUNTS` and returns it — **even though that override has lower confidence than the explicit section heading**. That re-introduces the original mis-classification.
+
+**Fix:** Make override only fire when the row's name contains a **strong identifier** (e.g. matches a high-specificity hint like `\bhdfc\b`, `\bsbi\b`, `\bbank a/c\b`) AND the section hint is a generic catch-all (`CURRENT_LIABILITIES`, `CURRENT_ASSETS`). Otherwise prefer the section heading. Add an allow-list of "strong override" patterns instead of accepting any same-side hint match.
+
+---
+
+## P0-5 — GST CGST/SGST rounding can create 1-paise drift across many lines
+
+**Where:** `src/lib/gst.ts` `computeLine` (line 27–37).
+
+**What happens today:** per line we do `Math.round(gstAmount/2)` for CGST and `gstAmount - cgst` for SGST. That is correct **per line**, but when the voucher has many lines, the sum of CGST may differ from the sum of SGST by N×0 to N×1 paise — which is acceptable. **However**, Indian GST rules require CGST = SGST on every B2B invoice for downstream GSTR-1/2A reconciliation. A 1-paise difference on a line will be flagged by GSTN portal validators.
+
+**Fix:** Compute `half = Math.floor(gstAmount / 2)` and assign `cgst = sgst = half`, then add the leftover 1 paise (if `gstAmount` is odd) into a separate per-voucher round-off accumulator that is consolidated into the existing `round_off_paise` on the voucher header. This keeps CGST = SGST on every line and preserves total integrity via round-off.
+
+---
+
+## P1-6 — Company delete still relies on cascade that may not exist
+
+**Where:** Last migration created in the previous turn for company delete.
+
+**Risk:** If any child table (e.g. `gst_api_credentials`, `recurring_invoices`, `einvoice_details`, `einvoice_api_log`, `bill_allocations`, `voucher_items`, `voucher_entries`, `bank_statement_lines`, `gstr2b_lines`, `payment_reminders`, `ledger_group_mappings`, `gstr3b_inward_summary`, `gstr3b_itc_reversal`) lacks `ON DELETE CASCADE` from `companies` (the schema shows **no foreign keys at all** on most tables), DELETE on companies fails silently from the user's perspective (RLS hides the row but a referencing row blocks the delete with a 23503 violation).
+
+**Fix:** A single migration that, for every `*.company_id` column in `public`, adds a `FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE` (drop existing constraint first if any). Same for `voucher_id` cascading to `vouchers`. This guarantees company delete actually deletes everything.
+
+---
+
+## P1-7 — `next_voucher_number` race window
+
+**Where:** `public.next_voucher_number` (RPC, plpgsql).
+
+**Problem:** It does `INSERT … ON CONFLICT DO NOTHING` then `UPDATE … RETURNING next_number - 1`. Under concurrent inserts (two browser tabs saving at once) the same number can be returned twice because the seq row is not locked between the two statements.
+
+**Fix:** Wrap in `SELECT … FOR UPDATE` after the upsert, or do the upsert + increment in a single CTE. Add a unique index on `(company_id, voucher_type, voucher_number)` on `vouchers` so duplicates are physically prevented. Backfill any duplicates first.
+
+---
+
+## P2-8 — Period locking / financial-year guard is missing
+
+**Observation:** Nothing in the code prevents posting a voucher dated in a closed financial year, after GSTR-1 has been filed for that period. Standard Indian accounting software locks past periods after returns are filed.
+
+**Fix (later, low priority for this turn):** Add a `period_locks` table (`company_id, ym, locked_at, locked_by`) and check before insert/update of vouchers and voucher_entries. Mention as a follow-up; do not block this turn on it.
+
+---
+
+## What I will change in this turn (in order)
+
+1. **P0-1 round-off**: update `voucher-postings.ts` to add round-off entry; update `ItemVoucherForm.tsx` so header `total_paise = subtotal + GST + round_off`; align PDF.
+2. **P0-5 CGST/SGST equality**: rewrite `computeLine` to keep CGST = SGST and push remainder to a `rounding_paise` field returned from `sumLines`; fold into header `round_off_paise`.
+3. **P0-2 group/type contract**: in `OpeningBalanceImport.tsx`, sync `group_code` ↔ `type` in both directions and validate before insert.
+4. **P0-3 + P0-4 classification**: tighten `GROUP_HEADINGS` regex set; add Bank OD → Secured Loans; refine `guessGroupCode` override to only fire on strong-identifier matches.
+5. **P1-6 cascade migration**: one migration adding `ON DELETE CASCADE` foreign keys for every `company_id` and `voucher_id` column so company / voucher delete is reliable.
+6. **P1-7 voucher number race**: tighten RPC + add unique index.
+
+I will skip P2-8 (period lock) this turn — it's a feature, not a bug — and surface it as the next safety upgrade after these fixes land.
+
+## What I will NOT touch
+- Existing data (no destructive backfills besides the cascade FK adjustment).
+- The auth/company-membership flow (it's already correct after the last fix).
+- The Tally/Busy big-file importer (working from the previous plan, separate scope).
+
+Approve this and I'll switch to build mode and apply the fixes in the order above, with a quick verification pass (compile + spot-check trial balance equality after a sample sales voucher with round-off) at the end.
