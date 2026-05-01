@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -16,7 +22,7 @@ import {
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Save, Wand2, RotateCcw, Tags } from "lucide-react";
+import { Loader2, Save, Wand2, RotateCcw, Tags, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   ACCOUNT_GROUPS,
@@ -26,8 +32,11 @@ import {
 import { LEDGER_TYPES, type LedgerTypeValue } from "@/lib/constants";
 import {
   applyMappingsToLedgers,
+  applyFuzzySuggestions,
+  buildFuzzySuggestions,
   fetchLedgerMappings,
   saveLedgerMappings,
+  type FuzzySuggestion,
   type LedgerMappingRow,
   type LedgerRecord,
   type LedgerType,
@@ -50,6 +59,13 @@ export function LedgerMappingPanel({
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "mapped" | "unmapped">("all");
 
+  // Fuzzy matching settings + review state.
+  const [fuzzyOn, setFuzzyOn] = useState(true);
+  const [threshold, setThreshold] = useState(0.82); // 0..1
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<FuzzySuggestion[]>([]);
+  const [accepted, setAccepted] = useState<Set<number>>(new Set());
+
   // Load existing saved mappings on mount / company change.
   useEffect(() => {
     if (!companyId) return;
@@ -67,6 +83,49 @@ export function LedgerMappingPanel({
     onChange(next);
     const hits = ledgers.filter((r) => saved.has(r.name.toLowerCase())).length;
     toast.success(`Applied ${hits} saved mapping${hits === 1 ? "" : "s"}`);
+  }
+
+  function openFuzzyReview() {
+    if (saved.size === 0) {
+      toast.info("No saved mappings yet — save some first to enable fuzzy match.");
+      return;
+    }
+    const sugg = buildFuzzySuggestions(ledgers, saved, threshold);
+    if (sugg.length === 0) {
+      toast.info("No close matches found above the current threshold.");
+      return;
+    }
+    setSuggestions(sugg);
+    setAccepted(new Set(sugg.map((s) => s.index))); // accept all by default
+    setReviewOpen(true);
+  }
+
+  function applyAcceptedFuzzy() {
+    const picks = suggestions.filter((s) => accepted.has(s.index));
+    if (picks.length === 0) {
+      setReviewOpen(false);
+      return;
+    }
+    const next = applyFuzzySuggestions(ledgers, picks);
+    onChange(next);
+    toast.success(`Auto-matched ${picks.length} ledger${picks.length === 1 ? "" : "s"}`);
+    setReviewOpen(false);
+  }
+
+  function autoMatchAndApply() {
+    if (saved.size === 0) {
+      toast.info("No saved mappings yet — save some first.");
+      return;
+    }
+    // First exact, then fuzzy in one shot.
+    const exact = applyMappingsToLedgers(ledgers, saved);
+    const sugg = buildFuzzySuggestions(exact, saved, threshold);
+    const next = applyFuzzySuggestions(exact, sugg);
+    onChange(next);
+    const exactHits = ledgers.filter((r) => saved.has(r.name.toLowerCase())).length;
+    toast.success(
+      `Auto-mapped ${exactHits} exact + ${sugg.length} fuzzy match${sugg.length === 1 ? "" : "es"}`,
+    );
   }
 
   function setRowGroup(idx: number, code: string) {
@@ -151,6 +210,14 @@ export function LedgerMappingPanel({
               disabled={disabled || loading || saved.size === 0}>
               <Wand2 className="mr-1 h-3.5 w-3.5" /> Apply saved
             </Button>
+            <Button size="sm" variant="outline" onClick={openFuzzyReview}
+              disabled={disabled || loading || saved.size === 0 || !fuzzyOn}>
+              <Sparkles className="mr-1 h-3.5 w-3.5" /> Review fuzzy matches
+            </Button>
+            <Button size="sm" variant="outline" onClick={autoMatchAndApply}
+              disabled={disabled || loading || saved.size === 0}>
+              <Sparkles className="mr-1 h-3.5 w-3.5" /> Auto-match all
+            </Button>
             <Button size="sm" variant="outline" onClick={() => persist("changed")}
               disabled={disabled || saving}>
               {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
@@ -161,6 +228,31 @@ export function LedgerMappingPanel({
               Save all as future defaults
             </Button>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Switch id="fuzzy-on" checked={fuzzyOn} onCheckedChange={setFuzzyOn} disabled={disabled} />
+            <Label htmlFor="fuzzy-on" className="text-xs">
+              Fuzzy match when exact name not found
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Sensitivity</span>
+            <Slider
+              value={[Math.round(threshold * 100)]}
+              onValueChange={(v) => setThreshold((v[0] ?? 80) / 100)}
+              min={60} max={98} step={1}
+              className="w-[160px]"
+              disabled={disabled || !fuzzyOn}
+            />
+            <Badge variant="outline" className="text-[10px] tabular-nums">
+              ≥ {Math.round(threshold * 100)}%
+            </Badge>
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            Higher = stricter matches. Use <strong>Review fuzzy matches</strong> to confirm before applying.
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -279,6 +371,75 @@ export function LedgerMappingPanel({
           <strong>Save changed</strong> stores only edits made here.{" "}
           <strong>Save all</strong> remembers every visible ledger so future imports of the same names auto-map.
         </p>
+
+        <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> Fuzzy match suggestions
+              </DialogTitle>
+              <DialogDescription>
+                {suggestions.length} ledger{suggestions.length === 1 ? "" : "s"} look similar to a saved mapping.
+                Uncheck any you don't want to apply.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[420px] overflow-auto rounded border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={accepted.size === suggestions.length && suggestions.length > 0}
+                        onChange={(e) => setAccepted(
+                          e.target.checked ? new Set(suggestions.map((s) => s.index)) : new Set(),
+                        )}
+                      />
+                    </TableHead>
+                    <TableHead>Source ledger</TableHead>
+                    <TableHead>Matched saved name</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suggestions.map((s) => {
+                    const on = accepted.has(s.index);
+                    return (
+                      <TableRow key={s.index}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={(e) => {
+                              const next = new Set(accepted);
+                              if (e.target.checked) next.add(s.index); else next.delete(s.index);
+                              setAccepted(next);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{s.source}</TableCell>
+                        <TableCell className="text-xs">{s.match.source_name}</TableCell>
+                        <TableCell className="text-xs">
+                          {GROUP_BY_CODE[s.match.group_code]?.label || s.match.group_code}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {(s.score * 100).toFixed(0)}%
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReviewOpen(false)}>Cancel</Button>
+              <Button onClick={applyAcceptedFuzzy} disabled={accepted.size === 0}>
+                Apply {accepted.size} match{accepted.size === 1 ? "" : "es"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
