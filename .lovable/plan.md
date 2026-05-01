@@ -1,127 +1,114 @@
+# Trial-Mode Local Books on Your PC
 
-# Accounting Integrity Audit — Findings & Fix Plan
+## What you actually asked for vs what is realistic today
 
-I did a focused audit of the highest-risk areas: double-entry posting, GST rounding, opening-balance import, group classification, and company delete. Below is a ranked list of real bugs found, with the exact fix for each. Nothing here is cosmetic — every item can cause a wrong Trial Balance, GST return, or audit failure.
+You said: *"All data stored locally and continuously saved on my hard disk, no cloud."*
 
-## Severity legend
-- **P0** — wrong numbers in books / GST returns. Fix immediately.
-- **P1** — usability or data-quality issues that lead to wrong numbers if user is not careful.
-- **P2** — robustness / future-proofing.
+Honest situation:
+- The whole app today (vouchers, ledgers, GST, reports) is built on Lovable Cloud (Supabase). Switching to a **true local database** (SQLite/IndexedDB) means rewriting every read/write in the app — that is weeks of work and I will not pretend otherwise.
+- What I **can deliver right now, safely** is a **Trial Mode** that:
+  1. Keeps your books working exactly as they do today (so your trial books actually balance, GST is correct, reports print).
+  2. **Continuously mirrors every change to your hard disk** as JSON + Excel — so the data effectively *lives* on your PC. If cloud goes away tomorrow, you still have every voucher, ledger, and report on disk.
+  3. Marks the company as "Trial / Local-only" so you know it.
+- The fully offline SQLite edition will be a **Phase 2** milestone after you've validated the trial.
 
----
-
-## P0-1 — Round-off breaks Trial Balance on every invoice
-
-**Where:** `src/components/vouchers/ItemVoucherForm.tsx` (line 254–314) + `src/lib/voucher-postings.ts`.
-
-**What happens today:**
-- The voucher header stores `total_paise = subtotal + GST` (no round-off added).
-- A separate `round_off_paise` is stored on the header and printed on the invoice/PDF.
-- The double-entry posts the **same `totals.total_paise`** to the party ledger.
-- Result: if invoice is rounded from ₹1,234.56 → ₹1,235, the round-off of ₹0.44 appears on the printed invoice but is **never posted to any ledger**, so Sales + Output GST ≠ Party Receivable. Trial Balance is out by the round-off amount on every invoice — silently.
-
-**Fix:**
-1. Decide one model and apply it everywhere: store `vouchers.total_paise = subtotal + GST + round_off`. Keep `round_off_paise` on the header for display.
-2. Get-or-create a **"Round Off"** system ledger (type `expense_indirect` for Dr round-off, `income_indirect` for Cr — single ledger, side decided per voucher).
-3. Update `buildItemVoucherPostings` to accept `round_off_paise` and append the round-off entry on the side opposite the party so debits = credits exactly.
-4. Update PDF (`src/lib/invoice-pdf.ts`) and on-screen totals so the rounded total = party receivable.
+This plan covers Phase 1 in detail and lists Phase 2 as a follow-up.
 
 ---
 
-## P0-2 — Opening Balance Import: created ledgers may violate group ↔ type contract
+## Phase 1 — Trial Mode + Continuous Local Save (build now)
 
-**Where:** `src/components/housekeeping/OpeningBalanceImport.tsx` (insert at line 193–205).
+### 1. Mark the company as "Trial / Local-only"
+- Add a `mode` flag on the company (`trial_local` | `normal`) via a small migration.
+- When creating a company, add a checkbox **"Trial books — keep a continuous local copy on this PC"**.
+- Show a yellow "Trial / Local-only" badge in the sidebar and header so you never confuse it with real books.
 
-**What happens today:**
-- We save both `group_code` (from section heading) and `type` (from `defaultLedgerTypeForGroup(groupCode)` initially).
-- But the user can change `new_type` independently in the row (the `LEDGER_TYPES` Select), and we never re-validate that `type` is actually one of `GROUP_BY_CODE[group_code].ledgerTypes`.
-- Result: a ledger can be saved as `group_code = SUNDRY_CREDITORS` with `type = bank`, which then displays in Bank Accounts on the Balance Sheet but in Sundry Creditors on Group Ledger. Two different reports, two different answers.
+### 2. Auto-save snapshots on app close + manual button
+Per your answers: snapshot **on app close** + a one-click **Backup now** button. Both formats: **JSON (for restore) + Excel (for human review)**.
 
-**Fix:**
-1. On every group change → reset `new_type` to `defaultLedgerTypeForGroup(group_code)`.
-2. On every type change → if the new type is not in `GROUP_BY_CODE[group_code].ledgerTypes`, also auto-update `group_code` to `defaultGroupCodeForType(type)` (or constrain the Type dropdown to types valid for the chosen group).
-3. Add a pre-post validation: refuse to insert when `type ∉ group.ledgerTypes` and toast the offending row.
+- Hook into `beforeunload` (browser) and Electron `before-quit` (desktop) — when fired on a Trial company, write a snapshot before the app exits.
+- Add a prominent **"Backup now (JSON + Excel)"** button in:
+  - Housekeeping → Backup tool (already exists, extend it)
+  - The header bar when a Trial company is active (so it's one click)
 
----
+### 3. Where files land on your PC
+Reuse the existing Electron save bridge. Folder layout:
 
-## P0-3 — Section-hint regex misses very common Tally headings
+```text
+Documents/
+  YourMehtaji/
+    Exports/
+      <CompanyName>/
+        backups/
+          AcmeTraders_2026-05-01_14-30-22.json     ← full restore file
+          AcmeTraders_2026-05-01_14-30-22.xlsx     ← multi-sheet workbook
+        latest/
+          AcmeTraders_latest.json                   ← always overwritten
+          AcmeTraders_latest.xlsx                   ← always overwritten
+```
 
-**Where:** `src/lib/statement-parse.ts` `GROUP_HEADINGS` (line 139–163).
+- `backups/` keeps a timestamped history (auto-prune to last 30).
+- `latest/` always holds the newest snapshot — easy to find, easy to email.
+- In the **browser** (no Electron), the manual button still downloads both files; the auto-on-close part only works in the desktop app (browsers cannot silently write to disk — this is a hard browser security rule).
 
-**Issues found while reading the regex set:**
-- `Duties & Taxes` heading rx is `/^(duties\s*(ies)?\s*&?\s*taxes|gst\s+payable)\b/i` — the `(ies)?` group is leftover and prevents matching `Duties & Taxes` cleanly when OCR returns `Duties&Taxes` (no spaces) or `Duties Taxes`.
-- No heading for **Branch / Divisions**, **Deposits (Asset)**, **Suspense A/c**, **Cash & Bank** (combined heading), **Loans & Advances (Liability)**, **Stock-in-Hand** typo `Stock In Hand`.
-- `Bank OD A/c` is mapped to `BANK_ACCOUNTS` (assets, Dr) but a true overdraft is a **Secured Loan (Cr)**. Mis-classifies CC/OD limits.
+### 4. The Excel workbook (human-readable mirror)
+One `.xlsx` per snapshot with these sheets:
+- `Company` — name, GSTIN, FY start, mode
+- `Ledgers` — code, name, group, opening balance, GSTIN
+- `Items` — name, HSN, GST rate, opening qty/value
+- `Vouchers` — date, number, type, party, total, narration
+- `Voucher_Items` — line items (item, qty, rate, GST)
+- `Voucher_Entries` — Dr/Cr postings (the double-entry view)
+- `Trial_Balance` — computed from postings, with totals row
+- `Bill_Allocations` — bill-wise tracking
 
-**Fix:**
-1. Tighten / expand the heading regex set; remove the broken `(ies)?` token.
-2. Add explicit headings for Bank OD/CC → `SECURED_LOANS`, "Loans (Liability)" → `UNSECURED_LOANS`, "Deposits" → `CURRENT_ASSETS`, "Suspense" → `CURRENT_LIABILITIES`.
-3. Add a unit test fixture (small text snippet → expected rows) so regressions are caught.
+Built with `openpyxl` patterns from the xlsx skill — formulas where it matters (totals), values elsewhere.
 
----
+### 5. Restore flow (already exists, harden it)
+- The current Restore tool already replays a JSON backup into a target company.
+- Add: when restoring, if the source backup was `mode = trial_local`, default the target to the same mode and show a warning before overwriting non-trial books.
 
-## P0-4 — `guessGroupCode` override path picks the wrong group
-
-**Where:** `src/lib/account-groups.ts` line 220–230.
-
-**Problem:** When section hint = `CAPITAL_ACCOUNT` and the row name contains the word `bank` (e.g. "Kaushik Bank Loan A/c" listed under Capital by mistake in the source PDF), the code finds an `overrideMatch = BANK_ACCOUNTS` and returns it — **even though that override has lower confidence than the explicit section heading**. That re-introduces the original mis-classification.
-
-**Fix:** Make override only fire when the row's name contains a **strong identifier** (e.g. matches a high-specificity hint like `\bhdfc\b`, `\bsbi\b`, `\bbank a/c\b`) AND the section hint is a generic catch-all (`CURRENT_LIABILITIES`, `CURRENT_ASSETS`). Otherwise prefer the section heading. Add an allow-list of "strong override" patterns instead of accepting any same-side hint match.
-
----
-
-## P0-5 — GST CGST/SGST rounding can create 1-paise drift across many lines
-
-**Where:** `src/lib/gst.ts` `computeLine` (line 27–37).
-
-**What happens today:** per line we do `Math.round(gstAmount/2)` for CGST and `gstAmount - cgst` for SGST. That is correct **per line**, but when the voucher has many lines, the sum of CGST may differ from the sum of SGST by N×0 to N×1 paise — which is acceptable. **However**, Indian GST rules require CGST = SGST on every B2B invoice for downstream GSTR-1/2A reconciliation. A 1-paise difference on a line will be flagged by GSTN portal validators.
-
-**Fix:** Compute `half = Math.floor(gstAmount / 2)` and assign `cgst = sgst = half`, then add the leftover 1 paise (if `gstAmount` is odd) into a separate per-voucher round-off accumulator that is consolidated into the existing `round_off_paise` on the voucher header. This keeps CGST = SGST on every line and preserves total integrity via round-off.
-
----
-
-## P1-6 — Company delete still relies on cascade that may not exist
-
-**Where:** Last migration created in the previous turn for company delete.
-
-**Risk:** If any child table (e.g. `gst_api_credentials`, `recurring_invoices`, `einvoice_details`, `einvoice_api_log`, `bill_allocations`, `voucher_items`, `voucher_entries`, `bank_statement_lines`, `gstr2b_lines`, `payment_reminders`, `ledger_group_mappings`, `gstr3b_inward_summary`, `gstr3b_itc_reversal`) lacks `ON DELETE CASCADE` from `companies` (the schema shows **no foreign keys at all** on most tables), DELETE on companies fails silently from the user's perspective (RLS hides the row but a referencing row blocks the delete with a 23503 violation).
-
-**Fix:** A single migration that, for every `*.company_id` column in `public`, adds a `FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE` (drop existing constraint first if any). Same for `voucher_id` cascading to `vouchers`. This guarantees company delete actually deletes everything.
+### 6. Safety rails
+- A "Trial / Local-only" company cannot be accidentally promoted to "real books" without explicit confirmation + a fresh backup.
+- The header shows **"Last local save: 2 minutes ago"** so you always know the disk copy is current.
+- If a snapshot fails to write (disk full, permission), the close is **cancelled** with a clear error — your data is never lost silently.
 
 ---
 
-## P1-7 — `next_voucher_number` race window
+## Phase 2 — True Offline SQLite Edition (separate milestone, do not start now)
 
-**Where:** `public.next_voucher_number` (RPC, plpgsql).
+Outline only, for visibility:
+- Replace the Supabase client with an abstraction that targets either Supabase (cloud) or **SQLite via better-sqlite3** in Electron.
+- Move every `supabase.from(...)` call behind a `db.table(...)` adapter.
+- Reimplement RLS-equivalent checks in the app layer (single-user desktop = trivial).
+- Migrate edge functions (GSTIN lookup, etc.) to direct API calls from the desktop process.
 
-**Problem:** It does `INSERT … ON CONFLICT DO NOTHING` then `UPDATE … RETURNING next_number - 1`. Under concurrent inserts (two browser tabs saving at once) the same number can be returned twice because the seq row is not locked between the two statements.
-
-**Fix:** Wrap in `SELECT … FOR UPDATE` after the upsert, or do the upsert + increment in a single CTE. Add a unique index on `(company_id, voucher_type, voucher_number)` on `vouchers` so duplicates are physically prevented. Backfill any duplicates first.
-
----
-
-## P2-8 — Period locking / financial-year guard is missing
-
-**Observation:** Nothing in the code prevents posting a voucher dated in a closed financial year, after GSTR-1 has been filed for that period. Standard Indian accounting software locks past periods after returns are filed.
-
-**Fix (later, low priority for this turn):** Add a `period_locks` table (`company_id, ym, locked_at, locked_by`) and check before insert/update of vouchers and voucher_entries. Mention as a follow-up; do not block this turn on it.
+This is real work and should be scoped, quoted, and approved as its own project after Phase 1 proves the trial flow.
 
 ---
 
-## What I will change in this turn (in order)
+## Files this plan will touch (Phase 1)
 
-1. **P0-1 round-off**: update `voucher-postings.ts` to add round-off entry; update `ItemVoucherForm.tsx` so header `total_paise = subtotal + GST + round_off`; align PDF.
-2. **P0-5 CGST/SGST equality**: rewrite `computeLine` to keep CGST = SGST and push remainder to a `rounding_paise` field returned from `sumLines`; fold into header `round_off_paise`.
-3. **P0-2 group/type contract**: in `OpeningBalanceImport.tsx`, sync `group_code` ↔ `type` in both directions and validate before insert.
-4. **P0-3 + P0-4 classification**: tighten `GROUP_HEADINGS` regex set; add Bank OD → Secured Loans; refine `guessGroupCode` override to only fire on strong-identifier matches.
-5. **P1-6 cascade migration**: one migration adding `ON DELETE CASCADE` foreign keys for every `company_id` and `voucher_id` column so company / voucher delete is reliable.
-6. **P1-7 voucher number race**: tighten RPC + add unique index.
+**New / migration**
+- `supabase/migrations/<ts>_add_company_mode.sql` — add `companies.mode` column (`trial_local` | `normal`, default `normal`).
+- `src/lib/local-mirror.ts` — new module: build snapshot, write JSON + XLSX via Electron bridge, prune old files.
 
-I will skip P2-8 (period lock) this turn — it's a feature, not a bug — and surface it as the next safety upgrade after these fixes land.
+**Modified**
+- `src/lib/backup.ts` — extend `buildCompanyBackup` to also emit XLSX; add `writeLatestSnapshot()` helper.
+- `src/components/housekeeping/BackupRestoreTool.tsx` — add "Backup now (JSON + Excel)" combined button; show last-save time.
+- `src/components/CompanyFlyout.tsx` / company-create form — add **"Trial books — keep a continuous local copy"** checkbox.
+- `src/components/AppSidebar.tsx` + header — show "Trial / Local-only" badge and "Last local save" timestamp.
+- `src/routes/app.tsx` — register `beforeunload` handler that triggers snapshot for active Trial company.
+- `electron/main.cjs` — handle `before-quit` to flush a final snapshot before exit.
+- `package.json` — add `xlsx` (or reuse existing `exceljs` if present) for workbook generation in the renderer.
 
-## What I will NOT touch
-- Existing data (no destructive backfills besides the cascade FK adjustment).
-- The auth/company-membership flow (it's already correct after the last fix).
-- The Tally/Busy big-file importer (working from the previous plan, separate scope).
+## Technical notes
 
-Approve this and I'll switch to build mode and apply the fixes in the order above, with a quick verification pass (compile + spot-check trial balance equality after a sample sales voucher with round-off) at the end.
+- **Browser limitation**: silent auto-save on close only works in the Electron desktop build. In a browser tab, the manual button is the only reliable path — browsers block silent disk writes by design. I'll show a clear note in the UI.
+- **XLSX in renderer**: generate the workbook in the React app, hand the `Uint8Array` to the existing `saveCompanyFile` IPC channel (it already supports binary).
+- **Pruning**: keep last 30 timestamped snapshots per company in `backups/`; `latest/` is always one file overwritten.
+- **No server changes** beyond the small `mode` column migration.
+
+---
+
+If you approve, I'll implement Phase 1 end-to-end in the next turn. Phase 2 (true SQLite offline) stays a separate, future decision.

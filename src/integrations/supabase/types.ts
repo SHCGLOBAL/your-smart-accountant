@@ -248,6 +248,7 @@ export type Database = {
           id: string
           inventory_enabled: boolean
           logo_url: string | null
+          mode: string
           name: string
           pan: string | null
           phone: string | null
@@ -274,6 +275,7 @@ export type Database = {
           id?: string
           inventory_enabled?: boolean
           logo_url?: string | null
+          mode?: string
           name: string
           pan?: string | null
           phone?: string | null
@@ -300,6 +302,7 @@ export type Database = {
           id?: string
           inventory_enabled?: boolean
           logo_url?: string | null
+          mode?: string
           name?: string
           pan?: string | null
           phone?: string | null
