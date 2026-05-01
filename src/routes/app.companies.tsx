@@ -58,6 +58,7 @@ const schema = z.object({
   gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
   inventory_enabled: z.boolean(),
   annual_turnover_lakhs: z.string().optional(),
+  trial_local: z.boolean(),
 });
 
 interface FormState {
@@ -79,6 +80,7 @@ interface FormState {
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
+  trial_local: boolean;
 }
 
 const empty: FormState = {
@@ -100,6 +102,7 @@ const empty: FormState = {
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
   annual_turnover_lakhs: "",
+  trial_local: false,
 };
 
 function CompaniesPage() {
@@ -160,6 +163,7 @@ function CompaniesPage() {
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
+      trial_local: (data as { mode?: string }).mode === "trial_local",
     });
     setOpen(true);
   };
@@ -220,6 +224,7 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
+      mode: parsed.data.trial_local ? "trial_local" : "normal",
     };
 
     if (editingId) {
@@ -351,6 +356,25 @@ function CompaniesPage() {
                       Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
                     </p>
                   </div>
+                </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={form.trial_local}
+                      onChange={(e) => setForm({ ...form, trial_local: e.target.checked })}
+                    />
+                    <div>
+                      <div className="font-semibold">Trial books — keep a continuous local copy on this PC</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Marks this company as <strong>Trial / Local-only</strong>. Each time you close the
+                        app (or click <em>Backup now</em>) a JSON + Excel snapshot is saved to your hard
+                        disk under <code>Documents/YourMehtaji/Exports/&lt;Company&gt;/</code>. In a normal
+                        browser tab the snapshots download to your Downloads folder.
+                      </p>
+                    </div>
+                  </label>
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>

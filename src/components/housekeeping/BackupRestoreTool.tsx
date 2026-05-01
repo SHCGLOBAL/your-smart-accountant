@@ -9,12 +9,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { writeLocalMirror } from "@/lib/local-mirror";
 
 interface Props {
   companyId: string;
@@ -25,6 +26,7 @@ interface Props {
 export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [mirroring, setMirroring] = useState(false);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -41,6 +43,23 @@ export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
       toast.error((e as Error).message || "Export failed");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function doMirror() {
+    if (!companyId) return;
+    setMirroring(true);
+    try {
+      const r = await writeLocalMirror(companyId, companyName);
+      toast.success(
+        r.isDesktop ? "Local copy saved to your PC" : "JSON + Excel downloaded",
+        { description: `${r.jsonFile} • ${r.xlsxFile}`, duration: 6000 },
+      );
+      try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
+    } catch (e) {
+      toast.error((e as Error).message || "Local save failed");
+    } finally {
+      setMirroring(false);
     }
   }
 
@@ -124,12 +143,30 @@ export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
             Documents/YourMehtaji/Exports/&lt;Company&gt;/backups/.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <Button onClick={doExport} disabled={exporting || disabled}>
             {exporting
               ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
               : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
           </Button>
+          <div>
+            <Button
+              variant="outline"
+              onClick={doMirror}
+              disabled={mirroring || disabled}
+              title="Saves both JSON (for restore) and Excel (human-readable) to your PC"
+            >
+              {mirroring
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+                : <><HardDriveDownload className="mr-2 h-4 w-4" />Backup now (JSON + Excel)</>}
+            </Button>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              In the desktop app, both files are written silently to
+              <code className="mx-1">Documents/YourMehtaji/Exports/{companyName}/</code>
+              (subfolders <code>backups/</code> and <code>latest/</code>). In a browser tab, both files
+              download to your Downloads folder.
+            </p>
+          </div>
           {lastBackup && (
             <div className="mt-2 text-xs text-muted-foreground">
               Last export: {new Date(lastBackup).toLocaleString()}
