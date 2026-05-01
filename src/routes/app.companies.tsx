@@ -357,6 +357,25 @@ function CompaniesPage() {
                     </p>
                   </div>
                 </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={form.trial_local}
+                      onChange={(e) => setForm({ ...form, trial_local: e.target.checked })}
+                    />
+                    <div>
+                      <div className="font-semibold">Trial books — keep a continuous local copy on this PC</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Marks this company as <strong>Trial / Local-only</strong>. Each time you close the
+                        app (or click <em>Backup now</em>) a JSON + Excel snapshot is saved to your hard
+                        disk under <code>Documents/YourMehtaji/Exports/&lt;Company&gt;/</code>. In a normal
+                        browser tab the snapshots download to your Downloads folder.
+                      </p>
+                    </div>
+                  </label>
+                </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
                   <Input
