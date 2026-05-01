@@ -32,6 +32,8 @@ import {
 import { ImportProgressCard } from "./ImportProgressCard";
 import { ImportErrorBoundary } from "./ImportErrorBoundary";
 import { ImportSettingsPanel } from "./ImportSettingsPanel";
+import { LedgerMappingPanel } from "./LedgerMappingPanel";
+import { applyMappingsToLedgers, fetchLedgerMappings } from "@/lib/tally-busy-import";
 
 const SIZE_CONFIRM_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -198,7 +200,13 @@ function CombinedImporter({ companyId, disabled }: Props) {
         (d, t, label) => { setDone(d); setTotal(t); if (label) setStage(label); },
         settings.chunkSize,
       );
-      const lRows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
+      // Auto-apply previously saved mappings before showing the preview.
+      let mappedLedgers = out.ledgers;
+      try {
+        const saved = await fetchLedgerMappings(companyId);
+        if (saved.size > 0) mappedLedgers = applyMappingsToLedgers(out.ledgers, saved);
+      } catch { /* non-fatal: just use auto-guessed groups */ }
+      const lRows: LedgerRow[] = mappedLedgers.map((x, i) => ({ ...x, _key: `l${i}` }));
       const iRows: ItemRow[] = out.items.map((x, i) => ({ ...x, _key: `i${i}` }));
       const vRows: VoucherRow[] = out.vouchers.map((x, i) => ({ ...x, _key: `v${i}` }));
       setLedgers(lRows); setItems(iRows); setVouchers(vRows);
@@ -299,6 +307,17 @@ function CombinedImporter({ companyId, disabled }: Props) {
 
       {grandTotal > 0 && !busy && (
         <>
+          {ledgers.length > 0 && (
+            <LedgerMappingPanel
+              companyId={companyId}
+              ledgers={ledgers}
+              previewLimit={settings.previewLimit}
+              disabled={posting || disabled}
+              onChange={(next) => {
+                setLedgers(next.map((r, i) => ({ ...r, _key: ledgers[i]?._key ?? `l${i}` })));
+              }}
+            />
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 p-3">
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge variant="secondary"><DbIcon className="mr-1 h-3 w-3" /> {selL.size} / {ledgers.length} ledgers</Badge>
@@ -416,7 +435,12 @@ function SingleImporter({
         settings.chunkSize,
       );
       if (kind === "ledger") {
-        const rows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
+        let mapped = out.ledgers;
+        try {
+          const saved = await fetchLedgerMappings(companyId);
+          if (saved.size > 0) mapped = applyMappingsToLedgers(out.ledgers, saved);
+        } catch { /* ignore */ }
+        const rows: LedgerRow[] = mapped.map((x, i) => ({ ...x, _key: `l${i}` }));
         setLedgers(rows); setSelL(new Set(rows.map((r) => r._key)));
         toast.success(`Parsed ${rows.length} ledger rows`);
       } else if (kind === "item") {
@@ -497,14 +521,25 @@ function SingleImporter({
       )}
 
       {kind === "ledger" && ledgers.length > 0 && !busy && (
-        <SectionPreview
+        <>
+          <LedgerMappingPanel
+            companyId={companyId}
+            ledgers={ledgers}
+            previewLimit={settings.previewLimit}
+            disabled={posting || disabled}
+            onChange={(next) => {
+              setLedgers(next.map((r, i) => ({ ...r, _key: ledgers[i]?._key ?? `l${i}` })));
+            }}
+          />
+          <SectionPreview
           title="Ledgers" rows={ledgers} sel={selL} setSel={setSelL}
           previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <LedgerCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
           matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
-        />
+          />
+        </>
       )}
       {kind === "item" && items.length > 0 && !busy && (
         <SectionPreview
