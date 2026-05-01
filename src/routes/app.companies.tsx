@@ -58,6 +58,7 @@ const schema = z.object({
   gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
   inventory_enabled: z.boolean(),
   annual_turnover_lakhs: z.string().optional(),
+  trial_local: z.boolean(),
 });
 
 interface FormState {
@@ -79,6 +80,7 @@ interface FormState {
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
+  trial_local: boolean;
 }
 
 const empty: FormState = {
@@ -100,6 +102,7 @@ const empty: FormState = {
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
   annual_turnover_lakhs: "",
+  trial_local: false,
 };
 
 function CompaniesPage() {
@@ -160,6 +163,7 @@ function CompaniesPage() {
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
+      trial_local: (data as { mode?: string }).mode === "trial_local",
     });
     setOpen(true);
   };
@@ -220,6 +224,7 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
+      mode: parsed.data.trial_local ? "trial_local" : "normal",
     };
 
     if (editingId) {
