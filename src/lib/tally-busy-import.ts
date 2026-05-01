@@ -68,12 +68,23 @@ function readBuffer(f: File | Blob): Promise<ArrayBuffer> {
  * Smart text decoder. Detects UTF-16 LE/BE, UTF-8 BOM, or NUL-heavy data
  * (common in Tally XML exports) and decodes accordingly. Strips BOM + stray NULs.
  */
-export async function decodeFileSmart(f: File | Blob): Promise<string> {
+export type EncodingChoice = "auto" | "utf-8" | "utf-16le" | "utf-16be";
+
+export async function decodeFileSmart(
+  f: File | Blob,
+  forced: EncodingChoice = "auto",
+  stripNuls = true,
+): Promise<string> {
   const buf = await readBuffer(f);
   const bytes = new Uint8Array(buf);
   let encoding: "utf-16le" | "utf-16be" | "utf-8" = "utf-8";
   let sliceFrom = 0;
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+  if (forced !== "auto") {
+    encoding = forced;
+    if (encoding === "utf-16le" && bytes[0] === 0xff && bytes[1] === 0xfe) sliceFrom = 2;
+    else if (encoding === "utf-16be" && bytes[0] === 0xfe && bytes[1] === 0xff) sliceFrom = 2;
+    else if (encoding === "utf-8" && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) sliceFrom = 3;
+  } else if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
     encoding = "utf-16le";
     sliceFrom = 2;
   } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
@@ -97,14 +108,31 @@ export async function decodeFileSmart(f: File | Blob): Promise<string> {
   }
   const view = sliceFrom > 0 ? bytes.subarray(sliceFrom) : bytes;
   const decoded = new TextDecoder(encoding, { fatal: false }).decode(view);
-  // Strip residual NULs and BOM character.
-  return decoded.replace(/\u0000/g, "").replace(/^\uFEFF/, "");
+  // Always strip leading BOM character; strip residual NULs only when requested.
+  const noBom = decoded.replace(/^\uFEFF/, "");
+  return stripNuls ? noBom.replace(/\u0000/g, "") : noBom;
 }
 
 /** Utility: yield to the browser so the UI can paint between heavy batches. */
 export function yieldToUI(): Promise<void> {
   return new Promise((res) => setTimeout(res, 0));
 }
+
+/** User-tweakable import settings (from the settings panel). */
+export interface ImportSettings {
+  encoding: EncodingChoice;
+  stripNuls: boolean;
+  chunkSize: number;
+  previewLimit: number;
+}
+
+export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
+  encoding: "auto",
+  stripNuls: true,
+  chunkSize: 2000,
+  previewLimit: 200,
+};
+
 
 // ---------------- Parsing ----------------
 
@@ -176,14 +204,18 @@ export async function parseTallyXml(xml: string): Promise<ParsedRow[]> {
 }
 
 /** Parse any single (non-zip) file into row records. */
-export async function parseAnyFile(f: File | Blob, name: string): Promise<ParsedRow[]> {
+export async function parseAnyFile(
+  f: File | Blob,
+  name: string,
+  settings: ImportSettings = DEFAULT_IMPORT_SETTINGS,
+): Promise<ParsedRow[]> {
   const lname = name.toLowerCase();
   if (lname.endsWith(".xml")) {
-    const text = await decodeFileSmart(f);
+    const text = await decodeFileSmart(f, settings.encoding, settings.stripNuls);
     return await parseTallyXml(text);
   }
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
-    const text = await decodeFileSmart(f);
+    const text = await decodeFileSmart(f, settings.encoding, settings.stripNuls);
     const Papa = (await import("papaparse")).default;
     const out = Papa.parse<Record<string, unknown>>(text, {
       header: true,
@@ -211,7 +243,10 @@ export async function parseAnyFile(f: File | Blob, name: string): Promise<Parsed
 }
 
 /** Top-level entry: handles ZIP archives by recursing into each inner file. */
-export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
+export async function parseFileOrZip(
+  f: File,
+  settings: ImportSettings = DEFAULT_IMPORT_SETTINGS,
+): Promise<ParsedRow[]> {
   const lname = f.name.toLowerCase();
   if (lname.endsWith(".zip")) {
     const JSZip = (await import("jszip")).default;
@@ -223,7 +258,7 @@ export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
       const lower = fname.toLowerCase();
       if (!/\.(xml|csv|txt|xlsx|xls)$/.test(lower)) continue;
       const blob = await entry.async("blob");
-      const inner = await parseAnyFile(blob, fname);
+      const inner = await parseAnyFile(blob, fname, settings);
       for (const r of inner) {
         if (!r.__sheet) r.__sheet = fname;
         all.push(r);
@@ -231,7 +266,7 @@ export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
     }
     return all;
   }
-  return parseAnyFile(f, f.name);
+  return parseAnyFile(f, f.name, settings);
 }
 
 // ---------------- Classification ----------------

@@ -27,11 +27,12 @@ import {
   parseFileOrZip, classifyAndMap, estimateBand,
   postLedgers, postItems, postVouchers,
   type LedgerRecord, type ItemRecord, type VoucherRecord, type PostResultEx,
+  type ImportSettings, DEFAULT_IMPORT_SETTINGS,
 } from "@/lib/tally-busy-import";
 import { ImportProgressCard } from "./ImportProgressCard";
 import { ImportErrorBoundary } from "./ImportErrorBoundary";
+import { ImportSettingsPanel } from "./ImportSettingsPanel";
 
-const PREVIEW_LIMIT = 200;
 const SIZE_CONFIRM_BYTES = 10 * 1024 * 1024; // 10 MB
 
 interface Props { companyId: string; disabled: boolean }
@@ -164,6 +165,7 @@ function downloadFailedCsv(name: string, rows: { name: string; reason: string }[
 // =====================================================================
 function CombinedImporter({ companyId, disabled }: Props) {
   const [file, setFile] = useState<File | null>(null);
+  const [settings, setSettings] = useState<ImportSettings>(DEFAULT_IMPORT_SETTINGS);
   const [stage, setStage] = useState("");
   const [done, setDone] = useState(0);
   const [total, setTotal] = useState(0);
@@ -188,12 +190,14 @@ function CombinedImporter({ companyId, disabled }: Props) {
     try {
       setStage("Decoding & parsing file");
       setDone(0); setTotal(0);
-      const data = await parseFileOrZip(f);
+      const data = await parseFileOrZip(f, settings);
       setStage("Classifying records");
       setTotal(data.length);
-      const out = await classifyAndMap(data, (d, t, label) => {
-        setDone(d); setTotal(t); if (label) setStage(label);
-      });
+      const out = await classifyAndMap(
+        data,
+        (d, t, label) => { setDone(d); setTotal(t); if (label) setStage(label); },
+        settings.chunkSize,
+      );
       const lRows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
       const iRows: ItemRow[] = out.items.map((x, i) => ({ ...x, _key: `i${i}` }));
       const vRows: VoucherRow[] = out.vouchers.map((x, i) => ({ ...x, _key: `v${i}` }));
@@ -270,6 +274,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
   return (
     <div className="space-y-3">
       {dialog}
+      <ImportSettingsPanel value={settings} onChange={setSettings} disabled={busy || posting} />
       <div className="space-y-1">
         <Label>Single Tally / Busy export (XML, ZIP, Excel, CSV)</Label>
         {input}
@@ -326,6 +331,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={ledgers} sel={selL} setSel={setSelL}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
                     render={(r) => <LedgerCols r={r} />}
                     matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
@@ -343,6 +349,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={items} sel={selI} setSel={setSelI}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
                     render={(r) => <ItemCols r={r} />}
                     matches={(r, q) => r.name.toLowerCase().includes(q) || r.hsn.toLowerCase().includes(q)}
@@ -360,6 +367,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={vouchers} sel={selV} setSel={setSelV}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
                     render={(r) => <VoucherCols r={r} />}
                     matches={(r, q) => r.party.toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
@@ -381,6 +389,7 @@ function SingleImporter({
   companyId, disabled, kind, hint,
 }: Props & { kind: "ledger" | "item" | "voucher"; hint: string }) {
   const [file, setFile] = useState<File | null>(null);
+  const [settings, setSettings] = useState<ImportSettings>(DEFAULT_IMPORT_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [posting, setPosting] = useState(false);
   const [stage, setStage] = useState("");
@@ -399,11 +408,13 @@ function SingleImporter({
     setLedgers([]); setItems([]); setVouchers([]);
     try {
       setStage("Decoding & parsing file");
-      const data = await parseFileOrZip(f);
+      const data = await parseFileOrZip(f, settings);
       setStage("Classifying records"); setTotal(data.length); setDone(0);
-      const out = await classifyAndMap(data, (d, t, l) => {
-        setDone(d); setTotal(t); if (l) setStage(l);
-      });
+      const out = await classifyAndMap(
+        data,
+        (d, t, l) => { setDone(d); setTotal(t); if (l) setStage(l); },
+        settings.chunkSize,
+      );
       if (kind === "ledger") {
         const rows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
         setLedgers(rows); setSelL(new Set(rows.map((r) => r._key)));
@@ -462,6 +473,7 @@ function SingleImporter({
   return (
     <div className="space-y-3">
       {dialog}
+      <ImportSettingsPanel value={settings} onChange={setSettings} disabled={busy || posting} />
       <div className="space-y-1">
         <Label>Tally XML, CSV, Excel, or ZIP</Label>
         {input}
@@ -487,6 +499,7 @@ function SingleImporter({
       {kind === "ledger" && ledgers.length > 0 && !busy && (
         <SectionPreview
           title="Ledgers" rows={ledgers} sel={selL} setSel={setSelL}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <LedgerCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
@@ -496,6 +509,7 @@ function SingleImporter({
       {kind === "item" && items.length > 0 && !busy && (
         <SectionPreview
           title="Items" rows={items} sel={selI} setSel={setSelI}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <ItemCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
@@ -505,6 +519,7 @@ function SingleImporter({
       {kind === "voucher" && vouchers.length > 0 && !busy && (
         <SectionPreview
           title="Vouchers" rows={vouchers} sel={selV} setSel={setSelV}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <VoucherCols r={r} />}
           headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
@@ -525,10 +540,11 @@ interface PreviewProps<T extends Keyed> {
   headers: React.ReactNode;
   render: (r: T) => React.ReactNode;
   matches: (r: T, q: string) => boolean;
+  previewLimit?: number;
 }
 
 function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
-  const { rows, sel, setSel, headers, render, matches } = props;
+  const { rows, sel, setSel, headers, render, matches, previewLimit = 200 } = props;
   const [q, setQ] = useState("");
 
   const filtered = useMemo(() => {
@@ -536,7 +552,7 @@ function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
     return s ? rows.filter((r) => matches(r, s)) : rows;
   }, [rows, q, matches]);
 
-  const visible = filtered.slice(0, PREVIEW_LIMIT);
+  const visible = filtered.slice(0, previewLimit);
   const allFilteredSelected = filtered.length > 0 && filtered.every((r) => sel.has(r._key));
 
   function toggleAllFiltered(on: boolean) {
@@ -563,11 +579,11 @@ function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
           className="h-8 max-w-xs"
         />
         <span className="text-xs text-muted-foreground">
-          Showing {Math.min(visible.length, PREVIEW_LIMIT)} of {filtered.length}
+          Showing {Math.min(visible.length, previewLimit)} of {filtered.length}
           {q && ` (filtered from ${rows.length})`}
         </span>
-        {filtered.length > PREVIEW_LIMIT && (
-          <Badge variant="outline" className="text-[10px]">Preview capped at {PREVIEW_LIMIT} rows</Badge>
+        {filtered.length > previewLimit && (
+          <Badge variant="outline" className="text-[10px]">Preview capped at {previewLimit} rows</Badge>
         )}
       </div>
       <div className="max-h-[360px] overflow-auto rounded border">
