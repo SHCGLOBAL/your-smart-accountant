@@ -123,6 +123,9 @@ export interface ExtractedOpening {
   account_name: string;
   amount: number; // rupees
   side: "Dr" | "Cr";
+  /** Group code inferred from the surrounding section heading (e.g. "CAPITAL_ACCOUNT").
+   *  Empty string when no heading was active. Used to seed the editable group on import. */
+  section_hint?: string;
 }
 
 export interface OpeningBalanceTotals {
@@ -133,27 +136,29 @@ export interface OpeningBalanceTotals {
 // Group headings commonly found in Tally / standard Indian balance sheets.
 // Used to (a) skip the heading line itself and (b) infer Dr/Cr side for the
 // detail rows that follow it.
-const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
+const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr"; group?: string }[] = [
   // Liabilities / Equity → Cr
-  { rx: /^(profit\s+for\s+the\s+period)\b/i, side: "Cr" },
-  { rx: /^(capital(\s+account)?|reserves?(\s+&?\s*surplus)?|owners?\s+equity)\b/i, side: "Cr" },
-  { rx: /^(current\s+liabilit(y|ies)|liabilit(y|ies))\b/i, side: "Cr" },
-  { rx: /^(sundry\s+creditors?|creditors?|accounts?\s+payable|trade\s+payables?)\b/i, side: "Cr" },
-  { rx: /^(duties\s*(ies)?\s*&?\s*taxes|gst\s+payable)\b/i, side: "Cr" },
-  { rx: /^(loans?\s*\(?liabilit(y|ies)?\)?|secured\s+loans?|unsecured\s+loans?|borrowings?)\b/i, side: "Cr" },
-  { rx: /^(provisions?|outstanding\s+expenses?|expenses?\s+payable)\b/i, side: "Cr" },
+  { rx: /^(profit\s+for\s+the\s+period)\b/i, side: "Cr", group: "RESERVES_AND_SURPLUS" },
+  { rx: /^(capital(\s+account)?|owners?\s+equity)\b/i, side: "Cr", group: "CAPITAL_ACCOUNT" },
+  { rx: /^(reserves?(\s+&?\s*surplus)?)\b/i, side: "Cr", group: "RESERVES_AND_SURPLUS" },
+  { rx: /^(current\s+liabilit(y|ies)|liabilit(y|ies))\b/i, side: "Cr", group: "CURRENT_LIABILITIES" },
+  { rx: /^(sundry\s+creditors?|creditors?|accounts?\s+payable|trade\s+payables?)\b/i, side: "Cr", group: "SUNDRY_CREDITORS" },
+  { rx: /^(duties\s*(ies)?\s*&?\s*taxes|gst\s+payable)\b/i, side: "Cr", group: "DUTIES_AND_TAXES" },
+  { rx: /^(secured\s+loans?)\b/i, side: "Cr", group: "SECURED_LOANS" },
+  { rx: /^(unsecured\s+loans?|loans?\s*\(?liabilit(y|ies)?\)?|borrowings?)\b/i, side: "Cr", group: "UNSECURED_LOANS" },
+  { rx: /^(provisions?|outstanding\s+expenses?|expenses?\s+payable)\b/i, side: "Cr", group: "PROVISIONS" },
   { rx: /^source(s)?\s+of\s+funds\b/i, side: "Cr" },
   // Assets → Dr
-  { rx: /^(fixed\s+assets?)\b/i, side: "Dr" },
-  { rx: /^(current\s+assets?)\b/i, side: "Dr" },
-  { rx: /^(investments?)\b/i, side: "Dr" },
-  { rx: /^(bank\s+accounts?|bank\s+ocd?\s+a\/c)\b/i, side: "Dr" },
-  { rx: /^(cash[\s-]*in[\s-]*hand|cash\s+account)\b/i, side: "Dr" },
-  { rx: /^(sundry\s+debtors?|debtors?|accounts?\s+receivable|trade\s+receivables?)\b/i, side: "Dr" },
-  { rx: /^(loans?\s*&?\s*advances?(\s*\(?asset\)?)?)\b/i, side: "Dr" },
-  { rx: /^(stock[\s-]*in[\s-]*hand|inventory|closing\s+stock|opening\s+stock)\b/i, side: "Dr" },
-  { rx: /^(profit\s*\/\s*loss\s+adjusted)\b/i, side: "Dr" },
-  { rx: /^(misc(ellaneous)?\s+expenses?|profit\s*&?\s*loss\s+a\/c|loss\s+to\s+be\s+adjusted)\b/i, side: "Dr" },
+  { rx: /^(fixed\s+assets?)\b/i, side: "Dr", group: "FIXED_ASSETS" },
+  { rx: /^(investments?)\b/i, side: "Dr", group: "INVESTMENTS" },
+  { rx: /^(bank\s+accounts?|bank\s+ocd?\s+a\/c)\b/i, side: "Dr", group: "BANK_ACCOUNTS" },
+  { rx: /^(cash[\s-]*in[\s-]*hand|cash\s+account)\b/i, side: "Dr", group: "CASH_IN_HAND" },
+  { rx: /^(sundry\s+debtors?|debtors?|accounts?\s+receivable|trade\s+receivables?)\b/i, side: "Dr", group: "SUNDRY_DEBTORS" },
+  { rx: /^(loans?\s*&?\s*advances?(\s*\(?asset\)?)?)\b/i, side: "Dr", group: "LOANS_AND_ADVANCES_ASSET" },
+  { rx: /^(stock[\s-]*in[\s-]*hand|inventory|closing\s+stock|opening\s+stock)\b/i, side: "Dr", group: "STOCK_IN_HAND" },
+  { rx: /^(current\s+assets?)\b/i, side: "Dr", group: "CURRENT_ASSETS" },
+  { rx: /^(profit\s*\/\s*loss\s+adjusted)\b/i, side: "Dr", group: "MISC_EXPENSES_ASSET" },
+  { rx: /^(misc(ellaneous)?\s+expenses?|profit\s*&?\s*loss\s+a\/c|loss\s+to\s+be\s+adjusted)\b/i, side: "Dr", group: "MISC_EXPENSES_ASSET" },
   { rx: /^application(s)?\s+of\s+funds\b/i, side: "Dr" },
 ];
 
@@ -193,6 +198,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
     .replace(/\s+/g, " ")
     .trim();
   let side = fallbackSide;
+  let section = "";
 
   let changed = true;
   while (changed && name) {
@@ -211,6 +217,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
       const match = name.match(heading.rx);
       if (match) {
         side = heading.side;
+        if (heading.group) section = heading.group;
         const rest = name.slice(match[0].length).trim();
         if (rest) {
           name = rest;
@@ -222,7 +229,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
   }
 
   name = name.replace(/^[.\-–—]+|[.\-–—]+$/g, "").trim();
-  return { name, side };
+  return { name, side, section };
 }
 
 function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
@@ -291,6 +298,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
   const matches = [...focused.matchAll(OPENING_AMOUNT_TOKEN_RX)];
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr";
+  let currentSection = "";
   let previousEnd = 0;
 
   for (const match of matches) {
@@ -300,6 +308,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
 
     const stripped = stripOpeningContext(prefix, currentSide);
     currentSide = stripped.side;
+    if (stripped.section) currentSection = stripped.section;
     let name = stripped.name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
 
     if (!name || name.length < 2) continue;
@@ -310,7 +319,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
 
     let side = stripped.side;
     if (value < 0) side = side === "Dr" ? "Cr" : "Dr";
-    out.push({ account_name: name, amount: Math.abs(value), side });
+    out.push({ account_name: name, amount: Math.abs(value), side, section_hint: currentSection });
   }
 
   return dedupeOpenings(removeOpeningSubtotalRows(out));
@@ -350,6 +359,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr"; // updated as we walk through sections
+  let currentSection = "";
 
   for (const raw of lines) {
     if (SKIP_LINE_RX.test(raw)) continue;
@@ -362,6 +372,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
     if (headingHit) {
       currentSide = headingHit.side;
+      if (headingHit.group) currentSection = headingHit.group;
       // Pure heading (no numbers) → skip. Otherwise this is a condensed
       // balance-sheet line that doubles as both heading AND data row
       // (e.g. "Bank Accounts 530.58") — fall through and emit it.
@@ -408,7 +419,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     name = name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
     if (name.length < 2) continue;
 
-    out.push({ account_name: name, amount, side });
+    out.push({ account_name: name, amount, side, section_hint: currentSection });
   }
 
   if (out.length <= 1 || /sources?\s+of\s+funds|application(s)?\s+of\s+funds/i.test(normalised)) {

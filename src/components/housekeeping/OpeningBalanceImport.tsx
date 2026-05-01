@@ -130,7 +130,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       setDocumentTotals(extractOpeningBalanceTotals(text));
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => {
-        const groupCode = guessGroupCode(p.account_name, p.side);
+        const groupCode = guessGroupCode(p.account_name, p.side, p.section_hint);
         return {
           ...p,
           _key: `r${i}`,
