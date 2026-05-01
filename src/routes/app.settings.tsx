@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon, Trash2 } from "lucide-react";
 import {
   exportAllCompaniesBackup,
   exportCompanyBackup,
@@ -23,6 +23,10 @@ import { useCompany } from "@/lib/company-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
 import { getSetuStatus, saveSetuCredentials } from "@/utils/setu.functions";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -47,8 +51,12 @@ interface Member {
 }
 
 function SettingsPage() {
-  const { activeCompanyId, activeMembership, memberships } = useCompany();
+  const { activeCompanyId, activeMembership, memberships, refresh: refreshCompanies } = useCompany();
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const restoreFileRef = useRef<HTMLInputElement | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
