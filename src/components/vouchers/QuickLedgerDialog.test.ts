@@ -42,13 +42,25 @@ describe("Ledger dialog dismissal guards", () => {
       });
 
       it("attaches both guards to <DialogContent>", () => {
-        // Ensure the guards live on a DialogContent element (not some other
-        // nested popover) by checking they appear inside the same JSX tag.
-        const dialogContentBlocks = src.match(
-          /<DialogContent[\s\S]*?>/g,
-        );
-        expect(dialogContentBlocks, "expected at least one <DialogContent>").toBeTruthy();
-        const guarded = dialogContentBlocks!.some(
+        // Extract each <DialogContent ...> opening tag with brace-aware
+        // scanning so we know the guards belong to the same JSX tag and not
+        // some other nested element.
+        const openings: string[] = [];
+        let i = 0;
+        while ((i = src.indexOf("<DialogContent", i)) !== -1) {
+          let depth = 0;
+          let j = i;
+          for (; j < src.length; j++) {
+            const c = src[j];
+            if (c === "{") depth++;
+            else if (c === "}") depth--;
+            else if (c === ">" && depth === 0) break;
+          }
+          openings.push(src.slice(i, j + 1));
+          i = j + 1;
+        }
+        expect(openings.length, "expected at least one <DialogContent>").toBeGreaterThan(0);
+        const guarded = openings.some(
           (block) =>
             /onPointerDownOutside=\{\(e\)\s*=>\s*e\.preventDefault\(\)\}/.test(block) &&
             /onInteractOutside=\{\(e\)\s*=>\s*e\.preventDefault\(\)\}/.test(block),
