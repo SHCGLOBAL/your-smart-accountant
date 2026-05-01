@@ -309,7 +309,11 @@ export function AssistantChat() {
 
   function runAction(a: AssistantAction) {
     if (a.kind === "navigate" && a.to) {
-      navigate({ to: a.to });
+      if (a.to.includes("?") && typeof window !== "undefined") {
+        window.location.href = a.to;
+      } else {
+        navigate({ to: a.to });
+      }
       toast.success(`Opening ${a.label}`);
     } else if (a.kind === "set-theme" && a.theme) {
       setTheme(a.theme);
