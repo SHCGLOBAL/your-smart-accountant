@@ -383,7 +383,13 @@ export function AssistantChat() {
               size="sm"
               variant="default"
               className="h-7 text-xs"
-              onClick={() => navigate({ to: "/app/companies", search: { new: "1" } as never })}
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.location.href = "/app/companies?new=1";
+                } else {
+                  navigate({ to: "/app/companies" });
+                }
+              }}
             >
               Create company
             </Button>
