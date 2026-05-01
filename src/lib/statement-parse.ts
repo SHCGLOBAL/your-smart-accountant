@@ -355,6 +355,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr"; // updated as we walk through sections
+  let currentSection = "";
 
   for (const raw of lines) {
     if (SKIP_LINE_RX.test(raw)) continue;
@@ -367,6 +368,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
     if (headingHit) {
       currentSide = headingHit.side;
+      if (headingHit.group) currentSection = headingHit.group;
       // Pure heading (no numbers) → skip. Otherwise this is a condensed
       // balance-sheet line that doubles as both heading AND data row
       // (e.g. "Bank Accounts 530.58") — fall through and emit it.
@@ -413,7 +415,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     name = name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
     if (name.length < 2) continue;
 
-    out.push({ account_name: name, amount, side });
+    out.push({ account_name: name, amount, side, section_hint: currentSection });
   }
 
   if (out.length <= 1 || /sources?\s+of\s+funds|application(s)?\s+of\s+funds/i.test(normalised)) {
