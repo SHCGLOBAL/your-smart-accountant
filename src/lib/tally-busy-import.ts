@@ -68,12 +68,22 @@ function readBuffer(f: File | Blob): Promise<ArrayBuffer> {
  * Smart text decoder. Detects UTF-16 LE/BE, UTF-8 BOM, or NUL-heavy data
  * (common in Tally XML exports) and decodes accordingly. Strips BOM + stray NULs.
  */
-export async function decodeFileSmart(f: File | Blob): Promise<string> {
+export type EncodingChoice = "auto" | "utf-8" | "utf-16le" | "utf-16be";
+
+export async function decodeFileSmart(
+  f: File | Blob,
+  forced: EncodingChoice = "auto",
+): Promise<string> {
   const buf = await readBuffer(f);
   const bytes = new Uint8Array(buf);
   let encoding: "utf-16le" | "utf-16be" | "utf-8" = "utf-8";
   let sliceFrom = 0;
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+  if (forced !== "auto") {
+    encoding = forced;
+    if (encoding === "utf-16le" && bytes[0] === 0xff && bytes[1] === 0xfe) sliceFrom = 2;
+    else if (encoding === "utf-16be" && bytes[0] === 0xfe && bytes[1] === 0xff) sliceFrom = 2;
+    else if (encoding === "utf-8" && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) sliceFrom = 3;
+  } else if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
     encoding = "utf-16le";
     sliceFrom = 2;
   } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
