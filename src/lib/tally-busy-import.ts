@@ -11,6 +11,79 @@ import type { Database } from "@/integrations/supabase/types";
 export type LedgerType = Database["public"]["Enums"]["ledger_type"];
 export type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
+// ---------------- Saved ledger-name → group mappings ----------------
+
+export interface LedgerMappingRow {
+  source_name: string;
+  source_name_lc: string;
+  group_code: string;
+  ledger_type: LedgerType;
+}
+
+/** Fetch all saved mappings for a company, indexed by lowercase source name. */
+export async function fetchLedgerMappings(
+  companyId: string,
+): Promise<Map<string, LedgerMappingRow>> {
+  const { data, error } = await supabase
+    .from("ledger_group_mappings")
+    .select("source_name, source_name_lc, group_code, ledger_type")
+    .eq("company_id", companyId);
+  if (error) throw error;
+  const map = new Map<string, LedgerMappingRow>();
+  for (const r of data || []) {
+    map.set(r.source_name_lc, r as LedgerMappingRow);
+  }
+  return map;
+}
+
+/** Apply saved mappings to parsed ledger rows in-place (returns a new array). */
+export function applyMappingsToLedgers(
+  rows: LedgerRecord[],
+  mappings: Map<string, LedgerMappingRow>,
+): LedgerRecord[] {
+  return rows.map((r) => {
+    const m = mappings.get(lc(r.name));
+    if (!m) return r;
+    return { ...r, group_code: m.group_code, type: m.ledger_type };
+  });
+}
+
+/** Persist (upsert) mappings for the given ledger rows. */
+export async function saveLedgerMappings(
+  companyId: string,
+  rows: { name: string; group_code: string; type: LedgerType }[],
+): Promise<{ saved: number }> {
+  if (rows.length === 0) return { saved: 0 };
+  const { data: u } = await supabase.auth.getUser();
+  const userId = u?.user?.id ?? null;
+  // De-duplicate by lc name (last write wins)
+  const seen = new Map<string, { name: string; group_code: string; type: LedgerType }>();
+  for (const r of rows) {
+    if (!r.name) continue;
+    seen.set(lc(r.name), r);
+  }
+  const payload = Array.from(seen.entries()).map(([lcName, r]) => ({
+    company_id: companyId,
+    source_name: r.name,
+    source_name_lc: lcName,
+    group_code: r.group_code,
+    ledger_type: r.type,
+    created_by: userId,
+  }));
+  // Chunk to avoid huge requests
+  let saved = 0;
+  const BATCH = 500;
+  for (let i = 0; i < payload.length; i += BATCH) {
+    const slice = payload.slice(i, i + BATCH);
+    const { error } = await supabase
+      .from("ledger_group_mappings")
+      .upsert(slice, { onConflict: "company_id,source_name_lc" });
+    if (error) throw error;
+    saved += slice.length;
+  }
+  return { saved };
+}
+
 // ---------------- Generic helpers ----------------
 export function lc(s: unknown): string {
   return String(s ?? "").trim().toLowerCase();
