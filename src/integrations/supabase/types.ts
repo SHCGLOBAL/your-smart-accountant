@@ -228,6 +228,54 @@ export type Database = {
           },
         ]
       }
+      closing_runs: {
+        Row: {
+          capital_voucher_id: string | null
+          closing_stock_paise: number
+          closing_stock_voucher_id: string | null
+          company_id: string
+          fy_end: string
+          fy_start: string
+          id: string
+          notes: string | null
+          performed_at: string
+          performed_by: string
+          pl_voucher_id: string | null
+          status: string
+          trading_voucher_id: string | null
+        }
+        Insert: {
+          capital_voucher_id?: string | null
+          closing_stock_paise?: number
+          closing_stock_voucher_id?: string | null
+          company_id: string
+          fy_end: string
+          fy_start: string
+          id?: string
+          notes?: string | null
+          performed_at?: string
+          performed_by: string
+          pl_voucher_id?: string | null
+          status?: string
+          trading_voucher_id?: string | null
+        }
+        Update: {
+          capital_voucher_id?: string | null
+          closing_stock_paise?: number
+          closing_stock_voucher_id?: string | null
+          company_id?: string
+          fy_end?: string
+          fy_start?: string
+          id?: string
+          notes?: string | null
+          performed_at?: string
+          performed_by?: string
+          pl_voucher_id?: string | null
+          status?: string
+          trading_voucher_id?: string | null
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           access_password_hash: string | null
@@ -1081,6 +1129,42 @@ export type Database = {
           },
         ]
       }
+      monthly_balances: {
+        Row: {
+          closing_paise: number
+          company_id: string
+          credit_paise: number
+          debit_paise: number
+          id: string
+          ledger_id: string
+          opening_paise: number
+          period_month: string
+          rebuilt_at: string
+        }
+        Insert: {
+          closing_paise?: number
+          company_id: string
+          credit_paise?: number
+          debit_paise?: number
+          id?: string
+          ledger_id: string
+          opening_paise?: number
+          period_month: string
+          rebuilt_at?: string
+        }
+        Update: {
+          closing_paise?: number
+          company_id?: string
+          credit_paise?: number
+          debit_paise?: number
+          id?: string
+          ledger_id?: string
+          opening_paise?: number
+          period_month?: string
+          rebuilt_at?: string
+        }
+        Relationships: []
+      }
       payment_reminders: {
         Row: {
           channel: string
@@ -1696,6 +1780,10 @@ export type Database = {
           _type: Database["public"]["Enums"]["voucher_type"]
         }
         Returns: string
+      }
+      recompute_monthly_balances: {
+        Args: { _company_id: string }
+        Returns: number
       }
       set_company_password: {
         Args: { _company_id: string; _new_password: string }
