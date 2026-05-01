@@ -325,12 +325,12 @@ function LedgersPage() {
                 <Plus className="mr-2 h-4 w-4" /> New ledger
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
+            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
                 <DialogTitle>{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 overflow-y-auto px-6 py-4 flex-1 min-h-0">
                   <div className="space-y-1.5 md:col-span-2">
                     <Label htmlFor="name">Ledger name *</Label>
                     <Input
@@ -509,7 +509,7 @@ function LedgersPage() {
                     <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
                   <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                     Cancel
                   </Button>
