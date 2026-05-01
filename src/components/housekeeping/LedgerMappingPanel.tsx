@@ -371,6 +371,75 @@ export function LedgerMappingPanel({
           <strong>Save changed</strong> stores only edits made here.{" "}
           <strong>Save all</strong> remembers every visible ledger so future imports of the same names auto-map.
         </p>
+
+        <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> Fuzzy match suggestions
+              </DialogTitle>
+              <DialogDescription>
+                {suggestions.length} ledger{suggestions.length === 1 ? "" : "s"} look similar to a saved mapping.
+                Uncheck any you don't want to apply.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[420px] overflow-auto rounded border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={accepted.size === suggestions.length && suggestions.length > 0}
+                        onChange={(e) => setAccepted(
+                          e.target.checked ? new Set(suggestions.map((s) => s.index)) : new Set(),
+                        )}
+                      />
+                    </TableHead>
+                    <TableHead>Source ledger</TableHead>
+                    <TableHead>Matched saved name</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suggestions.map((s) => {
+                    const on = accepted.has(s.index);
+                    return (
+                      <TableRow key={s.index}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={(e) => {
+                              const next = new Set(accepted);
+                              if (e.target.checked) next.add(s.index); else next.delete(s.index);
+                              setAccepted(next);
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{s.source}</TableCell>
+                        <TableCell className="text-xs">{s.match.source_name}</TableCell>
+                        <TableCell className="text-xs">
+                          {GROUP_BY_CODE[s.match.group_code]?.label || s.match.group_code}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {(s.score * 100).toFixed(0)}%
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setReviewOpen(false)}>Cancel</Button>
+              <Button onClick={applyAcceptedFuzzy} disabled={accepted.size === 0}>
+                Apply {accepted.size} match{accepted.size === 1 ? "" : "es"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
