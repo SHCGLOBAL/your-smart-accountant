@@ -521,14 +521,25 @@ function SingleImporter({
       )}
 
       {kind === "ledger" && ledgers.length > 0 && !busy && (
-        <SectionPreview
+        <>
+          <LedgerMappingPanel
+            companyId={companyId}
+            ledgers={ledgers}
+            previewLimit={settings.previewLimit}
+            disabled={posting || disabled}
+            onChange={(next) => {
+              setLedgers(next.map((r, i) => ({ ...r, _key: ledgers[i]?._key ?? `l${i}` })));
+            }}
+          />
+          <SectionPreview
           title="Ledgers" rows={ledgers} sel={selL} setSel={setSelL}
           previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <LedgerCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
           matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
-        />
+          />
+        </>
       )}
       {kind === "item" && items.length > 0 && !busy && (
         <SectionPreview
