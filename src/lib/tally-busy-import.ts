@@ -133,11 +133,6 @@ export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
   previewLimit: 200,
 };
 
-function postDecode(text: string, stripNuls: boolean): string {
-  let out = text.replace(/^\uFEFF/, "");
-  if (stripNuls) out = out.replace(/\u0000/g, "");
-  return out;
-}
 
 // ---------------- Parsing ----------------
 
