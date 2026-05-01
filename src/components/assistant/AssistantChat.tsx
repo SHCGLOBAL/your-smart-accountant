@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2 } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,21 @@ interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   matches?: KbEntry[];
+  preview?: ParsedCompany;
 }
+
+type ParsedCompany = {
+  name?: string;
+  gstin?: string;
+  pan?: string;
+  state?: string;
+  state_code?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  financial_year_start?: string;
+  inventory_enabled?: boolean;
+};
 
 const WELCOME: ChatMessage = {
   id: "welcome",
@@ -55,6 +69,7 @@ export function AssistantChat() {
   const { memberships, setActiveCompanyId, refresh } = useCompany();
   const hasCompany = memberships.length > 0;
   const [creating, setCreating] = useState(false);
+  const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -79,18 +94,7 @@ export function AssistantChat() {
     );
   }
 
-  function parseCompanyDetails(text: string): null | {
-    name?: string;
-    gstin?: string;
-    pan?: string;
-    state?: string;
-    state_code?: string;
-    phone?: string;
-    email?: string;
-    address?: string;
-    financial_year_start?: string;
-    inventory_enabled?: boolean;
-  } {
+  function parseCompanyDetails(text: string): ParsedCompany | null {
     const out: Record<string, unknown> = {};
     // Field-style "Key: Value" (comma or newline separated)
     const kvRe = /\b(name|company|firm|gstin|gst|pan|state code|state_code|state|phone|mobile|email|mail|address|addr|fy|financial year|inventory|stock)\s*[:=\-]\s*([^,\n]+)/gi;
@@ -144,18 +148,24 @@ export function AssistantChat() {
       if (found) out.state_code = found.code;
     }
 
-    return Object.keys(out).length === 0 ? null : (out as ReturnType<typeof parseCompanyDetails>);
+    return Object.keys(out).length === 0 ? null : (out as ParsedCompany);
   }
 
-  async function tryCreateCompanyFromText(text: string): Promise<ChatMessage | null> {
-    const parsed = parseCompanyDetails(text);
-    if (!parsed || !parsed.name) return null;
+  async function confirmCreateCompany(parsed: ParsedCompany) {
+    if (!parsed.name) {
+      toast.error("Company name is required");
+      return;
+    }
     if (!user) {
-      return {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: "You need to be signed in to create a company. Please sign in first.",
-      };
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: "You need to be signed in to create a company. Please sign in first.",
+        },
+      ]);
+      return;
     }
     setCreating(true);
     try {
@@ -183,25 +193,30 @@ export function AssistantChat() {
         .select("id")
         .maybeSingle();
       if (error || !data) {
-        return {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below.`,
-          matches: [
-            {
-              id: "open-create",
-              category: "Settings",
-              title: "Open create company form",
-              answer: "",
-              keywords: [],
-              actions: [{ kind: "navigate", to: "/app/companies?new=1", label: "Open form" }],
-            } as KbEntry,
-          ],
-        };
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below.`,
+            matches: [
+              {
+                id: "open-create",
+                category: "Settings",
+                title: "Open create company form",
+                answer: "",
+                keywords: [],
+                actions: [{ kind: "navigate", to: "/app/companies?new=1", label: "Open form" }],
+              } as KbEntry,
+            ],
+          },
+        ]);
+        return;
       }
       setActiveCompanyId(data.id);
       await refresh();
       toast.success(`Company "${parsed.name}" created`);
+      setPendingCompany(null);
       const summary = [
         `**${parsed.name}** is ready 🎉`,
         parsed.gstin ? `- GSTIN: \`${parsed.gstin}\`` : null,
@@ -213,25 +228,28 @@ export function AssistantChat() {
       ]
         .filter(Boolean)
         .join("\n");
-      return {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: summary,
-        matches: [
-          {
-            id: "post-create",
-            category: "Settings",
-            title: "Post create",
-            answer: "",
-            keywords: [],
-            actions: [
-              { kind: "navigate", to: "/app", label: "Open dashboard" },
-              { kind: "navigate", to: "/app/settings", label: "Company settings" },
-              { kind: "navigate", to: "/app/ledgers", label: "Add ledgers" },
-            ],
-          } as KbEntry,
-        ],
-      };
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: summary,
+          matches: [
+            {
+              id: "post-create",
+              category: "Settings",
+              title: "Post create",
+              answer: "",
+              keywords: [],
+              actions: [
+                { kind: "navigate", to: "/app", label: "Open dashboard" },
+                { kind: "navigate", to: "/app/settings", label: "Company settings" },
+                { kind: "navigate", to: "/app/ledgers", label: "Add ledgers" },
+              ],
+            } as KbEntry,
+          ],
+        },
+      ]);
     } finally {
       setCreating(false);
     }
@@ -248,15 +266,24 @@ export function AssistantChat() {
     setMessages((m) => [...m, userMsg]);
     setInput("");
 
-    // 1) Try to create a company directly if the user pasted details.
     void (async () => {
-      const created = await tryCreateCompanyFromText(text);
-      if (created) {
-        setMessages((m) => [...m, created]);
+      // 1) If the user pasted enough details, show a PREVIEW + confirmation
+      //    instead of creating immediately.
+      const parsed = parseCompanyDetails(text);
+      if (parsed && parsed.name) {
+        setPendingCompany(parsed);
+        const preview: ChatMessage = {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text:
+            "Here's what I understood from your message. Please review the details below — I'll only create the company after you confirm.",
+          preview: parsed,
+        };
+        setMessages((m) => [...m, preview]);
         return;
       }
 
-      // 2) Otherwise, if intent is "create company" without enough details,
+      // 2) If the intent is "create company" but details are insufficient,
       //    show the guided help message + a CTA to open the form.
       if (detectCreateCompanyIntent(text) || (!hasCompany && /company/i.test(text))) {
         const guide: ChatMessage = {
@@ -346,7 +373,26 @@ export function AssistantChat() {
         <ScrollArea className="flex-1">
           <div ref={scrollerRef} className="flex flex-col gap-3 p-4">
             {messages.map((m) => (
-              <MessageBubble key={m.id} msg={m} onAction={runAction} />
+              <MessageBubble
+                key={m.id}
+                msg={m}
+                onAction={runAction}
+                onConfirmCompany={confirmCreateCompany}
+                onCancelCompany={() => {
+                  setPendingCompany(null);
+                  setMessages((mm) => [
+                    ...mm,
+                    {
+                      id: `a-${Date.now()}`,
+                      role: "assistant",
+                      text:
+                        "No problem — I won't create it. Send a new message with corrected details, or open the full form to fine-tune.",
+                    },
+                  ]);
+                }}
+                creating={creating}
+                isPending={!!pendingCompany && m.preview === pendingCompany}
+              />
             ))}
           </div>
         </ScrollArea>
@@ -467,9 +513,17 @@ export function AssistantChat() {
 function MessageBubble({
   msg,
   onAction,
+  onConfirmCompany,
+  onCancelCompany,
+  creating,
+  isPending,
 }: {
   msg: ChatMessage;
   onAction: (a: AssistantAction) => void;
+  onConfirmCompany: (p: ParsedCompany) => void;
+  onCancelCompany: () => void;
+  creating: boolean;
+  isPending: boolean;
 }) {
   const isUser = msg.role === "user";
   return (
@@ -482,6 +536,15 @@ function MessageBubble({
         }`}
       >
         <RichText text={msg.text} />
+        {!isUser && msg.preview && (
+          <CompanyPreviewCard
+            parsed={msg.preview}
+            disabled={!isPending || creating}
+            creating={creating}
+            onConfirm={() => onConfirmCompany(msg.preview!)}
+            onCancel={onCancelCompany}
+          />
+        )}
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {msg.matches[0].actions.map((a, i) => (
@@ -499,6 +562,109 @@ function MessageBubble({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function CompanyPreviewCard({
+  parsed,
+  disabled,
+  creating,
+  onConfirm,
+  onCancel,
+}: {
+  parsed: ParsedCompany;
+  disabled: boolean;
+  creating: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const rows: Array<[string, string | undefined]> = [
+    ["Name", parsed.name],
+    ["GSTIN", parsed.gstin],
+    ["PAN", parsed.pan],
+    [
+      "State",
+      parsed.state
+        ? `${parsed.state}${parsed.state_code ? ` (${parsed.state_code})` : ""}`
+        : parsed.state_code,
+    ],
+    ["Phone", parsed.phone],
+    ["Email", parsed.email],
+    ["Address", parsed.address],
+    ["FY start", parsed.financial_year_start],
+    [
+      "Inventory",
+      parsed.inventory_enabled === undefined
+        ? "Yes (default)"
+        : parsed.inventory_enabled
+          ? "Yes"
+          : "No",
+    ],
+  ];
+  const isGst =
+    !!parsed.gstin &&
+    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(parsed.gstin);
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-background/60 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-primary" />
+        <span className="text-xs font-semibold">Company preview</span>
+        <Badge
+          variant={isGst ? "default" : "secondary"}
+          className="ml-auto h-5 text-[10px]"
+        >
+          {isGst ? "GST Registered" : "Unregistered"}
+        </Badge>
+      </div>
+      <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 text-xs">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="break-words font-medium">
+              {v ? v : <span className="text-muted-foreground">—</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {disabled ? (
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {creating ? "Creating company…" : "This preview has been actioned."}
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={onConfirm}
+            disabled={creating || !parsed.name}
+          >
+            <Check className="h-3 w-3" /> Confirm & create
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={onCancel}
+            disabled={creating}
+          >
+            <X className="h-3 w-3" /> Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 text-xs"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/app/companies?new=1";
+              }
+            }}
+            disabled={creating}
+          >
+            <Pencil className="h-3 w-3" /> Edit in full form
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
