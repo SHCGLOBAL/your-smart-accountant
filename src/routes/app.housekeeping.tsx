@@ -35,10 +35,12 @@ import {
   CheckCircle2,
   Upload,
   HardDrive,
+  CalendarCheck,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
+import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 const TallyBusyImport = lazy(() =>
   import("@/components/housekeeping/TallyBusyImport").then((m) => ({
     default: m.TallyBusyImport,
@@ -94,7 +96,7 @@ function HousekeepingPage() {
       )}
 
       <Tabs defaultValue="opening" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-9">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
           </TabsTrigger>
@@ -123,6 +125,9 @@ function HousekeepingPage() {
           </TabsTrigger>
           <TabsTrigger value="recompute">
             <RefreshCw className="mr-1 h-3.5 w-3.5" /> Recompute
+          </TabsTrigger>
+          <TabsTrigger value="closure">
+            <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
           </TabsTrigger>
         </TabsList>
 
@@ -171,6 +176,16 @@ function HousekeepingPage() {
         </TabsContent>
         <TabsContent value="recompute">
           <RecomputeTool companyId={activeCompanyId} disabled={!isAdmin} />
+        </TabsContent>
+        <TabsContent value="closure">
+          <YearEndClosure
+            companyId={activeCompanyId}
+            disabled={!isAdmin}
+            fyStartHint={
+              (activeMembership?.companies as { financial_year_start?: string | null } | undefined)
+                ?.financial_year_start ?? null
+            }
+          />
         </TabsContent>
       </Tabs>
     </div>
