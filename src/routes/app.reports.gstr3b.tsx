@@ -20,6 +20,7 @@ import {
 } from "@/lib/gst-returns";
 import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
+import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 
 export const Route = createFileRoute("/app/reports/gstr3b")({
   head: () => ({ meta: [{ title: "GSTR-3B — Reports" }] }),
@@ -158,6 +159,14 @@ function GSTR3BPage() {
           <PrintableGstr3B built={built} company={company} fp={period.fp} />
 
           <ValidationPanel issues={validateGstr3B(built)} />
+
+          <PeriodLockCard
+            returnType="GSTR3B"
+            period={month}
+            periodStart={period.from}
+            periodEnd={period.to}
+            periodLabel={new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
+          />
 
           <ManualEntryCard
             companyId={activeCompanyId!}
