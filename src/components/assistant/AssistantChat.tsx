@@ -513,9 +513,17 @@ export function AssistantChat() {
 function MessageBubble({
   msg,
   onAction,
+  onConfirmCompany,
+  onCancelCompany,
+  creating,
+  isPending,
 }: {
   msg: ChatMessage;
   onAction: (a: AssistantAction) => void;
+  onConfirmCompany: (p: ParsedCompany) => void;
+  onCancelCompany: () => void;
+  creating: boolean;
+  isPending: boolean;
 }) {
   const isUser = msg.role === "user";
   return (
@@ -528,6 +536,15 @@ function MessageBubble({
         }`}
       >
         <RichText text={msg.text} />
+        {!isUser && msg.preview && (
+          <CompanyPreviewCard
+            parsed={msg.preview}
+            disabled={!isPending || creating}
+            creating={creating}
+            onConfirm={() => onConfirmCompany(msg.preview!)}
+            onCancel={onCancelCompany}
+          />
+        )}
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {msg.matches[0].actions.map((a, i) => (
@@ -545,6 +562,109 @@ function MessageBubble({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function CompanyPreviewCard({
+  parsed,
+  disabled,
+  creating,
+  onConfirm,
+  onCancel,
+}: {
+  parsed: ParsedCompany;
+  disabled: boolean;
+  creating: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const rows: Array<[string, string | undefined]> = [
+    ["Name", parsed.name],
+    ["GSTIN", parsed.gstin],
+    ["PAN", parsed.pan],
+    [
+      "State",
+      parsed.state
+        ? `${parsed.state}${parsed.state_code ? ` (${parsed.state_code})` : ""}`
+        : parsed.state_code,
+    ],
+    ["Phone", parsed.phone],
+    ["Email", parsed.email],
+    ["Address", parsed.address],
+    ["FY start", parsed.financial_year_start],
+    [
+      "Inventory",
+      parsed.inventory_enabled === undefined
+        ? "Yes (default)"
+        : parsed.inventory_enabled
+          ? "Yes"
+          : "No",
+    ],
+  ];
+  const isGst =
+    !!parsed.gstin &&
+    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(parsed.gstin);
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-background/60 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-primary" />
+        <span className="text-xs font-semibold">Company preview</span>
+        <Badge
+          variant={isGst ? "default" : "secondary"}
+          className="ml-auto h-5 text-[10px]"
+        >
+          {isGst ? "GST Registered" : "Unregistered"}
+        </Badge>
+      </div>
+      <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 text-xs">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="break-words font-medium">
+              {v ? v : <span className="text-muted-foreground">—</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {disabled ? (
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {creating ? "Creating company…" : "This preview has been actioned."}
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={onConfirm}
+            disabled={creating || !parsed.name}
+          >
+            <Check className="h-3 w-3" /> Confirm & create
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={onCancel}
+            disabled={creating}
+          >
+            <X className="h-3 w-3" /> Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 text-xs"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/app/companies?new=1";
+              }
+            }}
+            disabled={creating}
+          >
+            <Pencil className="h-3 w-3" /> Edit in full form
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
