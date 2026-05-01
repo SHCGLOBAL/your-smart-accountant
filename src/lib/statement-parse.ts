@@ -298,6 +298,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
   const matches = [...focused.matchAll(OPENING_AMOUNT_TOKEN_RX)];
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr";
+  let currentSection = "";
   let previousEnd = 0;
 
   for (const match of matches) {
@@ -307,6 +308,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
 
     const stripped = stripOpeningContext(prefix, currentSide);
     currentSide = stripped.side;
+    if (stripped.section) currentSection = stripped.section;
     let name = stripped.name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
 
     if (!name || name.length < 2) continue;
@@ -317,7 +319,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
 
     let side = stripped.side;
     if (value < 0) side = side === "Dr" ? "Cr" : "Dr";
-    out.push({ account_name: name, amount: Math.abs(value), side });
+    out.push({ account_name: name, amount: Math.abs(value), side, section_hint: currentSection });
   }
 
   return dedupeOpenings(removeOpeningSubtotalRows(out));
