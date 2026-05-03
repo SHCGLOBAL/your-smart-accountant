@@ -37,6 +37,7 @@ import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { Combo } from "./Combo";
 import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMastersVersion } from "@/lib/masters-cache";
+import { validateItemVoucher } from "@/lib/schemas/voucher";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
