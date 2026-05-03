@@ -65,7 +65,8 @@ function LedgerStatement() {
       if (back && back !== "/app/reports/ledger") {
         try { sessionStorage.removeItem("ledgerReturnTo"); } catch { /* ignore */ }
         e.preventDefault();
-        navigate({ to: back as unknown as "/app" });
+        // Use history to preserve any prior search/state without coupling to typed routes.
+        window.history.back();
       }
     };
     window.addEventListener("keydown", onKey);
