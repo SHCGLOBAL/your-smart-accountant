@@ -272,55 +272,50 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       });
       partyLedgerId = partyLine?.ledger_id ?? null;
     }
-    setSaving(true);
-    try {
+    // Snapshot payload then INSTANTLY reset. DB write happens in background.
+    const snap = {
+      companyId: activeCompanyId, voucherType,
+      voucherDate: date, partyLedgerId,
+      refNo, narration, total: totalForVoucher,
+      entries: entriesToInsert,
+    };
+    setRefNo("");
+    setNarration("");
+    setLines(Array.from({ length: cfg.defaultLines }, blank));
+    setSimpleLines(Array.from({ length: 2 }, blankSimple));
+    setCashBankId("");
+    setFocusedLine(0);
+    setSavedTick((n) => n + 1);
+    requestAnimationFrame(() => {
+      const root = formRootRef.current;
+      if (!root) return;
+      const first = root.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]), [role="combobox"]:not([disabled])');
+      first?.focus();
+    });
+    enqueueSave(`${cfg.title} ${snap.refNo || snap.voucherDate}`, async () => {
       const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: activeCompanyId,
-        _type: voucherType,
+        _company_id: snap.companyId, _type: snap.voucherType,
       });
       if (numErr) throw numErr;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-
       const { data: vData, error: vErr } = await supabase
         .from("vouchers")
         .insert({
-          company_id: activeCompanyId,
-          created_by: user.id,
-          voucher_type: voucherType,
-          voucher_number: numData as string,
-          voucher_date: date,
-          party_ledger_id: partyLedgerId,
-          reference_no: refNo || null,
-          narration: narration || null,
-          is_interstate: false,
-          subtotal_paise: totalForVoucher,
-          total_paise: totalForVoucher,
+          company_id: snap.companyId, created_by: user.id,
+          voucher_type: snap.voucherType, voucher_number: numData as string,
+          voucher_date: snap.voucherDate, party_ledger_id: snap.partyLedgerId,
+          reference_no: snap.refNo || null, narration: snap.narration || null,
+          is_interstate: false, subtotal_paise: snap.total, total_paise: snap.total,
         })
-        .select("id")
-        .single();
+        .select("id").single();
       if (vErr) throw vErr;
-
-      const entries = entriesToInsert.map((e) => ({ ...e, voucher_id: vData.id }));
+      const entries = snap.entries.map((e) => ({ ...e, voucher_id: vData.id }));
       const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
       if (eErr) throw eErr;
-
       toast.success(`${cfg.title} ${numData} saved`);
-      // Tally/Busy-style continuous entry: stay in the same voucher type and
-      // reset the form for the next entry instead of leaving the screen.
-      setRefNo("");
-      setNarration("");
-      setLines(Array.from({ length: cfg.defaultLines }, blank));
-      setSimpleLines(Array.from({ length: 2 }, blankSimple));
-      setFocusedLine(0);
-      setSavedTick((n) => n + 1);
-    } catch (e) {
-      console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, navigate, cfg]);
+    });
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
