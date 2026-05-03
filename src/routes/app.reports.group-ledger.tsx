@@ -82,6 +82,7 @@ interface LedgerRow {
   type: LedgerTypeValue;
   opening_balance_paise: number;
   opening_balance_is_debit: boolean;
+  group_code: string | null;
 }
 interface EntryRow {
   ledger_id: string;
@@ -106,7 +107,7 @@ function GroupLedgerReport() {
     setLoading(true);
     Promise.all([
       supabase.from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
+        .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
         .eq("company_id", activeCompanyId)
         .eq("is_active", true)
         .in("type", group.types)
@@ -116,11 +117,20 @@ function GroupLedgerReport() {
         .eq("vouchers.company_id", activeCompanyId)
         .lte("vouchers.voucher_date", to),
     ]).then(([l, e]) => {
-      setLedgers((l.data || []) as LedgerRow[]);
+      let rows = (l.data || []) as LedgerRow[];
+      if (group.groupCodes) {
+        const set = new Set(group.groupCodes);
+        rows = rows.filter((r) => r.group_code && set.has(r.group_code));
+      }
+      if (group.excludeGroupCodes) {
+        const ex = new Set(group.excludeGroupCodes);
+        rows = rows.filter((r) => !r.group_code || !ex.has(r.group_code));
+      }
+      setLedgers(rows);
       setEntries((e.data || []) as unknown as EntryRow[]);
       setLoading(false);
     });
-  }, [activeCompanyId, group.types, to]);
+  }, [activeCompanyId, group, to]);
 
   const rows = useMemo(() => {
     const ledgerIds = new Set(ledgers.map((l) => l.id));
