@@ -48,6 +48,7 @@ import {
   defaultGroupCodeForType,
   defaultLedgerTypeForGroup,
 } from "@/lib/account-groups";
+import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/app/ledgers")({
@@ -60,6 +61,7 @@ interface Ledger {
   name: string;
   type: LedgerTypeValue;
   group_code: string | null;
+  subgroup_id: string | null;
   gstin: string | null;
   pan: string | null;
   state: string | null;
@@ -100,6 +102,7 @@ type FormState = {
   name: string;
   type: string;
   group_code: string;
+  subgroup_id: string;
   gstin: string;
   pan: string;
   state_code: string;
@@ -117,6 +120,7 @@ const emptyForm: FormState = {
   name: "",
   type: "",
   group_code: "",
+  subgroup_id: "",
   gstin: "",
   pan: "",
   state_code: "",
@@ -132,6 +136,7 @@ const emptyForm: FormState = {
 
 function LedgersPage() {
   const { activeCompanyId, activeMembership } = useCompany();
+  const { subgroups, overrides } = useAccountGroups();
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -222,6 +227,7 @@ function LedgersPage() {
       name: l.name,
       type: l.type,
       group_code: l.group_code ?? defaultGroupCodeForType(l.type),
+      subgroup_id: l.subgroup_id ?? "",
       gstin: l.gstin ?? "",
       pan: l.pan ?? "",
       state_code: l.state_code ?? "",
@@ -266,6 +272,7 @@ function LedgersPage() {
       name: parsed.data.name,
       type: parsed.data.type as LedgerTypeValue,
       group_code: groupCode,
+      subgroup_id: form.subgroup_id || null,
       gstin: parsed.data.gstin || null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
@@ -386,6 +393,7 @@ function LedgersPage() {
                         setForm({
                           ...form,
                           group_code: v,
+                          subgroup_id: "",
                           type: compatible ? form.type : defaultLedgerTypeForGroup(v),
                         });
                       }}
@@ -412,6 +420,25 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {form.group_code && subgroupsFor(form.group_code, subgroups).length > 0 && (
+                    <div className="space-y-1 col-span-2">
+                      <Label htmlFor="subgroup_id">Sub-group (optional)</Label>
+                      <Select
+                        value={form.subgroup_id || "__none__"}
+                        onValueChange={(v) => setForm({ ...form, subgroup_id: v === "__none__" ? "" : v })}
+                      >
+                        <SelectTrigger id="subgroup_id">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— None —</SelectItem>
+                          {subgroupsFor(form.group_code, subgroups).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label htmlFor="gstin" className="flex items-center gap-2">
                       GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -572,12 +599,16 @@ function LedgersPage() {
                     const typeLabel =
                       LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type;
                     const groupCode = l.group_code ?? defaultGroupCodeForType(l.type);
-                    const groupLbl = GROUP_BY_CODE[groupCode]?.label ?? "—";
+                    const groupLbl = resolveGroupLabel(groupCode, overrides);
+                    const sg = l.subgroup_id ? subgroups.find((s) => s.id === l.subgroup_id) : null;
                     return (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
                         <TableCell>
-                          <Badge className="text-[10px]">{groupLbl}</Badge>
+                          <div className="flex flex-col gap-0.5">
+                            <Badge className="text-[10px] w-fit">{groupLbl}</Badge>
+                            {sg && <span className="text-[10px] text-muted-foreground">↳ {sg.name}</span>}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">

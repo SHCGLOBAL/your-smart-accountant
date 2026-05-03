@@ -22,6 +22,7 @@ import {
   lockWorkspace,
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
+import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -221,10 +222,12 @@ function AppLayout() {
               </Button>
             </div>
           </header>
-          <QuickActionsRibbon />
-          <main className="flex-1 p-4 md:p-6">
-            <Outlet />
-          </main>
+          <AccountGroupsProvider>
+            <QuickActionsRibbon />
+            <main className="flex-1 p-4 md:p-6">
+              <Outlet />
+            </main>
+          </AccountGroupsProvider>
         </SidebarInset>
       </div>
     </SidebarProvider>
