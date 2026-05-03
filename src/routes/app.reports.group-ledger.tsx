@@ -29,6 +29,7 @@ type GroupKey =
   | "duties_taxes"
   | "capital"
   | "fixed_assets"
+  | "investments"
   | "current_assets"
   | "stock_in_hand"
   | "direct_income"
@@ -46,6 +47,10 @@ interface GroupDef {
   section: "Balance Sheet" | "Profit & Loss" | "Combined";
   types: LedgerTypeValue[];
   nature: "debit" | "credit";
+  /** If set, filter ledgers to those whose group_code matches one of these codes. */
+  groupCodes?: string[];
+  /** If set, exclude ledgers whose group_code matches one of these codes. */
+  excludeGroupCodes?: string[];
 }
 
 const GROUPS: GroupDef[] = [
@@ -53,7 +58,8 @@ const GROUPS: GroupDef[] = [
   { key: "cash_in_hand", label: "Cash-in-Hand", section: "Balance Sheet", types: ["cash"], nature: "debit" },
   { key: "bank_accounts", label: "Bank Accounts", section: "Balance Sheet", types: ["bank"], nature: "debit" },
   { key: "fixed_assets", label: "Fixed Assets", section: "Balance Sheet", types: ["fixed_asset"], nature: "debit" },
-  { key: "current_assets", label: "Current Assets", section: "Balance Sheet", types: ["current_asset"], nature: "debit" },
+  { key: "investments", label: "Investments", section: "Balance Sheet", types: ["current_asset", "fixed_asset"], nature: "debit", groupCodes: ["INVESTMENTS"] },
+  { key: "current_assets", label: "Current Assets", section: "Balance Sheet", types: ["current_asset"], nature: "debit", excludeGroupCodes: ["INVESTMENTS"] },
   { key: "stock_in_hand", label: "Stock-in-Hand", section: "Balance Sheet", types: ["stock_in_hand"], nature: "debit" },
   { key: "all_assets", label: "All Assets (combined)", section: "Balance Sheet", types: ["sundry_debtor", "cash", "bank", "fixed_asset", "current_asset", "stock_in_hand"], nature: "debit" },
   { key: "sundry_creditors", label: "Sundry Creditors", section: "Balance Sheet", types: ["sundry_creditor"], nature: "credit" },
@@ -76,6 +82,7 @@ interface LedgerRow {
   type: LedgerTypeValue;
   opening_balance_paise: number;
   opening_balance_is_debit: boolean;
+  group_code: string | null;
 }
 interface EntryRow {
   ledger_id: string;
@@ -100,7 +107,7 @@ function GroupLedgerReport() {
     setLoading(true);
     Promise.all([
       supabase.from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
+        .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
         .eq("company_id", activeCompanyId)
         .eq("is_active", true)
         .in("type", group.types)
@@ -110,11 +117,20 @@ function GroupLedgerReport() {
         .eq("vouchers.company_id", activeCompanyId)
         .lte("vouchers.voucher_date", to),
     ]).then(([l, e]) => {
-      setLedgers((l.data || []) as LedgerRow[]);
+      let rows = (l.data || []) as LedgerRow[];
+      if (group.groupCodes) {
+        const set = new Set(group.groupCodes);
+        rows = rows.filter((r) => r.group_code && set.has(r.group_code));
+      }
+      if (group.excludeGroupCodes) {
+        const ex = new Set(group.excludeGroupCodes);
+        rows = rows.filter((r) => !r.group_code || !ex.has(r.group_code));
+      }
+      setLedgers(rows);
       setEntries((e.data || []) as unknown as EntryRow[]);
       setLoading(false);
     });
-  }, [activeCompanyId, group.types, to]);
+  }, [activeCompanyId, group, to]);
 
   const rows = useMemo(() => {
     const ledgerIds = new Set(ledgers.map((l) => l.id));
