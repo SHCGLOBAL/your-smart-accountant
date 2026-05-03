@@ -535,89 +535,20 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             </TableHeader>
             <TableBody>
               {lines.map((l, i) => (
-                <TableRow key={i}>
-                  <TableCell onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
-                    <div className="flex gap-1">
-                      <Combo
-                        className="flex-1"
-                        value={l.item_id}
-                        onChange={(v) => { setFocusedLine(i); onPickItem(i, v); }}
-                        options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
-                        placeholder="Select item"
-                        emptyText="No items — Alt+C to create"
-                        onCreate={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}
-                        createLabel="New item"
-                      />
-                      <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
-                        <PackagePlus className="h-4 w-4" /> Add
-                      </Button>
-                      {l.item_id && (
-                        <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="Edit item (Shift+F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: l.item_id, lineIdx: i }); }}>
-                          <Pencil className="h-4 w-4" /> Edit
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      value={l.description}
-                      onChange={(e) => updateLine(i, { description: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      type="number"
-                      step="0.01"
-                      value={l.qty}
-                      onChange={(e) => updateLine(i, { qty: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      type="number"
-                      step="0.01"
-                      value={l.rate}
-                      onChange={(e) => updateLine(i, { rate: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      type="number"
-                      step="0.01"
-                      value={l.discount}
-                      onChange={(e) => updateLine(i, { discount: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={l.gst_rate}
-                      onValueChange={(v) => updateLine(i, { gst_rate: v })}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GST_RATES.map((r) => (
-                          <SelectItem key={r} value={String(r)}>
-                            {r}%
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {formatINR(computed[i].total_paise)}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => removeLine(i)} disabled={lines.length === 1}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <ItemRow
+                  key={l.id}
+                  idx={i}
+                  row={l}
+                  amountPaise={computed[i]?.total_paise ?? 0}
+                  items={items}
+                  canDelete={lines.length > 1}
+                  onPickItem={onPickItem}
+                  onCommit={updateLine}
+                  onFocusRow={setFocusedLine}
+                  onDelete={removeLine}
+                  onAddItemDlg={(idx) => { setFocusedLine(idx); setItemDlg({ open: true, editId: null, lineIdx: idx }); }}
+                  onEditItemDlg={(idx, itemId) => { setFocusedLine(idx); setItemDlg({ open: true, editId: itemId, lineIdx: idx }); }}
+                />
               ))}
             </TableBody>
           </Table>
