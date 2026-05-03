@@ -23,7 +23,7 @@ import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
-import { LedgerPicker } from "@/components/fast-form/FastPicker";
+import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 
@@ -98,17 +98,17 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   );
   const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
   const [focusedLine, setFocusedLine] = useState(0);
+  const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
   const dateInputRef = useRef<HTMLElement | null>(null);
 
-  // Re-render when masters change so the local `ledgers` snapshot stays fresh.
-  useMastersVersion();
+  // Re-render when masters change so the ledger list stays fresh.
+  const mastersVersion = useMastersVersion();
   const ledgers: LedgerOpt[] = useMemo(
     () => getAllLedgers().map((l) => ({ id: l.id, name: l.name, type: l.type })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeCompanyId, useMastersVersion()],
+    [mastersVersion, activeCompanyId],
   );
 
   // Stable signature for the set of selected ledgers — prevents the balance
