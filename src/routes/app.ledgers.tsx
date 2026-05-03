@@ -599,12 +599,16 @@ function LedgersPage() {
                     const typeLabel =
                       LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type;
                     const groupCode = l.group_code ?? defaultGroupCodeForType(l.type);
-                    const groupLbl = GROUP_BY_CODE[groupCode]?.label ?? "—";
+                    const groupLbl = resolveGroupLabel(groupCode, overrides);
+                    const sg = l.subgroup_id ? subgroups.find((s) => s.id === l.subgroup_id) : null;
                     return (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
                         <TableCell>
-                          <Badge className="text-[10px]">{groupLbl}</Badge>
+                          <div className="flex flex-col gap-0.5">
+                            <Badge className="text-[10px] w-fit">{groupLbl}</Badge>
+                            {sg && <span className="text-[10px] text-muted-foreground">↳ {sg.name}</span>}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">
