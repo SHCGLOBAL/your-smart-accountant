@@ -684,7 +684,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         open={ewbDlg.open}
         onOpenChange={(o) => {
           setEwbDlg((s) => ({ ...s, open: o }));
-          if (!o) navigate({ to: "/app/vouchers" });
+          if (!o) {
+            // After E-Way prep dialog closes, reset form for the next entry
+            // instead of leaving the voucher screen.
+            setPartyId("");
+            setRefNo("");
+            setNarration("");
+            setLines([blankLine()]);
+            setFocusedLine(0);
+          }
         }}
         voucher={ewbDlg.voucher}
       />
