@@ -48,6 +48,7 @@ import {
   defaultGroupCodeForType,
   defaultLedgerTypeForGroup,
 } from "@/lib/account-groups";
+import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/app/ledgers")({
@@ -60,6 +61,7 @@ interface Ledger {
   name: string;
   type: LedgerTypeValue;
   group_code: string | null;
+  subgroup_id: string | null;
   gstin: string | null;
   pan: string | null;
   state: string | null;
@@ -100,6 +102,7 @@ type FormState = {
   name: string;
   type: string;
   group_code: string;
+  subgroup_id: string;
   gstin: string;
   pan: string;
   state_code: string;
@@ -117,6 +120,7 @@ const emptyForm: FormState = {
   name: "",
   type: "",
   group_code: "",
+  subgroup_id: "",
   gstin: "",
   pan: "",
   state_code: "",
