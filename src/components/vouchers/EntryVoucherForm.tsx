@@ -27,7 +27,6 @@ import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/mast
 import { enqueueSave } from "@/lib/save-queue";
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
 import { EntryRow } from "@/components/fast-form/EntryRow";
-import { AcceptConfirm } from "@/components/fast-form/AcceptConfirm";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
@@ -348,8 +347,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     });
   }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const save = useCallback(() => setConfirmOpen(true), []);
+  const save = useCallback(() => { void performSave(); }, [performSave]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -587,12 +585,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
-      <AcceptConfirm
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        onAccept={() => { void performSave(); }}
-        title={`Accept ${cfg.title}?`}
-      />
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
