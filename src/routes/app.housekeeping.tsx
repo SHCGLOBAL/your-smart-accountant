@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -65,11 +66,23 @@ interface LedgerOpt {
 }
 
 function HousekeepingPage() {
+  const navigate = useNavigate({ from: "/app/housekeeping" });
+  const search = useSearch({ from: "/app/housekeeping" }) as { tab?: string };
   const { activeCompanyId, activeMembership } = useCompany();
   const isAdmin = activeMembership?.role === "admin";
   const companyName = activeMembership?.companies?.name ?? "company";
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
   const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
+  const currentTab = search.tab ?? "opening";
+
+  const updateTab = (tab: string) => {
+    navigate({
+      to: ".",
+      search: (prev) => ({ ...prev, tab }),
+      replace: true,
+      resetScroll: false,
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -95,7 +108,7 @@ function HousekeepingPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="opening" className="space-y-4">
+      <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
