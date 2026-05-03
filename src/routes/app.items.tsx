@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { z } from "zod";
 import { toast } from "sonner";
 import { AlertTriangle, Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,6 +35,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
 import { GST_RATES, UNITS } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
+import { itemFormSchema as schema } from "@/lib/schemas/item";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
@@ -56,17 +56,6 @@ interface Item {
   is_active: boolean;
 }
 
-const schema = z.object({
-  name: z.string().trim().min(2, "Name is required").max(120),
-  hsn_code: z.string().trim().max(10).optional().or(z.literal("")),
-  unit: z.string().min(1, "Select a unit").max(10),
-  gst_rate: z.string(),
-  purchase_price: z.string().optional(),
-  sale_price: z.string().optional(),
-  opening_stock_qty: z.string().optional(),
-  opening_stock_rate: z.string().optional(),
-  reorder_level: z.string().optional(),
-});
 
 type FormState = {
   name: string;
