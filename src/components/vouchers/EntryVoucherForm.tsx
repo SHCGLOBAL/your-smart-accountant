@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, useDeferredValue, startTransition } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
+import { Plus, Save, X } from "lucide-react";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -27,6 +26,9 @@ import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
+import { EntryRow } from "@/components/fast-form/EntryRow";
+import { AcceptConfirm } from "@/components/fast-form/AcceptConfirm";
+import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -41,21 +43,23 @@ interface LedgerBalanceInfo {
 }
 
 interface Line {
+  id: string;
   ledger_id: string;
   debit: string;
   credit: string;
   narration: string;
 }
 
-/** Busy/Tally-style single-side line: one party ledger + one amount */
+/** Single-side line: one party ledger + one amount (used for receipt/payment) */
 interface SimpleLine {
+  id: string;
   ledger_id: string;
   amount: string;
   narration: string;
 }
 
-const blank = (): Line => ({ ledger_id: "", debit: "", credit: "", narration: "" });
-const blankSimple = (): SimpleLine => ({ ledger_id: "", amount: "", narration: "" });
+const blank = (): Line => ({ id: crypto.randomUUID(), ledger_id: "", debit: "", credit: "", narration: "" });
+const blankSimple = (): SimpleLine => ({ id: crypto.randomUUID(), ledger_id: "", amount: "", narration: "" });
 
 const CFG: Record<
   EntryVoucherType,
