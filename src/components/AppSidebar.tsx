@@ -84,6 +84,7 @@ const SECTIONS: NavSection[] = [
     icon: ShieldCheck,
     items: [
       { title: "Ledgers / Parties", url: "/app/ledgers", icon: Users, i18nKey: "nav.ledgers" },
+      { title: "Group Manager", url: "/app/account-groups", icon: Layers },
       { title: "Items / Stock", url: "/app/items", icon: Package, i18nKey: "nav.items" },
       { title: "Recurring Invoices", url: "/app/recurring", icon: Repeat, i18nKey: "nav.recurring" },
     ],
