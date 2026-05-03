@@ -286,9 +286,12 @@ export type Database = {
           bank_branch: string | null
           bank_ifsc: string | null
           bank_name: string | null
+          cin: string | null
+          corpus_fund_paise: number
           created_at: string
           created_by: string
           email: string | null
+          entity_status: Database["public"]["Enums"]["entity_status"]
           financial_year_start: string
           gst_filing_frequency: string
           gst_registered: boolean
@@ -300,6 +303,7 @@ export type Database = {
           name: string
           pan: string | null
           phone: string | null
+          share_capital_paise: number
           state: string | null
           state_code: string | null
           updated_at: string
@@ -313,9 +317,12 @@ export type Database = {
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
+          cin?: string | null
+          corpus_fund_paise?: number
           created_at?: string
           created_by: string
           email?: string | null
+          entity_status?: Database["public"]["Enums"]["entity_status"]
           financial_year_start?: string
           gst_filing_frequency?: string
           gst_registered?: boolean
@@ -327,6 +334,7 @@ export type Database = {
           name: string
           pan?: string | null
           phone?: string | null
+          share_capital_paise?: number
           state?: string | null
           state_code?: string | null
           updated_at?: string
@@ -340,9 +348,12 @@ export type Database = {
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
+          cin?: string | null
+          corpus_fund_paise?: number
           created_at?: string
           created_by?: string
           email?: string | null
+          entity_status?: Database["public"]["Enums"]["entity_status"]
           financial_year_start?: string
           gst_filing_frequency?: string
           gst_registered?: boolean
@@ -354,6 +365,7 @@ export type Database = {
           name?: string
           pan?: string | null
           phone?: string | null
+          share_capital_paise?: number
           state?: string | null
           state_code?: string | null
           updated_at?: string
@@ -616,6 +628,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      entity_members: {
+        Row: {
+          aadhaar_last4: string | null
+          address: string | null
+          appointed_on: string | null
+          capital_contribution_paise: number
+          company_id: string
+          created_at: string
+          designation: string | null
+          din: string | null
+          email: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          member_role: string
+          notes: string | null
+          pan: string | null
+          phone: string | null
+          profit_sharing_ratio: number
+          resigned_on: string | null
+          share_percent: number
+          updated_at: string
+        }
+        Insert: {
+          aadhaar_last4?: string | null
+          address?: string | null
+          appointed_on?: string | null
+          capital_contribution_paise?: number
+          company_id: string
+          created_at?: string
+          designation?: string | null
+          din?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          member_role: string
+          notes?: string | null
+          pan?: string | null
+          phone?: string | null
+          profit_sharing_ratio?: number
+          resigned_on?: string | null
+          share_percent?: number
+          updated_at?: string
+        }
+        Update: {
+          aadhaar_last4?: string | null
+          address?: string | null
+          appointed_on?: string | null
+          capital_contribution_paise?: number
+          company_id?: string
+          created_at?: string
+          designation?: string | null
+          din?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          member_role?: string
+          notes?: string | null
+          pan?: string | null
+          phone?: string | null
+          profit_sharing_ratio?: number
+          resigned_on?: string | null
+          share_percent?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       gst_api_credentials: {
         Row: {
@@ -1806,6 +1887,13 @@ export type Database = {
     }
     Enums: {
       company_role: "admin" | "accountant" | "viewer"
+      entity_status:
+        | "individual"
+        | "huf"
+        | "aop"
+        | "pvt_ltd"
+        | "registered_firm"
+        | "trust"
       gst_treatment:
         | "regular"
         | "composition"
@@ -1981,6 +2069,14 @@ export const Constants = {
   public: {
     Enums: {
       company_role: ["admin", "accountant", "viewer"],
+      entity_status: [
+        "individual",
+        "huf",
+        "aop",
+        "pvt_ltd",
+        "registered_firm",
+        "trust",
+      ],
       gst_treatment: [
         "regular",
         "composition",
