@@ -170,17 +170,19 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setLedgerBalances({});
   }, [date]);
 
+  const deferredLines = useDeferredValue(lines);
+  const deferredSimple = useDeferredValue(simpleLines);
   const totalDr = useMemo(
-    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
-    [lines],
+    () => deferredLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
+    [deferredLines],
   );
   const totalCr = useMemo(
-    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
-    [lines],
+    () => deferredLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
+    [deferredLines],
   );
   const simpleTotal = useMemo(
-    () => simpleLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0),
-    [simpleLines],
+    () => deferredSimple.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0),
+    [deferredSimple],
   );
   const balanced = isSimple
     ? cashBankId !== "" && simpleTotal > 0 && simpleLines.some((l) => l.ledger_id && parseFloat(l.amount) > 0)
@@ -191,17 +193,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     [ledgers],
   );
 
-  const update = (i: number, patch: Partial<Line>) =>
-    setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
-  const add = () => setLines((cur) => [...cur, blank()]);
-  const remove = (i: number) =>
+  const update = useCallback((i: number, patch: Partial<Line>) => {
+    startTransition(() => setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
+  }, []);
+  const add = useCallback(() => setLines((cur) => [...cur, blank()]), []);
+  const remove = useCallback((i: number) => {
     setLines((cur) => (cur.length <= 2 ? cur : cur.filter((_, idx) => idx !== i)));
-
-  const updateSimple = (i: number, patch: Partial<SimpleLine>) =>
-    setSimpleLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
-  const addSimple = () => setSimpleLines((cur) => [...cur, blankSimple()]);
-  const removeSimple = (i: number) =>
+  }, []);
+  const updateSimple = useCallback((i: number, patch: Partial<SimpleLine>) => {
+    startTransition(() => setSimpleLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
+  }, []);
+  const addSimple = useCallback(() => setSimpleLines((cur) => [...cur, blankSimple()]), []);
+  const removeSimple = useCallback((i: number) => {
     setSimpleLines((cur) => (cur.length <= 1 ? cur : cur.filter((_, idx) => idx !== i)));
+  }, []);
 
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
