@@ -38,6 +38,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { EmptyState } from "@/components/EmptyState";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 
 export const Route = createFileRoute("/app/vouchers")({
   head: () => ({ meta: [{ title: "Vouchers — Your Mehtaji" }] }),
@@ -190,11 +191,11 @@ function VouchersHub() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">From</Label>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-[160px]" />
+              <FyDatePicker value={from} onChange={setFrom} className="w-[170px]" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">To</Label>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-[160px]" />
+              <FyDatePicker value={to} onChange={setTo} className="w-[170px]" />
             </div>
             <div className="space-y-1 flex-1 min-w-[200px]">
               <Label className="text-xs">Search</Label>
