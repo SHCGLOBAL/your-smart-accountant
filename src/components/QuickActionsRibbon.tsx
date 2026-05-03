@@ -6,6 +6,7 @@ import {
   Banknote,
   BookOpen,
   Repeat,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const ACTIONS: QuickAction[] = [
   { to: "/app/vouchers/new/payment", label: "Payment", icon: Banknote, hotkey: "Alt+Y", i18nKey: "ribbon.payment" },
   { to: "/app/vouchers/new/journal", label: "Journal", icon: BookOpen, hotkey: "Alt+J", i18nKey: "ribbon.journal" },
   { to: "/app/vouchers/new/contra", label: "Contra", icon: Repeat, hotkey: "Alt+C", i18nKey: "ribbon.contra" },
+  { to: "/app/reports/ledger", label: "Ledger", icon: Library, hotkey: "Alt+L", i18nKey: "ribbon.ledger" },
 ];
 
 export function QuickActionsRibbon() {
@@ -38,7 +40,8 @@ export function QuickActionsRibbon() {
       </span>
       {ACTIONS.map((a) => {
         const active = location.pathname === a.to;
-        const label = t(a.i18nKey);
+        const translated = t(a.i18nKey);
+        const label = translated === a.i18nKey ? a.label : translated;
         return (
           <Link
             key={a.to}
