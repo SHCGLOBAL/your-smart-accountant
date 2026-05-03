@@ -1,114 +1,104 @@
-# Trial-Mode Local Books on Your PC
+## Goal
+Make voucher entry feel desktop-native (Tally/Busy speed): typing never re-renders the parent, Enter advances focus imperatively in <1ms, pickers search a synchronous in-memory Map, and Ctrl+A clears + refocuses Date in <10ms while the database save runs in the background.
 
-## What you actually asked for vs what is realistic today
-
-You said: *"All data stored locally and continuously saved on my hard disk, no cloud."*
-
-Honest situation:
-- The whole app today (vouchers, ledgers, GST, reports) is built on Lovable Cloud (Supabase). Switching to a **true local database** (SQLite/IndexedDB) means rewriting every read/write in the app — that is weeks of work and I will not pretend otherwise.
-- What I **can deliver right now, safely** is a **Trial Mode** that:
-  1. Keeps your books working exactly as they do today (so your trial books actually balance, GST is correct, reports print).
-  2. **Continuously mirrors every change to your hard disk** as JSON + Excel — so the data effectively *lives* on your PC. If cloud goes away tomorrow, you still have every voucher, ledger, and report on disk.
-  3. Marks the company as "Trial / Local-only" so you know it.
-- The fully offline SQLite edition will be a **Phase 2** milestone after you've validated the trial.
-
-This plan covers Phase 1 in detail and lists Phase 2 as a follow-up.
-
----
-
-## Phase 1 — Trial Mode + Continuous Local Save (build now)
-
-### 1. Mark the company as "Trial / Local-only"
-- Add a `mode` flag on the company (`trial_local` | `normal`) via a small migration.
-- When creating a company, add a checkbox **"Trial books — keep a continuous local copy on this PC"**.
-- Show a yellow "Trial / Local-only" badge in the sidebar and header so you never confuse it with real books.
-
-### 2. Auto-save snapshots on app close + manual button
-Per your answers: snapshot **on app close** + a one-click **Backup now** button. Both formats: **JSON (for restore) + Excel (for human review)**.
-
-- Hook into `beforeunload` (browser) and Electron `before-quit` (desktop) — when fired on a Trial company, write a snapshot before the app exits.
-- Add a prominent **"Backup now (JSON + Excel)"** button in:
-  - Housekeeping → Backup tool (already exists, extend it)
-  - The header bar when a Trial company is active (so it's one click)
-
-### 3. Where files land on your PC
-Reuse the existing Electron save bridge. Folder layout:
+## Architecture
 
 ```text
-Documents/
-  YourMehtaji/
-    Exports/
-      <CompanyName>/
-        backups/
-          AcmeTraders_2026-05-01_14-30-22.json     ← full restore file
-          AcmeTraders_2026-05-01_14-30-22.xlsx     ← multi-sheet workbook
-        latest/
-          AcmeTraders_latest.json                   ← always overwritten
-          AcmeTraders_latest.xlsx                   ← always overwritten
+┌─ src/lib/masters-cache.tsx ───────────┐  loaded once per company switch
+│  ledgersMap: Map<id, Ledger>          │  + Supabase Realtime subscription
+│  itemsMap:   Map<id, Item>            │  → patches Map in place, bumps version
+│  useMastersVersion() → number          │  (only pickers subscribe)
+└────────────────────────────────────────┘
+              ▲
+              │ synchronous read
+┌─ src/components/fast-form/ ───────────────────────────┐
+│  useFocusManager()   → register(ref), focusNext(), focusByName(), reset()
+│  <FastInput name … />        memoized, uncontrolled (defaultValue + ref)
+│  <FastNumberInput … />       same, formats on blur
+│  <FastDateInput … />         dd/mm/yyyy, smart-pad on blur
+│  <FastPicker … />            cmdk over masters Map, 2-stage Enter
+│  <FastForm onAccept … />     wires Ctrl+A / Esc / Enter-as-Tab
+│  useSaveQueue()              startTransition + requestIdleCallback flush
+└────────────────────────────────────────────────────────┘
+              ▲
+              │ used by
+  EntryVoucherForm.tsx (rewrite)   ItemVoucherForm.tsx (rewrite)
 ```
 
-- `backups/` keeps a timestamped history (auto-prune to last 30).
-- `latest/` always holds the newest snapshot — easy to find, easy to email.
-- In the **browser** (no Electron), the manual button still downloads both files; the auto-on-close part only works in the desktop app (browsers cannot silently write to disk — this is a hard browser security rule).
+## Implementation steps
 
-### 4. The Excel workbook (human-readable mirror)
-One `.xlsx` per snapshot with these sheets:
-- `Company` — name, GSTIN, FY start, mode
-- `Ledgers` — code, name, group, opening balance, GSTIN
-- `Items` — name, HSN, GST rate, opening qty/value
-- `Vouchers` — date, number, type, party, total, narration
-- `Voucher_Items` — line items (item, qty, rate, GST)
-- `Voucher_Entries` — Dr/Cr postings (the double-entry view)
-- `Trial_Balance` — computed from postings, with totals row
-- `Bill_Allocations` — bill-wise tracking
+**1. Global masters cache — `src/lib/masters-cache.tsx`**
+- `MastersProvider` wraps the app inside `CompanyProvider`.
+- On `activeCompanyId` change: parallel fetch all `ledgers` + `items` for that company (paged in 1000-row batches to bypass PostgREST limit), build `Map<id, Ledger>` and `Map<id, Item>`, plus pre-sorted arrays for picker rendering.
+- Subscribe to `postgres_changes` on `ledgers` and `items` filtered by `company_id`. On INSERT/UPDATE/DELETE, mutate the Map in place and increment a `version` integer stored in a `useSyncExternalStore` snapshot.
+- Exports: `getLedger(id)`, `getItem(id)`, `searchLedgers(query, type?)`, `searchItems(query)`, `useMastersReady()`, `useMastersVersion()`. Pickers subscribe only to version, not to the whole list — typing causes zero parent re-render.
+- Migration: add `ledgers` and `items` to `supabase_realtime` publication and set `REPLICA IDENTITY FULL` so updates carry old rows.
 
-Built with `openpyxl` patterns from the xlsx skill — formulas where it matters (totals), values elsewhere.
+**2. Focus manager — `src/components/fast-form/useFocusManager.tsx`**
+- `useFocusManager()` returns `{ register(name, ref), focusNext(currentName), focusByName(name), focusFirst(), reset() }`.
+- Internally keeps an **ordered ref array** (no state) so focus shifts never trigger renders.
+- `register` returns a callback ref that inserts at mount and removes at unmount; order is determined by DOM position (`compareDocumentPosition`) so dynamic rows stay correctly ordered.
 
-### 5. Restore flow (already exists, harden it)
-- The current Restore tool already replays a JSON backup into a target company.
-- Add: when restoring, if the source backup was `mode = trial_local`, default the target to the same mode and show a warning before overwriting non-trial books.
+**3. FastForm primitives — `src/components/fast-form/`**
+- `FastInput` / `FastNumberInput` / `FastDateInput`: `React.memo`, take `defaultValue` + `name` + `manager`, never `value`. They expose data via `manager.getValue(name)` (reads from `ref.current.value`). Validation happens on blur.
+- `FastPicker`: memoized; subscribes to `useMastersVersion`. Holds tiny local state for `query` + `open` + `highlight`. Search runs synchronously over the Map (filtered + Fuse-style scoring, capped at 50 results). **Two-stage Enter:** if popover open and a row is highlighted, first Enter selects + closes (cursor stays on trigger); second Enter calls `manager.focusNext`. If popover closed, Enter advances. Alt+C calls `onCreate(query)`.
+- `FastForm`: wraps children in a `<div onKeyDown>` that handles Enter-as-Tab (via manager), Ctrl+A → `onAccept`, Esc → `onCancel`. Provides `manager` via context.
 
-### 6. Safety rails
-- A "Trial / Local-only" company cannot be accidentally promoted to "real books" without explicit confirmation + a fresh backup.
-- The header shows **"Last local save: 2 minutes ago"** so you always know the disk copy is current.
-- If a snapshot fails to write (disk full, permission), the close is **cancelled** with a clear error — your data is never lost silently.
+**4. Save queue — `src/lib/save-queue.ts`**
+- `enqueueSave(fn)` pushes a job; flush happens inside `requestIdleCallback` (fallback `setTimeout(0)`) wrapped in `startTransition`.
+- On failure: toast + push to a "Pending" tray (`useSaveQueue()` exposes pending count + retry).
+- No IndexedDB persistence in this pass (per user choice — validation-only blocking).
 
----
+**5. Rewrite `EntryVoucherForm.tsx`**
+- Replace `useState` per field with `FastInput` / `FastPicker` driven by one `useFocusManager`.
+- Replace ledger fetch + Combo with `<FastPicker source="ledgers" filter={...} />`.
+- `handleAccept` (Ctrl+A): synchronously read all values from manager → run validation (balanced Dr/Cr, required ledger, non-zero amount). If invalid, toast and keep focus. If valid: snapshot payload, call `manager.reset()` + `manager.focusByName("date")` (single rAF), then `enqueueSave(() => persistVoucher(payload))`.
 
-## Phase 2 — True Offline SQLite Edition (separate milestone, do not start now)
+**6. Rewrite `ItemVoucherForm.tsx`**
+- Same pattern. Item grid rows use a stable key + `React.memo` row component; row-level state is held in refs so typing in row 5 never re-renders rows 1–4 or the totals header.
+- Totals (subtotal/CGST/SGST/IGST/total) recompute via a debounced manager subscription (`requestAnimationFrame` coalesced) and write into a separate memoized `<TotalsBar>` — typing remains lag-free even on 100-line invoices.
 
-Outline only, for visibility:
-- Replace the Supabase client with an abstraction that targets either Supabase (cloud) or **SQLite via better-sqlite3** in Electron.
-- Move every `supabase.from(...)` call behind a `db.table(...)` adapter.
-- Reimplement RLS-equivalent checks in the app layer (single-user desktop = trivial).
-- Migrate edge functions (GSTIN lookup, etc.) to direct API calls from the desktop process.
+**7. Wire-up**
+- `src/routes/app.tsx`: mount `<MastersProvider>` inside `<CompanyProvider>`. Show a one-time "Loading masters…" splash only on first company switch; subsequent navigations are instant.
+- Remove the now-redundant per-form ledger/item fetches.
 
-This is real work and should be scoped, quoted, and approved as its own project after Phase 1 proves the trial flow.
+**8. Database migration**
+```sql
+alter publication supabase_realtime add table public.ledgers;
+alter publication supabase_realtime add table public.items;
+alter table public.ledgers replica identity full;
+alter table public.items   replica identity full;
+```
 
----
+## Files
 
-## Files this plan will touch (Phase 1)
+**New**
+- `src/lib/masters-cache.tsx`
+- `src/lib/save-queue.ts`
+- `src/components/fast-form/useFocusManager.tsx`
+- `src/components/fast-form/FastForm.tsx`
+- `src/components/fast-form/FastInput.tsx`
+- `src/components/fast-form/FastNumberInput.tsx`
+- `src/components/fast-form/FastDateInput.tsx`
+- `src/components/fast-form/FastPicker.tsx`
+- `src/components/fast-form/PendingSavesTray.tsx`
+- `supabase/migrations/<ts>_realtime_masters.sql`
 
-**New / migration**
-- `supabase/migrations/<ts>_add_company_mode.sql` — add `companies.mode` column (`trial_local` | `normal`, default `normal`).
-- `src/lib/local-mirror.ts` — new module: build snapshot, write JSON + XLSX via Electron bridge, prune old files.
+**Rewritten**
+- `src/components/vouchers/EntryVoucherForm.tsx`
+- `src/components/vouchers/ItemVoucherForm.tsx`
 
-**Modified**
-- `src/lib/backup.ts` — extend `buildCompanyBackup` to also emit XLSX; add `writeLatestSnapshot()` helper.
-- `src/components/housekeeping/BackupRestoreTool.tsx` — add "Backup now (JSON + Excel)" combined button; show last-save time.
-- `src/components/CompanyFlyout.tsx` / company-create form — add **"Trial books — keep a continuous local copy"** checkbox.
-- `src/components/AppSidebar.tsx` + header — show "Trial / Local-only" badge and "Last local save" timestamp.
-- `src/routes/app.tsx` — register `beforeunload` handler that triggers snapshot for active Trial company.
-- `electron/main.cjs` — handle `before-quit` to flush a final snapshot before exit.
-- `package.json` — add `xlsx` (or reuse existing `exceljs` if present) for workbook generation in the renderer.
+**Edited**
+- `src/routes/app.tsx` (mount MastersProvider + PendingSavesTray in footer)
+- `src/components/vouchers/Combo.tsx` (kept but marked deprecated; FastPicker replaces it in voucher forms)
 
-## Technical notes
+## Out of scope (this pass)
+- Web Worker for posting math (per your choice — startTransition is enough)
+- IndexedDB offline queue
+- Migrating non-voucher screens (ledgers/items/reports) to FastForm — they don't need it
 
-- **Browser limitation**: silent auto-save on close only works in the Electron desktop build. In a browser tab, the manual button is the only reliable path — browsers block silent disk writes by design. I'll show a clear note in the UI.
-- **XLSX in renderer**: generate the workbook in the React app, hand the `Uint8Array` to the existing `saveCompanyFile` IPC channel (it already supports binary).
-- **Pruning**: keep last 30 timestamped snapshots per company in `backups/`; `latest/` is always one file overwritten.
-- **No server changes** beyond the small `mode` column migration.
-
----
-
-If you approve, I'll implement Phase 1 end-to-end in the next turn. Phase 2 (true SQLite offline) stays a separate, future decision.
+## Acceptance checklist
+- Typing in any field: React DevTools shows only that input re-rendering.
+- Picker open + first letter typed: results appear within the same frame, no network call.
+- Ctrl+A on a valid voucher: form clears and Date is focused before the network request leaves; failed saves appear in the Pending tray with retry.
+- Realtime: creating a ledger in another tab makes it appear in the picker without refresh.

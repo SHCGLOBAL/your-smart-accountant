@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
@@ -24,6 +24,8 @@ import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { Combo } from "./Combo";
+import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
+import { enqueueSave } from "@/lib/save-queue";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -94,24 +96,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [simpleLines, setSimpleLines] = useState<SimpleLine[]>(() =>
     Array.from({ length: 2 }, blankSimple),
   );
-  const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
-  const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState(0);
+  const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
+  const formRootRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!activeCompanyId) return;
-    supabase
-      .from("ledgers")
-      .select("id, name, type")
-      .eq("company_id", activeCompanyId)
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
-  }, [activeCompanyId]);
+  // Re-render when masters change so the ledger list stays fresh.
+  const mastersVersion = useMastersVersion();
+  const ledgers: LedgerOpt[] = useMemo(
+    () => getAllLedgers().map((l) => ({ id: l.id, name: l.name, type: l.type })),
+    [mastersVersion, activeCompanyId],
+  );
 
   // Stable signature for the set of selected ledgers — prevents the balance
   // fetch from firing on every keystroke in narration/debit/credit.
@@ -274,55 +272,50 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       });
       partyLedgerId = partyLine?.ledger_id ?? null;
     }
-    setSaving(true);
-    try {
+    // Snapshot payload then INSTANTLY reset. DB write happens in background.
+    const snap = {
+      companyId: activeCompanyId, voucherType,
+      voucherDate: date, partyLedgerId,
+      refNo, narration, total: totalForVoucher,
+      entries: entriesToInsert,
+    };
+    setRefNo("");
+    setNarration("");
+    setLines(Array.from({ length: cfg.defaultLines }, blank));
+    setSimpleLines(Array.from({ length: 2 }, blankSimple));
+    setCashBankId("");
+    setFocusedLine(0);
+    setSavedTick((n) => n + 1);
+    requestAnimationFrame(() => {
+      const root = formRootRef.current;
+      if (!root) return;
+      const first = root.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]), [role="combobox"]:not([disabled])');
+      first?.focus();
+    });
+    enqueueSave(`${cfg.title} ${snap.refNo || snap.voucherDate}`, async () => {
       const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: activeCompanyId,
-        _type: voucherType,
+        _company_id: snap.companyId, _type: snap.voucherType,
       });
       if (numErr) throw numErr;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-
       const { data: vData, error: vErr } = await supabase
         .from("vouchers")
         .insert({
-          company_id: activeCompanyId,
-          created_by: user.id,
-          voucher_type: voucherType,
-          voucher_number: numData as string,
-          voucher_date: date,
-          party_ledger_id: partyLedgerId,
-          reference_no: refNo || null,
-          narration: narration || null,
-          is_interstate: false,
-          subtotal_paise: totalForVoucher,
-          total_paise: totalForVoucher,
+          company_id: snap.companyId, created_by: user.id,
+          voucher_type: snap.voucherType, voucher_number: numData as string,
+          voucher_date: snap.voucherDate, party_ledger_id: snap.partyLedgerId,
+          reference_no: snap.refNo || null, narration: snap.narration || null,
+          is_interstate: false, subtotal_paise: snap.total, total_paise: snap.total,
         })
-        .select("id")
-        .single();
+        .select("id").single();
       if (vErr) throw vErr;
-
-      const entries = entriesToInsert.map((e) => ({ ...e, voucher_id: vData.id }));
+      const entries = snap.entries.map((e) => ({ ...e, voucher_id: vData.id }));
       const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
       if (eErr) throw eErr;
-
       toast.success(`${cfg.title} ${numData} saved`);
-      // Tally/Busy-style continuous entry: stay in the same voucher type and
-      // reset the form for the next entry instead of leaving the screen.
-      setRefNo("");
-      setNarration("");
-      setLines(Array.from({ length: cfg.defaultLines }, blank));
-      setSimpleLines(Array.from({ length: 2 }, blankSimple));
-      setFocusedLine(0);
-      setSavedTick((n) => n + 1);
-    } catch (e) {
-      console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, navigate, cfg]);
+    });
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -345,11 +338,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   }, [save, navigate, saving, lines, focusedLine]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
-    setLedgers((cur) => {
-      const without = cur.filter((x) => x.id !== lg.id);
-      return [...without, { id: lg.id, name: lg.name, type: lg.type }].sort((a, b) =>
-        a.name.localeCompare(b.name),
-      );
+    upsertCachedLedger({
+      id: lg.id, name: lg.name, type: lg.type,
+      state_code: (lg as { state_code?: string | null }).state_code ?? null,
+      is_active: true,
     });
     const idx = ledgerDlg.lineIdx;
     if (idx !== null) {
@@ -365,7 +357,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
+      <div
+        ref={(el) => { enterTab.ref.current = el; formRootRef.current = el; }}
+        onKeyDown={enterTab.onKeyDown}
+        className="space-y-4"
+      >
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
