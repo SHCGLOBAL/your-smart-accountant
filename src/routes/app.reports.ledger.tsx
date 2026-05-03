@@ -54,6 +54,24 @@ function LedgerStatement() {
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
 
+  // Alt+L brought the user here — Esc returns to the originating screen.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+      let back: string | null = null;
+      try { back = sessionStorage.getItem("ledgerReturnTo"); } catch { /* ignore */ }
+      if (back && back !== "/app/reports/ledger") {
+        try { sessionStorage.removeItem("ledgerReturnTo"); } catch { /* ignore */ }
+        e.preventDefault();
+        navigate({ to: back });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
   useEffect(() => {
     if (!activeCompanyId) return;
     supabase
