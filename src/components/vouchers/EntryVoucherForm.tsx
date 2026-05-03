@@ -492,75 +492,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             </TableHeader>
             <TableBody>
               {lines.map((l, i) => (
-                <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Combo
-                        className="flex-1"
-                        value={l.ledger_id}
-                        onChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}
-                        options={ledgers.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
-                        placeholder="Select ledger"
-                        emptyText="No ledgers — Alt+C to create"
-                        onCreate={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}
-                        createLabel="New ledger"
-                      />
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
-                        <UserPlus className="h-4 w-4" />
-                      </Button>
-                      {l.ledger_id && (
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    {l.ledger_id && ledgerBalances[l.ledger_id] && (
-                      <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-                        <span className="text-muted-foreground/80">Bal:</span>
-                        <span className={ledgerBalances[l.ledger_id].paise >= 0 ? "text-foreground" : "text-foreground"}>
-                          {formatINR(Math.abs(ledgerBalances[l.ledger_id].paise))}
-                        </span>
-                        <span className="text-muted-foreground/80">
-                          {ledgerBalances[l.ledger_id].paise >= 0 ? "Dr" : "Cr"}
-                        </span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9 text-right font-mono"
-                      type="number"
-                      step="0.01"
-                      value={l.debit}
-                      onChange={(e) =>
-                        update(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9 text-right font-mono"
-                      type="number"
-                      step="0.01"
-                      value={l.credit}
-                      onChange={(e) =>
-                        update(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      value={l.narration}
-                      onChange={(e) => update(i, { narration: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => remove(i)} disabled={lines.length <= 2}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <EntryRow
+                  key={l.id}
+                  mode="double"
+                  idx={i}
+                  row={{ id: l.id, ledger_id: l.ledger_id, debit: l.debit, credit: l.credit, narration: l.narration }}
+                  ledgerOptions={ledgers}
+                  balance={ledgerBalances[l.ledger_id]}
+                  canDelete={lines.length > 2}
+                  onCommit={(idx, patch) => update(idx, patch as Partial<Line>)}
+                  onFocusRow={setFocusedLine}
+                  onDelete={remove}
+                  onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
+                  onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
+                />
               ))}
             </TableBody>
           </Table>
