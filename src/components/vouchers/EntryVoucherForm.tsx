@@ -211,7 +211,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
-  const save = useCallback(async () => {
+  const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
     let entriesToInsert: { ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no: number }[] = [];
     let totalForVoucher = 0;
@@ -310,6 +310,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       toast.error(check.message);
       return;
     }
+    rememberNarration(voucherType, narration);
     setRefNo("");
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
@@ -344,15 +345,25 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       const entries = snap.entries.map((e) => ({ ...e, voucher_id: vData.id }));
       const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
       if (eErr) throw eErr;
-      toast.success(`${cfg.title} ${numData} saved`);
     });
   }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const save = useCallback(() => setConfirmOpen(true), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        const last = recallNarration(voucherType);
+        if (last) { setNarration(last); toast.message("Narration recalled"); }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (isSimple) { if (simpleLines.length > 1) removeSimple(focusedLine); }
+        else if (lines.length > 2) remove(focusedLine);
       } else if (e.key === "F3") {
         e.preventDefault();
         const lid = lines[focusedLine]?.ledger_id ?? null;
@@ -366,7 +377,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, lines, focusedLine]);
+  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
