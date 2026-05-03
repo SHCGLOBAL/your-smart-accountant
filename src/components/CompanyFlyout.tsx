@@ -92,8 +92,8 @@ export function CompanyFlyout() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "list">("menu");
-  const [hideTimer, setHideTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   useEffect(() => {
@@ -111,64 +111,76 @@ export function CompanyFlyout() {
     };
   }, [open]);
 
-  useEffect(() => () => { if (hideTimer) clearTimeout(hideTimer); }, [hideTimer]);
-
-  const show = () => {
-    if (hideTimer) { clearTimeout(hideTimer); setHideTimer(null); }
-    setOpen(true);
-  };
-  const scheduleHide = () => {
-    const t = setTimeout(() => { setOpen(false); setView("menu"); }, 200);
-    setHideTimer(t);
-  };
-
-  const onNew = () => {
+  const show = () => setOpen(true);
+  const close = () => {
     setOpen(false);
     setView("menu");
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (
+        target &&
+        (triggerRef.current?.contains(target) || panelRef.current?.contains(target))
+      ) {
+        return;
+      }
+      close();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        close();
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const onNew = () => {
+    close();
     navigate({ to: "/app/companies", search: { new: 1 } as never });
   };
   const onPick = (id: string) => {
     setActiveCompanyId(id);
-    setOpen(false);
-    setView("menu");
+    close();
     navigate({ to: "/app" });
   };
   const onEdit = (id: string) => {
     setActiveCompanyId(id);
-    setOpen(false);
-    setView("menu");
+    close();
     navigate({ to: "/app/companies", search: { edit: id } as never });
   };
   const onSettings = () => {
-    setOpen(false);
-    setView("menu");
+    close();
     navigate({ to: "/app/settings" });
   };
 
   return (
-    <div
-      className="relative"
-      onFocus={show}
-      onBlur={scheduleHide}
-    >
+    <div className="relative">
       <button
         ref={triggerRef}
         type="button"
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? close() : show())}
       >
         <Building2 className="h-3.5 w-3.5" />
         <span>{t("company.flyoutTitle")}</span>
-        <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
+        <ChevronRight className={`ml-auto h-3.5 w-3.5 opacity-60 transition-transform ${open ? "rotate-90" : "rotate-0"}`} />
       </button>
 
       {open && (
-        <>
         <div
-          className="fixed inset-0 z-[99]"
-          onClick={() => { setOpen(false); setView("menu"); }}
-        />
-        <div
+          ref={panelRef}
           className="fixed z-[100] w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
           style={{ top: pos.top, left: pos.left }}
         >
@@ -235,7 +247,6 @@ export function CompanyFlyout() {
             </div>
           )}
         </div>
-        </>
       )}
     </div>
   );
