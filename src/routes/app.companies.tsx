@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { z } from "zod";
 import { toast } from "sonner";
 import { Building2, Check, Plus, Pencil, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { INDIAN_STATES } from "@/lib/constants";
-import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, CIN_REGEX, type EntityStatus } from "@/lib/entity-status";
+import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, type EntityStatus } from "@/lib/entity-status";
+import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
 
 export const Route = createFileRoute("/app/companies")({
