@@ -14,6 +14,7 @@ import {
   groupedExportRows,
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
+import { useAccountGroups } from "@/lib/account-groups-runtime";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/app/reports/balance-sheet")({
 
 function BalanceSheet() {
   const { activeCompanyId, activeMembership } = useCompany();
+  const { overrides } = useAccountGroups();
   const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
   const liabHeader = features.scheduleIII
     ? "Equity & Liabilities"
@@ -63,8 +65,9 @@ function BalanceSheet() {
   const goLedger = (id: string) =>
     navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
 
-  const liab = groupedTRows(liabBuckets, goLedger);
-  const asset = groupedTRows(assetBuckets, goLedger);
+  const labelFor = (code: string, fallback: string) => overrides[code] ?? fallback;
+  const liab = groupedTRows(liabBuckets, goLedger, labelFor);
+  const asset = groupedTRows(assetBuckets, goLedger, labelFor);
 
   // Append P/L balancing row
   const liabRows: TRow[] = [...liab.rows];
