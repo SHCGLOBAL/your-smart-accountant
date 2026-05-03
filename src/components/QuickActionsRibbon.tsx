@@ -40,7 +40,8 @@ export function QuickActionsRibbon() {
       </span>
       {ACTIONS.map((a) => {
         const active = location.pathname === a.to;
-        const label = t(a.i18nKey);
+        const translated = t(a.i18nKey);
+        const label = translated === a.i18nKey ? a.label : translated;
         return (
           <Link
             key={a.to}
