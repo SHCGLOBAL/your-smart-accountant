@@ -393,6 +393,7 @@ function LedgersPage() {
                         setForm({
                           ...form,
                           group_code: v,
+                          subgroup_id: "",
                           type: compatible ? form.type : defaultLedgerTypeForGroup(v),
                         });
                       }}
@@ -419,6 +420,25 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {form.group_code && subgroupsFor(form.group_code, subgroups).length > 0 && (
+                    <div className="space-y-1 col-span-2">
+                      <Label htmlFor="subgroup_id">Sub-group (optional)</Label>
+                      <Select
+                        value={form.subgroup_id || "__none__"}
+                        onValueChange={(v) => setForm({ ...form, subgroup_id: v === "__none__" ? "" : v })}
+                      >
+                        <SelectTrigger id="subgroup_id">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— None —</SelectItem>
+                          {subgroupsFor(form.group_code, subgroups).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label htmlFor="gstin" className="flex items-center gap-2">
                       GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
