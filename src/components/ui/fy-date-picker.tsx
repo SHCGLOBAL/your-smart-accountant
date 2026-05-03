@@ -40,8 +40,13 @@ export function useDefaultFyDate(): string {
   return React.useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const d = today < start ? start : today > end ? end : today;
-    return format(d, "yyyy-MM-dd");
+    // If today falls inside the active FY, prefill it.
+    // Otherwise return blank so the user can type DD/MM and the picker
+    // will auto-fill the FY year.
+    if (today >= start && today <= end) {
+      return format(today, "yyyy-MM-dd");
+    }
+    return "";
   }, [start, end]);
 }
 
