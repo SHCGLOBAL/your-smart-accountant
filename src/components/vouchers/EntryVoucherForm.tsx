@@ -358,7 +358,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
+      <div
+        ref={(el) => { enterTab.ref.current = el; formRootRef.current = el; }}
+        onKeyDown={enterTab.onKeyDown}
+        className="space-y-4"
+      >
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
