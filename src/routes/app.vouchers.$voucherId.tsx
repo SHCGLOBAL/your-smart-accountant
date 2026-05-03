@@ -23,6 +23,7 @@ import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
@@ -353,7 +354,7 @@ function VoucherEditPage() {
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label className="text-xs">Date</Label>
-            <Input type="date" value={voucher.voucher_date} onChange={(e) => setVoucher({ ...voucher, voucher_date: e.target.value })} disabled={!canWrite} />
+            <FyDatePicker value={voucher.voucher_date} onChange={(v) => setVoucher({ ...voucher, voucher_date: v })} disabled={!canWrite} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Reference No.</Label>

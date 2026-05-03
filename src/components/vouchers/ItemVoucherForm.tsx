@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
 import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
 import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
@@ -110,7 +111,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const { activeCompanyId, activeMembership } = useCompany();
   const cfg = TITLES[voucherType];
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const defaultDate = useDefaultFyDate();
+  const [date, setDate] = useState(defaultDate);
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
@@ -433,7 +435,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Date</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <FyDatePicker value={date} onChange={setDate} />
           </div>
           <div className="space-y-1">
             <Label className="flex items-center justify-between">
