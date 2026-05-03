@@ -341,7 +341,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           },
         });
       } else {
-        navigate({ to: "/app/vouchers" });
+        // Tally/Busy-style continuous entry: clear and stay on the same voucher type.
+        setPartyId("");
+        setRefNo("");
+        setNarration("");
+        setLines([blankLine()]);
+        setFocusedLine(0);
       }
     } catch (e) {
       console.error(e);
@@ -351,14 +356,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, navigate, cfg]);
 
-  // Hotkeys: Ctrl+S save, Esc cancel, F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
+  // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
-      } else if (e.key === "Escape") {
-        navigate({ to: "/app/vouchers" });
       } else if (e.key === "F3") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -411,7 +414,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
+            <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
             {interstate && (
               <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                 Interstate (IGST)
@@ -681,7 +684,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         open={ewbDlg.open}
         onOpenChange={(o) => {
           setEwbDlg((s) => ({ ...s, open: o }));
-          if (!o) navigate({ to: "/app/vouchers" });
+          if (!o) {
+            // After E-Way prep dialog closes, reset form for the next entry
+            // instead of leaving the voucher screen.
+            setPartyId("");
+            setRefNo("");
+            setNarration("");
+            setLines([blankLine()]);
+            setFocusedLine(0);
+          }
         }}
         voucher={ewbDlg.voucher}
       />
