@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyRangeStrings } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/app/reports/trading")({
 function TradingAccount() {
   const { activeCompanyId } = useCompany();
   const navigate = useNavigate();
-  const initial = defaultFyRange();
+  const initial = useFyRangeStrings();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);

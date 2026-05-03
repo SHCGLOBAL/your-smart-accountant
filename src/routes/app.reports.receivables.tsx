@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Mail } from "lucide-react";
-import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyRangeStrings } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useAuth } from "@/lib/auth-context";
@@ -49,7 +49,7 @@ const BUCKETS = [
 export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const { activeCompanyId, activeMembership } = useCompany();
   const { user } = useAuth();
-  const initial = defaultFyRange();
+  const initial = useFyRangeStrings();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [ledgers, setLedgers] = useState<Ledger[]>([]);

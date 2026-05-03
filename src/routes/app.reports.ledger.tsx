@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyRangeStrings } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -48,7 +48,7 @@ function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const search = Route.useSearch();
-  const initial = defaultFyRange();
+  const initial = useFyRangeStrings();
   const [from, setFrom] = useState(search.from || initial.from);
   const [to, setTo] = useState(search.to || initial.to);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
