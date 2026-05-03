@@ -36,40 +36,6 @@ export const Route = createFileRoute("/app/companies")({
   component: CompaniesPage,
 });
 
-const schema = z.object({
-  name: z.string().trim().min(2, "Name is required").max(120),
-  entity_status: z.enum(["individual","huf","aop","pvt_ltd","registered_firm","trust"]),
-  cin: z.string().trim().max(21).optional().or(z.literal("")),
-  share_capital_lakhs: z.string().optional(),
-  corpus_fund_lakhs: z.string().optional(),
-  gstin: z
-    .string()
-    .trim()
-    .max(15)
-    .regex(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN")
-    .optional()
-    .or(z.literal("")),
-  pan: z.string().trim().max(10).optional().or(z.literal("")),
-  state: z.string().trim().max(50).optional().or(z.literal("")),
-  state_code: z.string().trim().max(3).optional().or(z.literal("")),
-  address: z.string().trim().max(500).optional().or(z.literal("")),
-  email: z.string().trim().max(255).optional().or(z.literal("")),
-  phone: z.string().trim().max(20).optional().or(z.literal("")),
-  financial_year_start: z.string().optional(),
-  bank_name: z.string().trim().max(100).optional().or(z.literal("")),
-  bank_account_no: z.string().trim().max(30).optional().or(z.literal("")),
-  bank_ifsc: z.string().trim().max(15).optional().or(z.literal("")),
-  bank_branch: z.string().trim().max(100).optional().or(z.literal("")),
-  gst_registered: z.boolean(),
-  gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
-  inventory_enabled: z.boolean(),
-  annual_turnover_lakhs: z.string().optional(),
-  trial_local: z.boolean(),
-}).superRefine((val, ctx) => {
-  if (val.entity_status === "pvt_ltd" && val.cin && !CIN_REGEX.test(val.cin.toUpperCase())) {
-    ctx.addIssue({ code: "custom", path: ["cin"], message: "Invalid CIN (e.g. U12345MH2020PTC123456)" });
-  }
-});
 interface FormState {
   name: string;
   entity_status: EntityStatus;
