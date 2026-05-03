@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { useCompany } from "@/lib/company-context";
 
 /**
@@ -73,23 +74,79 @@ export function FyDatePicker({
 
   const defaultMonth = selected ?? start;
 
+  const [text, setText] = React.useState<string>(selected ? format(selected, "dd/MM/yyyy") : "");
+  React.useEffect(() => {
+    setText(selected ? format(selected, "dd/MM/yyyy") : "");
+  }, [selected]);
+
+  /** Parse partial input like "15", "15/5", "15/5/26", "15-05-2025" into ISO. */
+  function tryParse(input: string): string | null {
+    const s = input.trim();
+    if (!s) return null;
+    const parts = s.split(/[\/\-\.\s]+/).filter(Boolean);
+    if (parts.length < 2) return null;
+    const dd = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1], 10);
+    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+    let yyyy: number;
+    if (parts[2]) {
+      let y = parseInt(parts[2], 10);
+      if (isNaN(y)) return null;
+      if (y < 100) y += 2000;
+      yyyy = y;
+    } else {
+      // Auto-pick FY year: months Apr–Dec → FY start year, Jan–Mar → FY end year
+      yyyy = mm >= start.getMonth() + 1 ? start.getFullYear() : end.getFullYear();
+    }
+    const d = new Date(yyyy, mm - 1, dd);
+    if (!isValid(d) || d.getDate() !== dd || d.getMonth() !== mm - 1) return null;
+    return format(d, "yyyy-MM-dd");
+  }
+
+  function commitText(v: string) {
+    if (!v.trim()) {
+      onChange("");
+      return;
+    }
+    const iso = tryParse(v);
+    if (iso) {
+      onChange(iso);
+      setText(format(parse(iso, "yyyy-MM-dd", new Date()), "dd/MM/yyyy"));
+    } else {
+      // revert
+      setText(selected ? format(selected, "dd/MM/yyyy") : "");
+    }
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          className={cn(
-            "h-9 w-full justify-start text-left font-normal",
-            !selected && "text-muted-foreground",
-            className,
-          )}
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {selected ? format(selected, "dd/MM/yyyy") : <span>{placeholder}</span>}
-        </Button>
-      </PopoverTrigger>
+    <div className={cn("relative flex items-center", className)}>
+      <Input
+        value={text}
+        disabled={disabled}
+        placeholder={placeholder ?? "DD/MM"}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={(e) => commitText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitText((e.target as HTMLInputElement).value);
+          }
+        }}
+        className="h-9 pr-9"
+      />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            className="absolute right-0 top-0 h-9 w-9 text-muted-foreground"
+            aria-label="Open calendar"
+          >
+            <CalendarIcon className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
@@ -109,6 +166,7 @@ export function FyDatePicker({
           className={cn("p-3 pointer-events-auto")}
         />
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </div>
   );
 }
