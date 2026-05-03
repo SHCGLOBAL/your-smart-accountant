@@ -29,6 +29,7 @@ type GroupKey =
   | "duties_taxes"
   | "capital"
   | "fixed_assets"
+  | "investments"
   | "current_assets"
   | "stock_in_hand"
   | "direct_income"
@@ -46,6 +47,10 @@ interface GroupDef {
   section: "Balance Sheet" | "Profit & Loss" | "Combined";
   types: LedgerTypeValue[];
   nature: "debit" | "credit";
+  /** If set, filter ledgers to those whose group_code matches one of these codes. */
+  groupCodes?: string[];
+  /** If set, exclude ledgers whose group_code matches one of these codes. */
+  excludeGroupCodes?: string[];
 }
 
 const GROUPS: GroupDef[] = [
@@ -53,7 +58,8 @@ const GROUPS: GroupDef[] = [
   { key: "cash_in_hand", label: "Cash-in-Hand", section: "Balance Sheet", types: ["cash"], nature: "debit" },
   { key: "bank_accounts", label: "Bank Accounts", section: "Balance Sheet", types: ["bank"], nature: "debit" },
   { key: "fixed_assets", label: "Fixed Assets", section: "Balance Sheet", types: ["fixed_asset"], nature: "debit" },
-  { key: "current_assets", label: "Current Assets", section: "Balance Sheet", types: ["current_asset"], nature: "debit" },
+  { key: "investments", label: "Investments", section: "Balance Sheet", types: ["current_asset", "fixed_asset"], nature: "debit", groupCodes: ["INVESTMENTS"] },
+  { key: "current_assets", label: "Current Assets", section: "Balance Sheet", types: ["current_asset"], nature: "debit", excludeGroupCodes: ["INVESTMENTS"] },
   { key: "stock_in_hand", label: "Stock-in-Hand", section: "Balance Sheet", types: ["stock_in_hand"], nature: "debit" },
   { key: "all_assets", label: "All Assets (combined)", section: "Balance Sheet", types: ["sundry_debtor", "cash", "bank", "fixed_asset", "current_asset", "stock_in_hand"], nature: "debit" },
   { key: "sundry_creditors", label: "Sundry Creditors", section: "Balance Sheet", types: ["sundry_creditor"], nature: "credit" },
