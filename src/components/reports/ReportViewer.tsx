@@ -69,7 +69,7 @@ export function ReportViewer({
         {/* Print-only header — repeats on every printed page via @page margins. */}
         <div className="report-print-header mb-3 border-b border-black pb-2 text-center">
           <div className="text-base font-bold uppercase tracking-wide">{company}</div>
-          <div className="text-sm font-semibold">{title}</div>
+          <div className="report-print-title text-sm font-semibold">{title}</div>
           {subtitle && <div className="text-xs">{subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
         </div>
