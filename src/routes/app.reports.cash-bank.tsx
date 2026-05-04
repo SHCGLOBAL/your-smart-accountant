@@ -64,11 +64,10 @@ function CashBankBook() {
   const { activeCompanyId } = useCompany();
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
-  useMastersVersion();
+  const mastersVersion = useMastersVersion();
   const cashBankLedgers = useMemo(
     () => getAllLedgers().filter((l) => l.type === "cash" || l.type === "bank"),
-    // re-eval on masters change via useMastersVersion above
-    [],
+    [mastersVersion],
   );
   const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   useEffect(() => {
