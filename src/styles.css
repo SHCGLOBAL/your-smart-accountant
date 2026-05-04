@@ -184,3 +184,105 @@
     color: transparent;
   }
 }
+
+/* ============================================================
+   Print rules — Reporting Module
+   When a `.report-print-root` element is present in the page,
+   only that subtree prints. All chrome (sidebar, header, status
+   bar, toolbar) is hidden. Tables get clean borders and a
+   running page header via .report-print-header.
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 12mm 10mm;
+  }
+  @page landscape {
+    size: A4 landscape;
+  }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 10pt;
+  }
+  /* When a print root exists, hide everything outside it. */
+  body:has(.report-print-root) > *:not(.report-print-root-wrap) {
+    display: none !important;
+  }
+  body:has(.report-print-root) .report-print-root-wrap *:not(.report-print-root):not(.report-print-root *) {
+    display: none !important;
+  }
+  /* Belt-and-suspenders: explicitly hide common app chrome. */
+  [data-sidebar],
+  [data-slot="sidebar"],
+  aside[data-sidebar="sidebar"],
+  header.sticky,
+  .print\:hidden {
+    display: none !important;
+  }
+  .report-print-root {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+  .report-print-root .report-print-header {
+    display: block !important;
+  }
+  .report-print-landscape {
+    page: landscape;
+  }
+  /* Tables — clean print look */
+  .report-print-root table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+  .report-print-root thead {
+    display: table-header-group; /* repeat header on every page */
+  }
+  .report-print-root tfoot {
+    display: table-footer-group;
+  }
+  .report-print-root tr,
+  .report-print-root td,
+  .report-print-root th {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .report-print-root th,
+  .report-print-root td {
+    border: 0.5pt solid #000 !important;
+    padding: 3pt 4pt !important;
+    vertical-align: top;
+  }
+  .report-print-root th {
+    background: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-weight: 600;
+  }
+  .report-print-root .num,
+  .report-print-root td.num,
+  .report-print-root th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .report-print-root .narration-cell {
+    white-space: normal;
+    word-break: break-word;
+  }
+  .report-print-root .row-bold td,
+  .report-print-root .row-bold th {
+    font-weight: 700;
+    background: #f7f7f7 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Header is hidden on screen, shown only when printing. */
+.report-print-header { display: none; }
