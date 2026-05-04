@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -11,7 +13,8 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 
-type LedgerSearch = { ledgerId?: string; from?: string; to?: string };
+type ViewMode = "columnar" | "horizontal";
+type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
 
 export const Route = createFileRoute("/app/reports/ledger")({
   head: () => ({ meta: [{ title: "Ledger Statement — Reports" }] }),
@@ -19,6 +22,7 @@ export const Route = createFileRoute("/app/reports/ledger")({
     ledgerId: typeof s.ledgerId === "string" ? s.ledgerId : undefined,
     from: typeof s.from === "string" ? s.from : undefined,
     to: typeof s.to === "string" ? s.to : undefined,
+    view: s.view === "horizontal" ? "horizontal" : s.view === "columnar" ? "columnar" : undefined,
   }),
   component: LedgerStatement,
 });
@@ -44,6 +48,24 @@ interface EntryRow {
   } | null;
 }
 
+interface SiblingRow {
+  voucher_id: string;
+  ledger_id: string;
+  debit_paise: number;
+  credit_paise: number;
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  sales: "Sales",
+  purchase: "Purchase",
+  receipt: "Receipt",
+  payment: "Payment",
+  journal: "Journal",
+  contra: "Contra",
+  credit_note: "Cr Note",
+  debit_note: "Dr Note",
+};
+
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
@@ -51,7 +73,10 @@ function LedgerStatement() {
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
+  const [view, setView] = useState<ViewMode>(search.view ?? "columnar");
   const [entries, setEntries] = useState<EntryRow[]>([]);
+  const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
+  const [siblingNames, setSiblingNames] = useState<Map<string, string>>(new Map());
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
 
   // Alt+L brought the user here — Esc returns to the originating screen.
@@ -65,7 +90,6 @@ function LedgerStatement() {
       if (back && back !== "/app/reports/ledger") {
         try { sessionStorage.removeItem("ledgerReturnTo"); } catch { /* ignore */ }
         e.preventDefault();
-        // Use history to preserve any prior search/state without coupling to typed routes.
         window.history.back();
       }
     };
@@ -99,159 +123,256 @@ function LedgerStatement() {
 
   useEffect(() => {
     if (!ledgerId || !ledger) return;
-    supabase
-      .from("voucher_entries")
-      .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
-      .eq("ledger_id", ledgerId)
-      .gte("vouchers.voucher_date", from)
-      .lte("vouchers.voucher_date", to)
-      .order("voucher_date", { referencedTable: "vouchers", ascending: true })
-      .then(({ data }) => setEntries((data || []) as unknown as EntryRow[]));
+    let cancelled = false;
+    void (async () => {
+      const { data: ent } = await supabase
+        .from("voucher_entries")
+        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
+        .eq("ledger_id", ledgerId)
+        .gte("vouchers.voucher_date", from)
+        .lte("vouchers.voucher_date", to)
+        .order("voucher_date", { referencedTable: "vouchers", ascending: true });
+      if (cancelled) return;
+      const list = (ent || []) as unknown as EntryRow[];
+      setEntries(list);
 
-    supabase
-      .from("voucher_entries")
-      .select("debit_paise, credit_paise, vouchers!inner(voucher_date)")
-      .eq("ledger_id", ledgerId)
-      .lt("vouchers.voucher_date", from)
-      .then(({ data }) => {
-        const rows = (data || []) as { debit_paise: number; credit_paise: number }[];
-        const movement = rows.reduce((s, r) => s + r.debit_paise - r.credit_paise, 0);
-        const obSigned = (ledger.opening_balance_is_debit ? 1 : -1) * ledger.opening_balance_paise;
-        setOpeningBeforeFrom(obSigned + movement);
-      });
+      const { data: prior } = await supabase
+        .from("voucher_entries")
+        .select("debit_paise, credit_paise, vouchers!inner(voucher_date)")
+        .eq("ledger_id", ledgerId)
+        .lt("vouchers.voucher_date", from);
+      if (cancelled) return;
+      const movement = (prior || []).reduce(
+        (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
+        0,
+      );
+      const obSigned = (ledger.opening_balance_is_debit ? 1 : -1) * ledger.opening_balance_paise;
+      setOpeningBeforeFrom(obSigned + movement);
+
+      // Sibling lookup for "particulars" in columnar view
+      const ids = list.map((e) => e.vouchers?.id).filter(Boolean) as string[];
+      if (ids.length === 0) {
+        setSiblings(new Map());
+        setSiblingNames(new Map());
+        return;
+      }
+      const { data: sibs } = await supabase
+        .from("voucher_entries")
+        .select("voucher_id, ledger_id, debit_paise, credit_paise")
+        .in("voucher_id", ids)
+        .neq("ledger_id", ledgerId);
+      if (cancelled) return;
+      const map = new Map<string, SiblingRow[]>();
+      const ledgerIds = new Set<string>();
+      for (const s of (sibs || []) as SiblingRow[]) {
+        const arr = map.get(s.voucher_id) ?? [];
+        arr.push(s);
+        map.set(s.voucher_id, arr);
+        ledgerIds.add(s.ledger_id);
+      }
+      setSiblings(map);
+      const { data: names } = await supabase
+        .from("ledgers")
+        .select("id, name")
+        .in("id", Array.from(ledgerIds));
+      if (cancelled) return;
+      const nameMap = new Map<string, string>();
+      for (const n of (names || []) as { id: string; name: string }[]) nameMap.set(n.id, n.name);
+      setSiblingNames(nameMap);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [ledgerId, from, to, ledger]);
 
-  const totals = useMemo(() => {
-    return entries.reduce(
-      (acc, e) => ({ dr: acc.dr + e.debit_paise, cr: acc.cr + e.credit_paise }),
-      { dr: 0, cr: 0 },
-    );
-  }, [entries]);
+  // Single-pass totals + columnar rows w/ running balance (integer paise math)
+  const { columnarRows, totals } = useMemo(() => {
+    type R = {
+      key: string;
+      voucherId: string;
+      date: string;
+      particulars: string;
+      vchType: string;
+      vchNo: string;
+      narration: string;
+      debit: number;
+      credit: number;
+      balance: number;
+    };
+    const rows: R[] = [];
+    let bal = openingBeforeFrom;
+    let dr = 0;
+    let cr = 0;
+    for (const e of entries) {
+      const v = e.vouchers;
+      if (!v) continue;
+      const sibs = siblings.get(v.id) ?? [];
+      const partyNames = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
+      const particulars = partyNames.length ? partyNames.join(", ") : "—";
+      bal = bal + e.debit_paise - e.credit_paise;
+      dr += e.debit_paise;
+      cr += e.credit_paise;
+      rows.push({
+        key: e.id,
+        voucherId: v.id,
+        date: v.voucher_date,
+        particulars,
+        vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
+        vchNo: v.voucher_number,
+        narration: e.narration ?? v.narration ?? "",
+        debit: e.debit_paise,
+        credit: e.credit_paise,
+        balance: bal,
+      });
+    }
+    return { columnarRows: rows, totals: { dr, cr } };
+  }, [entries, siblings, siblingNames, openingBeforeFrom]);
 
   const closing = openingBeforeFrom + totals.dr - totals.cr;
+  const fmtBal = (paise: number) =>
+    `${formatINR(Math.abs(paise), { symbol: false })} ${paise >= 0 ? "Dr" : "Cr"}`;
 
-  // T-format split: opening goes on whichever side is natural,
-  // each entry goes Dr or Cr depending on which has amount,
-  // closing balance is shown as a "By/To Balance c/d" balancing entry.
+  // ---------- T-format (Horizontal) data ----------
   const drRows: TRow[] = [];
   const crRows: TRow[] = [];
-
   if (openingBeforeFrom > 0) {
-    drRows.push({
-      label: "To Opening Balance",
-      hint: from,
-      amount: formatINR(openingBeforeFrom),
-      emphasis: "bold",
-    });
+    drRows.push({ label: "To Opening Balance", hint: from, amount: formatINR(openingBeforeFrom), emphasis: "bold" });
   } else if (openingBeforeFrom < 0) {
-    crRows.push({
-      label: "By Opening Balance",
-      hint: from,
-      amount: formatINR(-openingBeforeFrom),
-      emphasis: "bold",
-    });
+    crRows.push({ label: "By Opening Balance", hint: from, amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
   }
-
   for (const e of entries) {
     const v = e.vouchers;
     const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
     const hint = v ? `${v.voucher_date} · ${v.voucher_number}` : "";
     const goto = v ? () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } }) : undefined;
-    if (e.debit_paise > 0) {
-      drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
-    }
-    if (e.credit_paise > 0) {
-      crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
-    }
+    if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
+    if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
   }
-
-  // Balance c/d entry on the smaller side
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
   if (drSubtotal > crSubtotal) {
-    crRows.push({
-      label: "By Balance c/d",
-      hint: to,
-      amount: formatINR(drSubtotal - crSubtotal),
-      emphasis: "bold",
-    });
+    crRows.push({ label: "By Balance c/d", hint: to, amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
   } else if (crSubtotal > drSubtotal) {
-    drRows.push({
-      label: "To Balance c/d",
-      hint: to,
-      amount: formatINR(crSubtotal - drSubtotal),
-      emphasis: "bold",
-    });
+    drRows.push({ label: "To Balance c/d", hint: to, amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
   }
-
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
-  // Plain export rows derived from source data (not JSX TRow.label).
-  type ExportRow = { label: string; paise: number };
-  const drExport: ExportRow[] = [];
-  const crExport: ExportRow[] = [];
-  if (openingBeforeFrom > 0) drExport.push({ label: "To Opening Balance", paise: openingBeforeFrom });
-  else if (openingBeforeFrom < 0) crExport.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
-  for (const e of entries) {
-    const v = e.vouchers;
-    const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
-    const ref = v ? ` (${v.voucher_date} ${v.voucher_number})` : "";
-    if (e.debit_paise > 0) drExport.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
-    if (e.credit_paise > 0) crExport.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
-  }
-  if (drSubtotal > crSubtotal) crExport.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
-  else if (crSubtotal > drSubtotal) drExport.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
+  // ---------- Exports ----------
+  const fileBase = `ledger-${ledger?.name ?? "x"}-${from}_to_${to}`;
 
-  const exportBody = (): (string | number)[][] => {
-    const max = Math.max(drExport.length, crExport.length);
+  const csvRowsColumnar = (): (string | number)[][] => [
+    [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", "", "", ""],
+    [`Period: ${from} to ${to}`, "", "", "", "", "", "", ""],
+    ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"],
+    ["Opening Balance", "", "", "", "", "", "", fmtBal(openingBeforeFrom)],
+    ...columnarRows.map((row) => [
+      row.date,
+      row.particulars,
+      row.vchType,
+      row.vchNo,
+      row.narration,
+      row.debit ? r(row.debit).toFixed(2) : "",
+      row.credit ? r(row.credit).toFixed(2) : "",
+      fmtBal(row.balance),
+    ]),
+    ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+    ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
+  ];
+
+  const horizontalBody = (): (string | number)[][] => {
+    type ExportRow = { label: string; paise: number };
+    const drExp: ExportRow[] = [];
+    const crExp: ExportRow[] = [];
+    if (openingBeforeFrom > 0) drExp.push({ label: "To Opening Balance", paise: openingBeforeFrom });
+    else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
+    for (const e of entries) {
+      const v = e.vouchers;
+      const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
+      const ref = v ? ` (${v.voucher_date} ${v.voucher_number})` : "";
+      if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
+      if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
+    }
+    if (drSubtotal > crSubtotal) crExp.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
+    else if (crSubtotal > drSubtotal) drExp.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
+    const max = Math.max(drExp.length, crExp.length);
     return Array.from({ length: max }).map((_, i) => [
-      drExport[i]?.label ?? "",
-      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
-      crExport[i]?.label ?? "",
-      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+      drExp[i]?.label ?? "",
+      drExp[i] ? r(drExp[i].paise).toFixed(2) : "",
+      crExp[i]?.label ?? "",
+      crExp[i] ? r(crExp[i].paise).toFixed(2) : "",
     ]);
   };
 
-  const csvRows = (): (string | number)[][] => [
+  const csvRowsHorizontal = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
     [`Period: ${from} to ${to}`, "", "", ""],
     ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
-    ...exportBody(),
+    ...horizontalBody(),
     ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
     ["", "", "Closing", r(closing).toFixed(2)],
   ];
 
-  const onExportCsv = () => downloadCsv(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.csv`, csvRows());
+  const onExportCsv = () =>
+    downloadCsv(`${fileBase}-${view}.csv`, view === "columnar" ? csvRowsColumnar() : csvRowsHorizontal());
   const onExportXlsx = () =>
-    downloadXlsx(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.xlsx`, [
-      { name: "Ledger", rows: csvRows() },
+    downloadXlsx(`${fileBase}-${view}.xlsx`, [
+      { name: "Ledger", rows: view === "columnar" ? csvRowsColumnar() : csvRowsHorizontal() },
     ]);
-  const onExportPdf = () =>
-    downloadPdfTable({
-      title: `Ledger A/c — ${ledger?.name ?? ""}`,
-      subtitle: `${from} to ${to}`,
-      head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
-      body: exportBody(),
-      foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
-      fileName: `ledger-${ledger?.name ?? "x"}-${from}_to_${to}.pdf`,
-      orientation: "l",
-      rightAlignCols: [1, 3],
-    });
+  const onExportPdf = () => {
+    if (view === "columnar") {
+      downloadPdfTable({
+        title: `Ledger A/c — ${ledger?.name ?? ""}`,
+        subtitle: `${from} to ${to}`,
+        head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
+        body: [
+          ["", "Opening Balance", "", "", "", "", "", fmtBal(openingBeforeFrom)],
+          ...columnarRows.map((row) => [
+            row.date,
+            row.particulars,
+            row.vchType,
+            row.vchNo,
+            row.narration,
+            row.debit ? r(row.debit).toFixed(2) : "",
+            row.credit ? r(row.credit).toFixed(2) : "",
+            fmtBal(row.balance),
+          ]),
+        ],
+        foot: [
+          ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
+        ],
+        fileName: `${fileBase}-columnar.pdf`,
+        orientation: "l",
+        rightAlignCols: [5, 6, 7],
+      });
+    } else {
+      downloadPdfTable({
+        title: `Ledger A/c — ${ledger?.name ?? ""}`,
+        subtitle: `${from} to ${to}`,
+        head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+        body: horizontalBody(),
+        foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
+        fileName: `${fileBase}-horizontal.pdf`,
+        orientation: "l",
+        rightAlignCols: [1, 3],
+      });
+    }
+  };
 
-  return (
-    <div className="space-y-3">
-      <Card className="print:hidden">
-        <CardContent className="p-3">
-          <ReportToolbar
-            from={from}
-            to={to}
-            onFrom={setFrom}
-            onTo={setTo}
-            onExportCsv={onExportCsv}
-            onExportXlsx={onExportXlsx}
-            onExportPdf={onExportPdf}
-            onPrint={() => window.print()}
-            extra={
+  const toolbar = (
+    <Card>
+      <CardContent className="p-3">
+        <ReportToolbar
+          from={from}
+          to={to}
+          onFrom={setFrom}
+          onTo={setTo}
+          onExportCsv={onExportCsv}
+          onExportXlsx={onExportXlsx}
+          onExportPdf={onExportPdf}
+          onPrint={() => window.print()}
+          extra={
+            <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Ledger</Label>
                 <Select value={ledgerId} onValueChange={setLedgerId}>
@@ -265,12 +386,100 @@ function LedgerStatement() {
                   </SelectContent>
                 </Select>
               </div>
-            }
-          />
-        </CardContent>
-      </Card>
+              <div className="space-y-1">
+                <Label className="text-xs">Format</Label>
+                <ToggleGroup
+                  type="single"
+                  size="sm"
+                  value={view}
+                  onValueChange={(v) => v && setView(v as ViewMode)}
+                  className="h-9 rounded-md border border-input bg-background p-0.5"
+                >
+                  <ToggleGroupItem value="columnar" className="px-3 text-xs">
+                    Columnar Format
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="horizontal" className="px-3 text-xs">
+                    Horizontal / T-Format
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+            </div>
+          }
+        />
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <ReportViewer
+      title="Ledger Statement"
+      subtitle={ledger ? `${ledger.name} A/c` : undefined}
+      fromDate={from}
+      toDate={to}
+      toolbar={toolbar}
+      orientation="landscape"
+    >
       {!ledger ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a ledger to view its statement.</CardContent></Card>
+      ) : view === "columnar" ? (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className="border-b border-border p-2 text-left">Date</th>
+                  <th className="border-b border-border p-2 text-left">Particulars</th>
+                  <th className="border-b border-border p-2 text-left">Vch Type</th>
+                  <th className="border-b border-border p-2 text-left">Vch No</th>
+                  <th className="border-b border-border p-2 text-left">Narration</th>
+                  <th className="border-b border-border p-2 num">Debit</th>
+                  <th className="border-b border-border p-2 num">Credit</th>
+                  <th className="border-b border-border p-2 num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="row-bold bg-muted/30">
+                  <td className="border-b border-border p-2 font-semibold" colSpan={7}>Opening Balance</td>
+                  <td className="border-b border-border p-2 num font-semibold">{fmtBal(openingBeforeFrom)}</td>
+                </tr>
+                {columnarRows.length === 0 ? (
+                  <tr>
+                    <td className="p-6 text-center text-muted-foreground" colSpan={8}>No entries in this period.</td>
+                  </tr>
+                ) : (
+                  columnarRows.map((row) => (
+                    <tr
+                      key={row.key}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })}
+                    >
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.date}</td>
+                      <td className="border-b border-border/60 p-2">{row.particulars}</td>
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchType}</td>
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchNo}</td>
+                      <td className="border-b border-border/60 p-2 narration-cell text-muted-foreground">{row.narration}</td>
+                      <td className="border-b border-border/60 p-2 num">{row.debit ? formatINR(row.debit, { symbol: false }) : ""}</td>
+                      <td className="border-b border-border/60 p-2 num">{row.credit ? formatINR(row.credit, { symbol: false }) : ""}</td>
+                      <td className="border-b border-border/60 p-2 num">{fmtBal(row.balance)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="row-bold bg-muted/50">
+                  <td className="p-2 font-semibold" colSpan={5}>Total</td>
+                  <td className="p-2 num font-semibold">{formatINR(totals.dr, { symbol: false })}</td>
+                  <td className="p-2 num font-semibold">{formatINR(totals.cr, { symbol: false })}</td>
+                  <td className="p-2"></td>
+                </tr>
+                <tr className="row-bold bg-muted/30">
+                  <td className="p-2 font-semibold" colSpan={7}>Closing Balance</td>
+                  <td className="p-2 num font-semibold">{fmtBal(closing)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </CardContent>
+        </Card>
       ) : (
         <>
           <TAccount
@@ -284,13 +493,11 @@ function LedgerStatement() {
           <Card>
             <CardContent className="flex justify-between p-3 text-sm">
               <span className="text-muted-foreground">Closing balance</span>
-              <span className="font-mono font-semibold">
-                {formatINR(Math.abs(closing))} {closing >= 0 ? "Dr" : "Cr"}
-              </span>
+              <span className="font-mono font-semibold">{fmtBal(closing)}</span>
             </CardContent>
           </Card>
         </>
       )}
-    </div>
+    </ReportViewer>
   );
 }
