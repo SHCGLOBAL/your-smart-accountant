@@ -331,6 +331,11 @@
 /* Header is visible on screen AND on print (was previously hidden on screen). */
 .report-print-header { display: block; }
 
+/* Capture spans are only used by the print engine to feed @page margin
+   boxes; hide them on screen. */
+.report-print-company-capture,
+.report-print-fy-capture { display: none; }
+
 /* Double-line separator under the report header. Renders as two thin
    horizontal rules with a small gap, matching traditional ledger books. */
 .report-header-rule {
