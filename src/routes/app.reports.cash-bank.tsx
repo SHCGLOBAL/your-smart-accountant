@@ -13,6 +13,7 @@ import { formatINR } from "@/lib/money";
 import { getLedger, useMastersVersion, getAllLedgers } from "@/lib/masters-cache";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
 
@@ -62,6 +63,7 @@ const TYPE_LABEL: Record<string, string> = {
 function CashBankBook() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const mastersVersion = useMastersVersion();
@@ -230,6 +232,8 @@ function CashBankBook() {
     downloadPdfTable({
       title: `Cash & Bank Book — ${ledger?.name ?? ""}`,
       subtitle: `${from} to ${to}`,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
       body: [
         ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)],

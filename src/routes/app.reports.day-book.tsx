@@ -8,6 +8,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
 
@@ -45,6 +46,7 @@ const CR_TYPES = new Set(["sales", "receipt", "credit_note"]);
 function DayBook() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,6 +116,8 @@ function DayBook() {
     downloadPdfTable({
       title: "Day Book",
       subtitle: `${from} to ${to}`,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       head: [["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"]],
       body: rows.map((r2) => [
         r2.voucher_date,

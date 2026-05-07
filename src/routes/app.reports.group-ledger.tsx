@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
@@ -93,6 +94,7 @@ interface EntryRow {
 
 function GroupLedgerReport() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const [groupKey, setGroupKey] = useState<GroupKey>("sundry_debtors");
   const { from, to, setFrom, setTo } = useFyRangeState();
@@ -245,7 +247,7 @@ function GroupLedgerReport() {
         hideDates
         onExportCsv={exportCsv}
         onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, [{ name: group.label.slice(0, 31), rows: [headers, ...tableRows] }])}
-        onExportPdf={() => downloadPdfTable({ title: group.label, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [2] })}
+        onExportPdf={() => downloadPdfTable({ title: group.label, companyName: pdfHeader.companyName, companySubLine: pdfHeader.companySubLine, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [2] })}
         onPrint={() => window.print()}
       />
 

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/app/reports/trading")({
 
 function TradingAccount() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
@@ -122,6 +124,8 @@ function TradingAccount() {
   const onExportPdf = () =>
     downloadPdfTable({
       title: "Trading Account",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
       head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
       body: exportBody(),

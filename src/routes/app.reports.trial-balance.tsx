@@ -5,6 +5,7 @@ import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolb
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -31,6 +32,7 @@ interface Entry {
 
 function TrialBalance() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
@@ -113,6 +115,8 @@ function TrialBalance() {
     const max = Math.max(drList.length, crList.length);
     downloadPdfTable({
       title: "Trial Balance",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${to}`,
       head: [["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"]],
       body: Array.from({ length: max }).map((_, i) => [

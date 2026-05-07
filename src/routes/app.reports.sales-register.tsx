@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -30,6 +31,7 @@ interface VRow {
 export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<VRow[]>([]);
 
