@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";

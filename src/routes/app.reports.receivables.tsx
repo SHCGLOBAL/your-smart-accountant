@@ -7,6 +7,7 @@ import { MessageCircle, Mail } from "lucide-react";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { useAuth } from "@/lib/auth-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
