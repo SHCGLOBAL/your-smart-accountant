@@ -143,9 +143,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, accountHeading || title, orientation);
       }, 50);
     },
-    [onExportPdf, doWord],
+    [onExportPdf, doWord, company, accountHeading, title, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
@@ -170,6 +171,7 @@ export function ReportViewer({
       if (k === "p") { e.preventDefault(); handlePick("system"); }
       else if (k === "d") { e.preventDefault(); handlePick("pdf"); }
       else if (k === "w") { e.preventDefault(); handlePick("word"); }
+      else if (k === "v") { e.preventDefault(); handlePick("preview"); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
