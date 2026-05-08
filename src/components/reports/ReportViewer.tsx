@@ -143,9 +143,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, accountHeading || title, orientation);
       }, 50);
     },
-    [onExportPdf, doWord],
+    [onExportPdf, doWord, company, accountHeading, title, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
@@ -170,6 +171,7 @@ export function ReportViewer({
       if (k === "p") { e.preventDefault(); handlePick("system"); }
       else if (k === "d") { e.preventDefault(); handlePick("pdf"); }
       else if (k === "w") { e.preventDefault(); handlePick("word"); }
+      else if (k === "v") { e.preventDefault(); handlePick("preview"); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -220,6 +222,30 @@ export function ReportViewer({
 
 function escape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Open a new window containing the rendered report HTML with the same
+ * stylesheets so the user can preview the print layout before sending it
+ * to the printer / PDF / Word. The window auto-invokes window.print()
+ * once content is ready; the user can cancel and just inspect.
+ */
+function openPrintPreview(
+  el: HTMLElement | null,
+  company: string,
+  heading: string,
+  orientation: "portrait" | "landscape",
+): void {
+  if (!el) return;
+  const w = window.open("", "_blank", "width=900,height=1100");
+  if (!w) return;
+  const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((n) => n.outerHTML)
+    .join("\n");
+  const orient = orientation === "landscape" ? "landscape" : "portrait";
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escape(company)} — ${escape(heading)} — Preview</title>${styleLinks}<style>@page{size:A4 ${orient};margin:14mm}body{margin:0;padding:14mm;background:#fff;color:#000}.preview-bar{position:sticky;top:0;display:flex;gap:8px;padding:8px;background:#f5f5f5;border-bottom:1px solid #ddd;font:13px system-ui;z-index:10}.preview-bar button{padding:6px 12px;border:1px solid #888;background:#fff;border-radius:4px;cursor:pointer}@media print{.preview-bar{display:none}body{padding:0}}</style></head><body><div class="preview-bar"><button onclick="window.print()">Print</button><button onclick="window.close()">Close</button><span style="margin-left:auto;color:#666">Print Preview</span></div><div class="report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${el.innerHTML}</div></body></html>`);
+  w.document.close();
 }
 
 /**

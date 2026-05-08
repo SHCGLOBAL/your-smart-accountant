@@ -1,8 +1,8 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileText, FileType2, Printer } from "lucide-react";
+import { Eye, FileText, FileType2, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type PrintMode = "system" | "pdf" | "word";
+export type PrintMode = "preview" | "system" | "pdf" | "word";
 
 interface Props {
   open: boolean;
@@ -28,6 +28,13 @@ export function PrintModeDialog({ open, onOpenChange, onPick, hasPdf = true, has
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 pt-2">
+          <ModeButton
+            icon={<Eye className="h-5 w-5" />}
+            label="Print Preview"
+            hint="Opens a preview window with the report formatted for print."
+            shortcut="V"
+            onClick={() => onPick("preview")}
+          />
           <ModeButton
             icon={<Printer className="h-5 w-5" />}
             label="System Printer"
