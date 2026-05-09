@@ -367,9 +367,7 @@ function CashBankBook() {
                     <tr
                       key={row.key}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() =>
-                        (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } }))
-                      }
+                      onClick={() => openVoucherDetail(navigate, row.voucherId)}
                     >
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
