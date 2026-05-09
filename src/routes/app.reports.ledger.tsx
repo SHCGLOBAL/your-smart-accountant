@@ -303,8 +303,8 @@ function LedgerStatement() {
     else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
     for (const e of entries) {
       const v = e.vouchers;
-      const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
-      const ref = v ? ` (${v.voucher_date} ${v.voucher_number})` : "";
+      const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+      const ref = v ? ` (${fmtIndianDate(v.voucher_date)} ${v.voucher_number})` : "";
       if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
       if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
     }
