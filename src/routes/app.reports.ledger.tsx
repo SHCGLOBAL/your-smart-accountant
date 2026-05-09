@@ -235,7 +235,7 @@ function LedgerStatement() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration ?? v.narration ?? "",
+        narration: e.narration || v.narration || v.reference_no || "",
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
