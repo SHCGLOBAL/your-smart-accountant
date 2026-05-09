@@ -167,16 +167,7 @@ function CashBankBook() {
       balance: number;
     };
     const out: R[] = [];
-    const vchNoSortKey = (s: string): number => {
-      const n = parseInt(String(s).replace(/\D+/g, ""), 10);
-      return isNaN(n) ? 0 : n;
-    };
-    const sorted = [...entries].sort((a, b) => {
-      const da = a.vouchers?.voucher_date ?? "";
-      const db = b.vouchers?.voucher_date ?? "";
-      if (da !== db) return da < db ? -1 : 1;
-      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
-    });
+    const sorted = sortEntriesByVoucherAsc(entries);
     let bal = opening;
     for (const e of sorted) {
       const v = e.vouchers;
@@ -195,7 +186,7 @@ function CashBankBook() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration ?? v.narration ?? v.reference_no ?? "",
+        narration: narrationOf(e, v),
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
