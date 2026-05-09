@@ -25,6 +25,7 @@ import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
+import { goBackFromVoucher } from "@/lib/voucher-return";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
   head: () => ({ meta: [{ title: "Edit Voucher — Your Mehtaji" }] }),
