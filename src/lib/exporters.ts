@@ -94,13 +94,17 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
           doc.text(opts.subtitle, pageW / 2, hy, { align: "center" });
         }
       }
-      const str = `Page ${doc.getNumberOfPages()}`;
+      const pageW2 = doc.internal.pageSize.getWidth();
+      const str = `Page ${doc.getNumberOfPages()} of {total_pages_count_string}`;
       doc.setFontSize(8);
       doc.setTextColor(120);
-      doc.text(str, pageW - 36, doc.internal.pageSize.getHeight() - 12, { align: "right" });
+      doc.text(str, pageW2 / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
       doc.setTextColor(0);
     },
   });
+  if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
+    (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
+  }
 
   const buf = doc.output("arraybuffer");
   void saveExport({
