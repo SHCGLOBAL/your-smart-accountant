@@ -40,6 +40,7 @@ interface EntryRow {
     voucher_number: string;
     voucher_type: string;
     narration: string | null;
+    reference_no: string | null;
   } | null;
   // sibling entries to determine "particulars" (the contra ledger)
 }
