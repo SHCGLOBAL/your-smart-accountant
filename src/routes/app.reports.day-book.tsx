@@ -60,7 +60,7 @@ function DayBook() {
     setLoading(true);
     supabase
       .from("vouchers")
-      .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, ledgers:party_ledger_id(name)")
+      .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, ledgers:party_ledger_id(name)")
       .eq("company_id", activeCompanyId)
       .gte("voucher_date", from)
       .lte("voucher_date", to)
