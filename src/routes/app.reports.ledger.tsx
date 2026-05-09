@@ -67,6 +67,17 @@ const TYPE_LABEL: Record<string, string> = {
   debit_note: "Dr Note",
 };
 
+function fmtIndianDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  if (!m) return iso || "";
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+function vchNoSortKey(s: string): number {
+  const n = parseInt(String(s).replace(/\D+/g, ""), 10);
+  return isNaN(n) ? 0 : n;
+}
+
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
@@ -202,10 +213,16 @@ function LedgerStatement() {
       balance: number;
     };
     const rows: R[] = [];
+    const sortedEntries = [...entries].sort((a, b) => {
+      const da = a.vouchers?.voucher_date ?? "";
+      const db = b.vouchers?.voucher_date ?? "";
+      if (da !== db) return da < db ? -1 : 1;
+      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
+    });
     let bal = openingBeforeFrom;
     let dr = 0;
     let cr = 0;
-    for (const e of entries) {
+    for (const e of sortedEntries) {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
@@ -322,37 +339,52 @@ function LedgerStatement() {
     ]);
   const onExportPdf = () => {
     if (view === "columnar") {
+      const showNarr = columnarRows.some((row) => (row.narration || "").trim().length > 0);
+      const head = showNarr
+        ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
+        : ["Date", "Particulars", "Vch Type", "Vch No", "Debit", "Credit", "Balance"];
+      const openingRow = showNarr
+        ? ["", "Opening Balance", "", "", "", "", "", fmtBal(openingBeforeFrom)]
+        : ["", "Opening Balance", "", "", "", "", fmtBal(openingBeforeFrom)];
+      const bodyRows = columnarRows.map((row) => {
+        const base = [
+          fmtIndianDate(row.date),
+          row.particulars,
+          row.vchType,
+          row.vchNo,
+        ];
+        const tail = [
+          row.debit ? r(row.debit).toFixed(2) : "",
+          row.credit ? r(row.credit).toFixed(2) : "",
+          fmtBal(row.balance),
+        ];
+        return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
+      });
+      const footRows = showNarr
+        ? [
+            ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+            ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
+          ]
+        : [
+            ["Total", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+            ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
+          ];
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
-        subtitle: `${from} to ${to}`,
+        subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
-        head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
-        body: [
-          ["", "Opening Balance", "", "", "", "", "", fmtBal(openingBeforeFrom)],
-          ...columnarRows.map((row) => [
-            row.date,
-            row.particulars,
-            row.vchType,
-            row.vchNo,
-            row.narration,
-            row.debit ? r(row.debit).toFixed(2) : "",
-            row.credit ? r(row.credit).toFixed(2) : "",
-            fmtBal(row.balance),
-          ]),
-        ],
-        foot: [
-          ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-          ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
-        ],
+        head: [head],
+        body: [openingRow, ...bodyRows],
+        foot: footRows,
         fileName: `${fileBase}-columnar.pdf`,
         orientation: "l",
-        rightAlignCols: [5, 6, 7],
+        rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
       });
     } else {
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
-        subtitle: `${from} to ${to}`,
+        subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
         head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
