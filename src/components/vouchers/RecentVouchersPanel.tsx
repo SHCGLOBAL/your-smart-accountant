@@ -1,3 +1,4 @@
+import { markVoucherOrigin } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -83,7 +84,7 @@ export function RecentVouchersPanel({
               <Button
                 variant="ghost"
                 className="h-auto w-full justify-between px-2 py-1.5 text-left"
-                onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
+                onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
               >
                 <span className="flex flex-col items-start">
                   <span className="font-mono text-xs">{r.voucher_number}</span>

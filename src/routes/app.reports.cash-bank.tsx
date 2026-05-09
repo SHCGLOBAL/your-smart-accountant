@@ -1,3 +1,4 @@
+import { markVoucherOrigin } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -363,7 +364,7 @@ function CashBankBook() {
                       key={row.key}
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() =>
-                        navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })
+                        (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } }))
                       }
                     >
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>

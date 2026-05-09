@@ -1,3 +1,4 @@
+import { markVoucherOrigin } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -232,7 +233,7 @@ function VouchersHub() {
                     <TableRow
                       key={r.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
+                      onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
                       title="Click to edit"
                     >
                       <TableCell>{fmtIndianDate(r.voucher_date)}</TableCell>

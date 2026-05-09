@@ -1,3 +1,4 @@
+import { markVoucherOrigin } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -164,7 +165,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                 <TableRow
                   key={x.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } })}
+                  onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } }))}
                   title="Click to edit"
                 >
                   <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
