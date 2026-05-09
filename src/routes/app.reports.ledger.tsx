@@ -137,7 +137,7 @@ function LedgerStatement() {
     void (async () => {
       const { data: ent } = await supabase
         .from("voucher_entries")
-        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
+        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
         .eq("ledger_id", ledgerId)
         .gte("vouchers.voucher_date", from)
         .lte("vouchers.voucher_date", to)
