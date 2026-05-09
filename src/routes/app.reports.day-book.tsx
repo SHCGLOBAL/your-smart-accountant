@@ -27,6 +27,7 @@ interface Row {
   voucher_type: string;
   total_paise: number;
   narration: string | null;
+  reference_no: string | null;
   ledgers: { name: string } | null;
 }
 
