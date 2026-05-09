@@ -321,7 +321,7 @@ function LedgerStatement() {
 
   const csvRowsHorizontal = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
-    [`Period: ${from} to ${to}`, "", "", ""],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", ""],
     ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
     ...horizontalBody(),
     ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
