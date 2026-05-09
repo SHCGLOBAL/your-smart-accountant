@@ -40,6 +40,7 @@ interface EntryRow {
     voucher_number: string;
     voucher_type: string;
     narration: string | null;
+    reference_no: string | null;
   } | null;
   // sibling entries to determine "particulars" (the contra ledger)
 }
@@ -114,7 +115,7 @@ function CashBankBook() {
 
       const { data: ent } = await supabase
         .from("voucher_entries")
-        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
+        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
         .eq("ledger_id", ledgerId)
         .eq("vouchers.company_id", activeCompanyId)
         .gte("vouchers.voucher_date", from)
@@ -164,8 +165,18 @@ function CashBankBook() {
       balance: number;
     };
     const out: R[] = [];
+    const vchNoSortKey = (s: string): number => {
+      const n = parseInt(String(s).replace(/\D+/g, ""), 10);
+      return isNaN(n) ? 0 : n;
+    };
+    const sorted = [...entries].sort((a, b) => {
+      const da = a.vouchers?.voucher_date ?? "";
+      const db = b.vouchers?.voucher_date ?? "";
+      if (da !== db) return da < db ? -1 : 1;
+      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
+    });
     let bal = opening;
-    for (const e of entries) {
+    for (const e of sorted) {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
@@ -182,7 +193,7 @@ function CashBankBook() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration ?? v.narration ?? "",
+        narration: e.narration ?? v.narration ?? v.reference_no ?? "",
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
