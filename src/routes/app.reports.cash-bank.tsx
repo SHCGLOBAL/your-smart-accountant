@@ -115,7 +115,7 @@ function CashBankBook() {
 
       const { data: ent } = await supabase
         .from("voucher_entries")
-        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
+        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
         .eq("ledger_id", ledgerId)
         .eq("vouchers.company_id", activeCompanyId)
         .gte("vouchers.voucher_date", from)
