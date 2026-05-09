@@ -278,11 +278,11 @@ function LedgerStatement() {
 
   const csvRowsColumnar = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", "", "", ""],
-    [`Period: ${from} to ${to}`, "", "", "", "", "", "", ""],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", "", "", "", "", ""],
     ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"],
     ["Opening Balance", "", "", "", "", "", "", fmtBal(openingBeforeFrom)],
     ...columnarRows.map((row) => [
-      row.date,
+      fmtIndianDate(row.date),
       row.particulars,
       row.vchType,
       row.vchNo,
