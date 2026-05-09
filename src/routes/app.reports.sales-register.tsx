@@ -47,8 +47,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       .eq("voucher_type", kind)
       .gte("voucher_date", from)
       .lte("voucher_date", to)
-      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .then(({ data }) => setRows((data || []) as unknown as VRow[]));
+      .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as VRow[])));
   }, [activeCompanyId, from, to, kind]);
 
   const totals = useMemo(() => rows.reduce(
