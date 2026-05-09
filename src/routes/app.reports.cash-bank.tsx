@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -210,7 +211,7 @@ function CashBankBook() {
     const body: (string | number)[][] = [
       ["Opening Balance", "", "", "", "", "", "", fmtBal(opening)],
       ...rows.map((row) => [
-        row.date,
+        fmtIndianDate(row.date),
         row.particulars,
         row.vchType,
         row.vchNo,
@@ -237,7 +238,7 @@ function CashBankBook() {
       body: [
         ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)],
         ...rows.map((row) => [
-          row.date,
+          fmtIndianDate(row.date),
           row.particulars,
           row.vchType,
           row.vchNo,
@@ -365,7 +366,7 @@ function CashBankBook() {
                         navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })
                       }
                     >
-                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.date}</td>
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchType}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchNo}</td>

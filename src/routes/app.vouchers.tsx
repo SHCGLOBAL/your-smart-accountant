@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -234,7 +235,7 @@ function VouchersHub() {
                       onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
                       title="Click to edit"
                     >
-                      <TableCell>{r.voucher_date}</TableCell>
+                      <TableCell>{fmtIndianDate(r.voucher_date)}</TableCell>
                       <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
                       <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
                       <TableCell>{r.ledgers?.name ?? "—"}</TableCell>

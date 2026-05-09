@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -159,7 +160,7 @@ function BankRecPage() {
                 const v = candidates.find((c) => c.id === l.matched_voucher_id);
                 return (
                   <TableRow key={l.id}>
-                    <TableCell className="font-mono text-xs">{l.txn_date}</TableCell>
+                    <TableCell className="font-mono text-xs">{fmtIndianDate(l.txn_date)}</TableCell>
                     <TableCell className="text-sm">{l.description}</TableCell>
                     <TableCell className="text-xs">{l.reference}</TableCell>
                     <TableCell className="text-right font-mono">{l.debit_paise ? formatINR(l.debit_paise) : ""}</TableCell>

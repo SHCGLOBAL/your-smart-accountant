@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,7 +85,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const body = (): (string | number)[][] => [
     head,
     ...rows.map((x) => [
-      x.voucher_date,
+      fmtIndianDate(x.voucher_date),
       x.voucher_number,
       x.ledgers?.name ?? "",
       x.ledgers?.gstin ?? "",
@@ -118,10 +119,10 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             onExportPdf={() =>
               downloadPdfTable({
                 title,
-                subtitle: `${from} to ${to}`,
+                subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
                 head: [head],
                 body: rows.map((x) => [
-                  x.voucher_date,
+                  fmtIndianDate(x.voucher_date),
                   x.voucher_number,
                   x.ledgers?.name ?? "",
                   x.ledgers?.gstin ?? "",
@@ -166,7 +167,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } })}
                   title="Click to edit"
                 >
-                  <TableCell>{x.voucher_date}</TableCell>
+                  <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
                   <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
                   <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>

@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -71,9 +72,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const billDateLabel = kind === "sales" ? "Invoice Date" : "Bill Date";
 
   const tableRows = rows.map((x) => [
-    x.voucher_date,
+    fmtIndianDate(x.voucher_date),
     kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number),
-    kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date),
+    fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)),
     x.ledgers?.name || "—",
     x.ledgers?.gstin || "—",
     x.place_of_supply_code || x.ledgers?.state_code || "—",
@@ -166,12 +167,12 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 ) : (
                   rows.map((x) => (
                     <TableRow key={x.id}>
-                      <TableCell className="whitespace-nowrap">{x.voucher_date}</TableCell>
+                      <TableCell className="whitespace-nowrap">{fmtIndianDate(x.voucher_date)}</TableCell>
                       <TableCell className="font-mono text-xs">
                         {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date}
+                        {fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date)}
                       </TableCell>
                       <TableCell>{x.ledgers?.name || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>

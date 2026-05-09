@@ -13,6 +13,7 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { fmtIndianDate } from "@/lib/format-date";
 
 type ViewMode = "columnar" | "horizontal";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
@@ -46,6 +47,7 @@ interface EntryRow {
     voucher_number: string;
     voucher_type: string;
     narration: string | null;
+    reference_no: string | null;
   } | null;
 }
 
@@ -67,11 +69,6 @@ const TYPE_LABEL: Record<string, string> = {
   debit_note: "Dr Note",
 };
 
-function fmtIndianDate(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
-  if (!m) return iso || "";
-  return `${m[3]}-${m[2]}-${m[1]}`;
-}
 
 function vchNoSortKey(s: string): number {
   const n = parseInt(String(s).replace(/\D+/g, ""), 10);
@@ -140,7 +137,7 @@ function LedgerStatement() {
     void (async () => {
       const { data: ent } = await supabase
         .from("voucher_entries")
-        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, company_id)")
+        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
         .eq("ledger_id", ledgerId)
         .gte("vouchers.voucher_date", from)
         .lte("vouchers.voucher_date", to)
@@ -238,7 +235,7 @@ function LedgerStatement() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration ?? v.narration ?? "",
+        narration: e.narration || v.narration || v.reference_no || "",
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
@@ -255,14 +252,14 @@ function LedgerStatement() {
   const drRows: TRow[] = [];
   const crRows: TRow[] = [];
   if (openingBeforeFrom > 0) {
-    drRows.push({ label: "To Opening Balance", hint: from, amount: formatINR(openingBeforeFrom), emphasis: "bold" });
+    drRows.push({ label: "To Opening Balance", hint: fmtIndianDate(from), amount: formatINR(openingBeforeFrom), emphasis: "bold" });
   } else if (openingBeforeFrom < 0) {
-    crRows.push({ label: "By Opening Balance", hint: from, amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
+    crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
   }
   for (const e of entries) {
     const v = e.vouchers;
-    const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
-    const hint = v ? `${v.voucher_date} · ${v.voucher_number}` : "";
+    const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+    const hint = v ? `${fmtIndianDate(v.voucher_date)} · ${v.voucher_number}` : "";
     const goto = v ? () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } }) : undefined;
     if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
     if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
@@ -270,9 +267,9 @@ function LedgerStatement() {
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
   if (drSubtotal > crSubtotal) {
-    crRows.push({ label: "By Balance c/d", hint: to, amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
+    crRows.push({ label: "By Balance c/d", hint: fmtIndianDate(to), amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
   } else if (crSubtotal > drSubtotal) {
-    drRows.push({ label: "To Balance c/d", hint: to, amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
+    drRows.push({ label: "To Balance c/d", hint: fmtIndianDate(to), amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
   }
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
@@ -281,11 +278,11 @@ function LedgerStatement() {
 
   const csvRowsColumnar = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", "", "", ""],
-    [`Period: ${from} to ${to}`, "", "", "", "", "", "", ""],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", "", "", "", "", ""],
     ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"],
     ["Opening Balance", "", "", "", "", "", "", fmtBal(openingBeforeFrom)],
     ...columnarRows.map((row) => [
-      row.date,
+      fmtIndianDate(row.date),
       row.particulars,
       row.vchType,
       row.vchNo,
@@ -306,8 +303,8 @@ function LedgerStatement() {
     else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
     for (const e of entries) {
       const v = e.vouchers;
-      const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
-      const ref = v ? ` (${v.voucher_date} ${v.voucher_number})` : "";
+      const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+      const ref = v ? ` (${fmtIndianDate(v.voucher_date)} ${v.voucher_number})` : "";
       if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
       if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
     }
@@ -324,7 +321,7 @@ function LedgerStatement() {
 
   const csvRowsHorizontal = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
-    [`Period: ${from} to ${to}`, "", "", ""],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", ""],
     ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
     ...horizontalBody(),
     ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
@@ -496,7 +493,7 @@ function LedgerStatement() {
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })}
                     >
-                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.date}</td>
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchType}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchNo}</td>
@@ -527,7 +524,7 @@ function LedgerStatement() {
         <>
           <TAccount
             title={`${ledger.name} Account`}
-            subtitle={`for the period ${from} to ${to}`}
+            subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
             leftRows={drRows}
             rightRows={crRows}
             leftTotal={formatINR(grandTotal)}

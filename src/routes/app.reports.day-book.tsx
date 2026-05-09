@@ -9,6 +9,7 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { fmtIndianDate } from "@/lib/format-date";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
 
@@ -75,7 +76,7 @@ function DayBook() {
     let crTotal = 0;
     for (const r2 of rows) {
       const label = `${TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type} — ${r2.ledgers?.name ?? "—"}`;
-      const hint = `${r2.voucher_date} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
+      const hint = `${fmtIndianDate(r2.voucher_date)} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
       const onClick = () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r2.id } });
       const tRow: TRow = { label, hint, amount: formatINR(r2.total_paise), onClick };
       if (DR_TYPES.has(r2.voucher_type)) {
@@ -98,7 +99,7 @@ function DayBook() {
   const csvRows = (): (string | number)[][] => [
     ["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"],
     ...rows.map((r2) => [
-      r2.voucher_date,
+      fmtIndianDate(r2.voucher_date),
       TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
       r2.voucher_number,
       r2.ledgers?.name ?? "",
@@ -115,12 +116,12 @@ function DayBook() {
   const onExportPdf = () =>
     downloadPdfTable({
       title: "Day Book",
-      subtitle: `${from} to ${to}`,
+      subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       head: [["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"]],
       body: rows.map((r2) => [
-        r2.voucher_date,
+        fmtIndianDate(r2.voucher_date),
         TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
         r2.voucher_number,
         r2.ledgers?.name ?? "",

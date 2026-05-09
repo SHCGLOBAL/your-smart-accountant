@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -129,10 +130,10 @@ function OutstandingPage() {
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
               ) : rows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
                   <TableCell className="font-medium">{r.voucher_number}</TableCell>
                   <TableCell>{r.ledgers?.name || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.due_date || r.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(r.due_date || r.voucher_date)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.paid_paise)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>

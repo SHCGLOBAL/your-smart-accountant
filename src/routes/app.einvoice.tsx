@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,7 +77,7 @@ function EinvoicePage() {
                 const requiresEwb = r.total_paise > 5_000_000;
                 return (
                   <TableRow key={r.id}>
-                    <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
+                    <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
                     <TableCell className="font-medium">
                       {r.voucher_number}
                       {requiresEwb && !r.einvoice_details?.ewb_no && (

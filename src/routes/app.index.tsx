@@ -1,3 +1,4 @@
+import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -317,7 +318,7 @@ function Dashboard() {
               <TableBody>
                 {recent.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>{r.voucher_date}</TableCell>
+                    <TableCell>{fmtIndianDate(r.voucher_date)}</TableCell>
                     <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
                     <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
                     <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
