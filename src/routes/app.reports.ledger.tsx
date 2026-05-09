@@ -524,7 +524,7 @@ function LedgerStatement() {
         <>
           <TAccount
             title={`${ledger.name} Account`}
-            subtitle={`for the period ${from} to ${to}`}
+            subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
             leftRows={drRows}
             rightRows={crRows}
             leftTotal={formatINR(grandTotal)}
