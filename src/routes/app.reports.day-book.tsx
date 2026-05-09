@@ -99,7 +99,7 @@ function DayBook() {
   const csvRows = (): (string | number)[][] => [
     ["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"],
     ...rows.map((r2) => [
-      r2.voucher_date,
+      fmtIndianDate(r2.voucher_date),
       TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
       r2.voucher_number,
       r2.ledgers?.name ?? "",
