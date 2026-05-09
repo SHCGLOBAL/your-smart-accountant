@@ -107,7 +107,7 @@ function DayBook() {
       TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
       r2.voucher_number,
       r2.ledgers?.name ?? "",
-      r2.narration ?? "",
+      narrationOf(null, r2),
       DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr",
       (r2.total_paise / 100).toFixed(2),
     ]),
