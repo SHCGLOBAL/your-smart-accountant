@@ -121,6 +121,8 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
               downloadPdfTable({
                 title,
                 subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+                companyName: pdfHeader.companyName,
+                companySubLine: pdfHeader.companySubLine,
                 head: [head],
                 body: rows.map((x) => [
                   fmtIndianDate(x.voucher_date),
