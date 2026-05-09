@@ -234,33 +234,50 @@ function CashBankBook() {
   const fileBase = `cash-bank-${ledger?.name ?? "x"}-${from}_to_${to}`;
   const onExportCsv = () => downloadCsv(`${fileBase}.csv`, csvRows());
   const onExportXlsx = () => downloadXlsx(`${fileBase}.xlsx`, [{ name: "Cash & Bank", rows: csvRows() }]);
-  const onExportPdf = () =>
+  const onExportPdf = () => {
+    const showNarr = hasAnyNarration(rows);
+    const head = showNarr
+      ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
+      : ["Date", "Particulars", "Vch Type", "Vch No", "Debit", "Credit", "Balance"];
+    const opening_row = showNarr
+      ? ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)]
+      : ["", "Opening Balance", "", "", "", "", fmtBal(opening)];
+    const bodyRows = rows.map((row) => {
+      const base = [
+        fmtIndianDate(row.date),
+        row.particulars,
+        row.vchType,
+        row.vchNo,
+      ];
+      const tail = [
+        row.debit ? r(row.debit).toFixed(2) : "",
+        row.credit ? r(row.credit).toFixed(2) : "",
+        fmtBal(row.balance),
+      ];
+      return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
+    });
+    const foot = showNarr
+      ? [
+          ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
+        ]
+      : [
+          ["Total", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
+        ];
     downloadPdfTable({
       title: ledger?.name ?? "Cash & Bank Book",
+      subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
-      body: [
-        ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)],
-        ...rows.map((row) => [
-          fmtIndianDate(row.date),
-          row.particulars,
-          row.vchType,
-          row.vchNo,
-          row.narration,
-          row.debit ? r(row.debit).toFixed(2) : "",
-          row.credit ? r(row.credit).toFixed(2) : "",
-          fmtBal(row.balance),
-        ]),
-      ],
-      foot: [
-        ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-        ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
-      ],
+      head: [head],
+      body: [opening_row, ...bodyRows],
+      foot,
       fileName: `${fileBase}.pdf`,
       orientation: "l",
-      rightAlignCols: [5, 6, 7],
+      rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
     });
+  };
 
   const toolbar = (
     <Card>
