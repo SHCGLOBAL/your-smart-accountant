@@ -213,10 +213,16 @@ function LedgerStatement() {
       balance: number;
     };
     const rows: R[] = [];
+    const sortedEntries = [...entries].sort((a, b) => {
+      const da = a.vouchers?.voucher_date ?? "";
+      const db = b.vouchers?.voucher_date ?? "";
+      if (da !== db) return da < db ? -1 : 1;
+      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
+    });
     let bal = openingBeforeFrom;
     let dr = 0;
     let cr = 0;
-    for (const e of entries) {
+    for (const e of sortedEntries) {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
