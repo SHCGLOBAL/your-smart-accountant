@@ -93,12 +93,17 @@ function LedgerStatement() {
   const [showBack, setShowBack] = useState(false);
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
-  // Alt+L brought the user here — Esc returns to the originating screen.
+  // Esc returns to the originating screen (Alt+L launcher or drill-down).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const tgt = e.target as HTMLElement | null;
       if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+      if (hasLedgerOrigin()) {
+        e.preventDefault();
+        goBackFromLedger(() => navigate({ to: "/app/reports" }));
+        return;
+      }
       let back: string | null = null;
       try { back = sessionStorage.getItem("ledgerReturnTo"); } catch { /* ignore */ }
       if (back && back !== "/app/reports/ledger") {
