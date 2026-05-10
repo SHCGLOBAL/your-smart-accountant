@@ -136,10 +136,13 @@ export interface XlsxSheet {
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
+  const lang = getStoredLang();
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
-    const ws = XLSX.utils.aoa_to_sheet(s.rows);
-    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+    const rows = lang === "en" ? s.rows : tReportRows(s.rows as (string | number)[][], lang);
+    const sheetName = lang === "en" ? s.name : tReportLabel(s.name, lang);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   }
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
   void saveExport({
