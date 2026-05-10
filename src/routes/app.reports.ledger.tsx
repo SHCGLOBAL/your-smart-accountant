@@ -628,6 +628,23 @@ function LedgerStatement() {
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">All Ledgers (one go)</Label>
+                <div className="flex h-9 items-center gap-1">
+                  <Button variant={allMode ? "default" : "outline"} size="sm" onClick={onViewAll} disabled={allLoading}>
+                    <Eye className="mr-1 h-4 w-4" /> {allLoading ? "Loading…" : "View All"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onExportAllPdf} disabled={allLoading}>
+                    <FileText className="mr-1 h-4 w-4" /> All PDF
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onExportAllWord} disabled={allLoading}>
+                    <FileType2 className="mr-1 h-4 w-4" /> All Word
+                  </Button>
+                  {allMode && (
+                    <Button variant="ghost" size="sm" onClick={() => setAllMode(false)}>Single</Button>
+                  )}
+                </div>
+              </div>
             </div>
           }
         />
