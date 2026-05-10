@@ -32,7 +32,7 @@ interface Row {
 }
 
 export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
-  const { activeCompanyId, activeMembership } = useCompany();
+  const { activeCompanyId } = useCompany();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const pdfHeader = useReportPdfHeader();
   const [rows, setRows] = useState<Row[]>([]);
