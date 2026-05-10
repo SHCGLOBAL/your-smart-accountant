@@ -55,7 +55,7 @@ function ProfitLoss() {
   );
 
   const goLedger = (id: string) =>
-    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
+    openLedgerReport(navigate, { ledgerId: id, from, to });
 
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
