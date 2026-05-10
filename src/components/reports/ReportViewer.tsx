@@ -151,10 +151,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
-        else if (mode === "preview") openPrintPreview(rootRef.current, company, accountHeading || title, orientation);
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
       }, 50);
     },
-    [onExportPdf, doWord, company, accountHeading, title, orientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
