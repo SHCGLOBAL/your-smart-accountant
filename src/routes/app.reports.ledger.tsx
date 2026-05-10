@@ -1,4 +1,6 @@
-import { markVoucherOrigin } from "@/lib/voucher-return";
+import { openVoucherDetail } from "@/lib/voucher-return";
+import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
+import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,11 +72,6 @@ const TYPE_LABEL: Record<string, string> = {
   debit_note: "Dr Note",
 };
 
-
-function vchNoSortKey(s: string): number {
-  const n = parseInt(String(s).replace(/\D+/g, ""), 10);
-  return isNaN(n) ? 0 : n;
-}
 
 function LedgerStatement() {
   const navigate = useNavigate();
@@ -211,12 +208,7 @@ function LedgerStatement() {
       balance: number;
     };
     const rows: R[] = [];
-    const sortedEntries = [...entries].sort((a, b) => {
-      const da = a.vouchers?.voucher_date ?? "";
-      const db = b.vouchers?.voucher_date ?? "";
-      if (da !== db) return da < db ? -1 : 1;
-      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
-    });
+    const sortedEntries = sortEntriesByVoucherAsc(entries);
     let bal = openingBeforeFrom;
     let dr = 0;
     let cr = 0;
@@ -236,7 +228,7 @@ function LedgerStatement() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration || v.narration || v.reference_no || "",
+        narration: narrationOf(e, v),
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
@@ -257,11 +249,11 @@ function LedgerStatement() {
   } else if (openingBeforeFrom < 0) {
     crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
   }
-  for (const e of entries) {
+  for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
-    const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+    const desc = narrationOf(e, v, (v?.voucher_type ?? "").replace(/_/g, " "));
     const hint = v ? `${fmtIndianDate(v.voucher_date)} · ${v.voucher_number}` : "";
-    const goto = v ? () => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } })) : undefined;
+    const goto = v ? () => openVoucherDetail(navigate, v.id) : undefined;
     if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
     if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
   }
@@ -302,9 +294,9 @@ function LedgerStatement() {
     const crExp: ExportRow[] = [];
     if (openingBeforeFrom > 0) drExp.push({ label: "To Opening Balance", paise: openingBeforeFrom });
     else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
-    for (const e of entries) {
+    for (const e of sortEntriesByVoucherAsc(entries)) {
       const v = e.vouchers;
-      const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+      const desc = narrationOf(e, v, (v?.voucher_type ?? "").replace(/_/g, " "));
       const ref = v ? ` (${fmtIndianDate(v.voucher_date)} ${v.voucher_number})` : "";
       if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
       if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
@@ -492,7 +484,7 @@ function LedgerStatement() {
                     <tr
                       key={row.key}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } }))}
+                      onClick={() => openVoucherDetail(navigate, row.voucherId)}
                     >
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
