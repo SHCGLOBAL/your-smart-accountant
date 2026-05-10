@@ -359,3 +359,13 @@
     break-after: avoid;
   }
 }
+
+/* Gujarati script support for on-screen and browser-print views.
+   When the app language is Gujarati, html[lang="gu"] applies the Noto Sans
+   Gujarati family so headings, table headers and labels render correctly. */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;500;600;700&display=swap");
+
+html[lang="gu"],
+html[lang="gu"] body {
+  font-family: "Noto Sans Gujarati", "Shruti", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
