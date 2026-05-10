@@ -150,6 +150,10 @@ function HousekeepingPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="verify_repair">
+          <VerifyAndRepairTool companyId={activeCompanyId} isAdmin={isAdmin} />
+        </TabsContent>
+
         <TabsContent value="opening">
           {activeCompanyId ? (
             <OpeningBalanceImport companyId={activeCompanyId} disabled={!isAdmin} />
