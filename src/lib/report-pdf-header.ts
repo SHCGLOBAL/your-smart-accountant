@@ -1,4 +1,5 @@
 import { useCompany } from "./company-context";
+import { getStoredLang } from "./i18n";
 
 /**
  * Returns the company / proprietor name and a financial-year sub-line
