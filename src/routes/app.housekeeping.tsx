@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
+import { describeError } from "@/lib/error-message";
 
 export const Route = createFileRoute("/app/housekeeping")({
   head: () => ({ meta: [{ title: "Housekeeping — Accounting Tools" }] }),
@@ -289,8 +290,7 @@ function MergeLedgersTool({ companyId, disabled }: { companyId: string | null; d
         .order("name");
       setLedgers((data || []) as LedgerOpt[]);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Merge failed: ${e.message || "unknown error"}`);
+      toast.error(`Merge failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
       setConfirmOpen(false);
@@ -426,8 +426,7 @@ function RenumberVouchersTool({ companyId, disabled }: { companyId: string | nul
       toast.success(`Renumbered ${preview.length} ${type} vouchers`);
       setPreview([]);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Renumber failed: ${e.message || "unknown"}`);
+      toast.error(`Renumber failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
       setConfirmOpen(false);
@@ -557,14 +556,16 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
     setRunning(true);
     try {
       // Fetch all vouchers + their entries
-      const { data: vchs } = await supabase
+      const { data: vchs, error: vErr } = await supabase
         .from("vouchers")
         .select("id, voucher_number, voucher_date, voucher_type")
         .eq("company_id", companyId);
-      const { data: entries } = await supabase
+      if (vErr) throw vErr;
+      const { data: entries, error: eErr } = await supabase
         .from("voucher_entries")
         .select("voucher_id, debit_paise, credit_paise, vouchers!inner(company_id)")
         .eq("vouchers.company_id", companyId);
+      if (eErr) throw eErr;
 
       const totals = new Map<string, { dr: number; cr: number }>();
       for (const e of (entries || []) as { voucher_id: string; debit_paise: number; credit_paise: number }[]) {
@@ -592,8 +593,7 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
       setHasRun(true);
       toast.success("Verification complete");
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Verification failed: ${e.message || "unknown"}`);
+      toast.error(`Verification failed: ${describeError(err)}`);
     } finally {
       setRunning(false);
     }
@@ -682,17 +682,25 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
     if (!companyId) return;
     setScanning(true);
     try {
-      const [{ data: ledgers }, { data: items }, { data: entries }, { data: vItems }] = await Promise.all([
+      const [ledgerRes, itemRes, entryRes, vItemRes] = await Promise.all([
         supabase.from("ledgers").select("id, name").eq("company_id", companyId).eq("is_active", true),
         supabase.from("items").select("id, name").eq("company_id", companyId).eq("is_active", true),
         supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
         supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
       ]);
+      const failed = [ledgerRes, itemRes, entryRes, vItemRes].find((r) => r.error);
+      if (failed?.error) throw failed.error;
+      const { data: ledgers } = ledgerRes;
+      const { data: items } = itemRes;
+      const { data: entries } = entryRes;
+      const { data: vItems } = vItemRes;
       const usedLedgerIds = new Set(((entries || []) as { ledger_id: string }[]).map((e) => e.ledger_id));
       const usedItemIds = new Set(((vItems || []) as { item_id: string }[]).map((v) => v.item_id));
       setUnusedLedgers(((ledgers || []) as { id: string; name: string }[]).filter((l) => !usedLedgerIds.has(l.id)));
       setUnusedItems(((items || []) as { id: string; name: string }[]).filter((i) => !usedItemIds.has(i.id)));
       setHasRun(true);
+    } catch (err) {
+      toast.error(`Cleanup scan failed: ${describeError(err)}`);
     } finally {
       setScanning(false);
     }
@@ -790,10 +798,11 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     setBusy(true);
     try {
       // For each voucher type, find max trailing number and reset next_number
-      const { data: vchs } = await supabase
+      const { data: vchs, error: vErr } = await supabase
         .from("vouchers")
         .select("voucher_type, voucher_number")
         .eq("company_id", companyId);
+      if (vErr) throw vErr;
       const maxByType = new Map<string, number>();
       for (const v of (vchs || []) as { voucher_type: string; voucher_number: string }[]) {
         const m = v.voucher_number.match(/(\d+)\s*$/);
@@ -809,12 +818,12 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
           .update({ next_number: maxNum + 1 })
           .eq("company_id", companyId)
           .eq("voucher_type", vtype as never);
-        if (!error) updated++;
+        if (error) throw error;
+        updated++;
       }
       toast.success(`Recomputed ${updated} voucher sequences`);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Recompute failed: ${e.message || "unknown"}`);
+      toast.error(`Recompute failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
     }
@@ -830,8 +839,7 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
       if (error) throw error;
       toast.success(`Monthly balance snapshot rebuilt — ${data ?? 0} rows`);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Snapshot rebuild failed: ${e.message || "unknown"}`);
+      toast.error(`Snapshot rebuild failed: ${describeError(err)}`);
     } finally {
       setSnapBusy(false);
     }
