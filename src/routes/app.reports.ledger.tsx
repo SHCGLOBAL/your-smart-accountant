@@ -19,7 +19,7 @@ import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSecti
 import { exportHtmlAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
-import { FileText, Eye, FileType2 } from "lucide-react";
+import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 type ViewMode = "columnar" | "horizontal";
