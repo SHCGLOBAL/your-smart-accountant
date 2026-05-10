@@ -666,7 +666,65 @@ function LedgerStatement() {
       onExportPdf={onExportPdf}
       exportFileBase={`${fileBase}-${view}`}
     >
-      {!ledger ? (
+      {allMode ? (
+        <div className="space-y-6">
+          {(allSections ?? []).length === 0 ? (
+            <Card><CardContent className="p-6 text-sm text-muted-foreground">{allLoading ? "Loading all ledgers…" : "No ledgers with activity in this period."}</CardContent></Card>
+          ) : (
+            (allSections ?? []).map((s) => (
+              <Card key={s.ledger.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="bg-muted/40 px-3 py-2 text-sm font-semibold">Ledger A/c — {s.ledger.name}</div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/60">
+                      <tr>
+                        <th className="border-b border-border p-2 text-left">Date</th>
+                        <th className="border-b border-border p-2 text-left">Particulars</th>
+                        <th className="border-b border-border p-2 text-left">Vch Type</th>
+                        <th className="border-b border-border p-2 text-left">Vch No</th>
+                        <th className="border-b border-border p-2 text-left">Narration</th>
+                        <th className="border-b border-border p-2 num">Debit</th>
+                        <th className="border-b border-border p-2 num">Credit</th>
+                        <th className="border-b border-border p-2 num">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="row-bold bg-muted/30">
+                        <td className="border-b border-border p-2 font-semibold" colSpan={7}>Opening Balance</td>
+                        <td className="border-b border-border p-2 num font-semibold">{fmtBal(s.opening)}</td>
+                      </tr>
+                      {s.rows.map((row, i) => (
+                        <tr key={i}>
+                          <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
+                          <td className="border-b border-border/60 p-2">{row.particulars}</td>
+                          <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchType}</td>
+                          <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchNo}</td>
+                          <td className="border-b border-border/60 p-2 narration-cell text-muted-foreground">{row.narration}</td>
+                          <td className="border-b border-border/60 p-2 num">{row.debit ? formatINR(row.debit, { symbol: false }) : ""}</td>
+                          <td className="border-b border-border/60 p-2 num">{row.credit ? formatINR(row.credit, { symbol: false }) : ""}</td>
+                          <td className="border-b border-border/60 p-2 num">{fmtBal(row.balance)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="row-bold bg-muted/50">
+                        <td className="p-2 font-semibold" colSpan={5}>Total</td>
+                        <td className="p-2 num font-semibold">{formatINR(s.dr, { symbol: false })}</td>
+                        <td className="p-2 num font-semibold">{formatINR(s.cr, { symbol: false })}</td>
+                        <td className="p-2"></td>
+                      </tr>
+                      <tr className="row-bold bg-muted/30">
+                        <td className="p-2 font-semibold" colSpan={7}>Closing Balance</td>
+                        <td className="p-2 num font-semibold">{fmtBal(s.closing)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      ) : !ledger ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a ledger to view its statement.</CardContent></Card>
       ) : view === "columnar" ? (
         <Card className="overflow-hidden">
