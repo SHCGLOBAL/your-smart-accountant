@@ -112,7 +112,10 @@ function HousekeepingPage() {
       )}
 
       <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-11">
+          <TabsTrigger value="verify_repair">
+            <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verify &amp; Repair
+          </TabsTrigger>
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
           </TabsTrigger>
