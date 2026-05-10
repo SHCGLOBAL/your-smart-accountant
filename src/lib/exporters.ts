@@ -8,7 +8,19 @@ import * as XLSX from "xlsx";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
-import { tReportLabel, tReportRows } from "@/lib/report-i18n";
+import { tReportLabel } from "@/lib/report-i18n";
+import { formatDatesInText } from "@/lib/format-date";
+
+function localizeExportText(text: string, lang = getStoredLang()): string {
+  const dated = formatDatesInText(text);
+  return lang === "en" ? dated : tReportLabel(dated, lang);
+}
+
+function localizeExportRows<T>(rows: T[][], lang = getStoredLang()): T[][] {
+  return rows.map((row) =>
+    row.map((cell) => (typeof cell === "string" ? (localizeExportText(cell, lang) as T) : cell)),
+  );
+}
 
 export interface PdfTableOptions {
   title: string;
@@ -34,11 +46,11 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     const FONT = await prepareReportFont(doc, lang);
     const pageW = doc.internal.pageSize.getWidth();
 
-    const title = tReportLabel(opts.title, lang);
-    const subtitle = opts.subtitle ? tReportLabel(opts.subtitle, lang) : undefined;
-    const head = tReportRows(opts.head, lang);
-    const body = tReportRows(opts.body as (string | number)[][], lang);
-    const foot = opts.foot ? tReportRows(opts.foot as (string | number)[][], lang) : undefined;
+    const title = localizeExportText(opts.title, lang);
+    const subtitle = opts.subtitle ? localizeExportText(opts.subtitle, lang) : undefined;
+    const head = localizeExportRows(opts.head, lang);
+    const body = localizeExportRows(opts.body as (string | number)[][], lang);
+    const foot = opts.foot ? localizeExportRows(opts.foot as (string | number)[][], lang) : undefined;
 
     let y = 28;
     if (opts.companyName) {
@@ -80,6 +92,9 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
       columnStyles,
       margin: { top: tableStartY },
+      didParseCell: (data) => {
+        data.cell.styles.font = FONT;
+      },
       didDrawPage: (data) => {
         if (data.pageNumber > 1) {
           let hy = 28;
@@ -139,8 +154,8 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
   const lang = getStoredLang();
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
-    const rows = lang === "en" ? s.rows : tReportRows(s.rows as (string | number)[][], lang);
-    const sheetName = lang === "en" ? s.name : tReportLabel(s.name, lang);
+    const rows = localizeExportRows(s.rows as (string | number)[][], lang);
+    const sheetName = localizeExportText(s.name, lang);
     const ws = XLSX.utils.aoa_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   }
@@ -189,8 +204,8 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
     const FONT = await prepareReportFont(doc, lang);
     const pageW = doc.internal.pageSize.getWidth();
 
-    const title = tReportLabel(opts.title, lang);
-    const subtitle = opts.subtitle ? tReportLabel(opts.subtitle, lang) : undefined;
+    const title = localizeExportText(opts.title, lang);
+    const subtitle = opts.subtitle ? localizeExportText(opts.subtitle, lang) : undefined;
 
     const drawPageHeader = (): number => {
       let y = 28;
@@ -224,21 +239,21 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       let y = drawPageHeader();
       doc.setFont(FONT, "bold");
       doc.setFontSize(11);
-      doc.text(tReportLabel(section.sectionTitle, lang), pageW / 2, y, { align: "center" });
+      doc.text(localizeExportText(section.sectionTitle, lang), pageW / 2, y, { align: "center" });
       y += 13;
       if (section.sectionSubtitle) {
         doc.setFont(FONT, "normal");
         doc.setFontSize(9);
-        doc.text(tReportLabel(section.sectionSubtitle, lang), pageW / 2, y, { align: "center" });
+        doc.text(localizeExportText(section.sectionSubtitle, lang), pageW / 2, y, { align: "center" });
         y += 11;
       }
       const columnStyles: Record<number, { halign: "right" }> = {};
       (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
       autoTable(doc, {
         startY: y + 4,
-        head: tReportRows(section.head, lang),
-        body: tReportRows(section.body as (string | number)[][], lang),
-        foot: section.foot ? tReportRows(section.foot as (string | number)[][], lang) : undefined,
+        head: localizeExportRows(section.head, lang),
+        body: localizeExportRows(section.body as (string | number)[][], lang),
+        foot: section.foot ? localizeExportRows(section.foot as (string | number)[][], lang) : undefined,
         showFoot: "lastPage",
         theme: "grid",
         styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
@@ -246,6 +261,9 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
         columnStyles,
         margin: { top: y + 4 },
+        didParseCell: (data) => {
+          data.cell.styles.font = FONT;
+        },
         didDrawPage: (data) => {
           if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
             drawPageHeader();
