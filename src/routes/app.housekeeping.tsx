@@ -76,7 +76,7 @@ function HousekeepingPage() {
   const companyName = activeMembership?.companies?.name ?? "company";
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
   const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
-  const currentTab = search.tab ?? "opening";
+  const currentTab = search.tab ?? "verify_repair";
 
   const updateTab = (tab: string) => {
     navigate({
