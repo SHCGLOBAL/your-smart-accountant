@@ -37,11 +37,13 @@ import {
   Upload,
   HardDrive,
   CalendarCheck,
+  ShieldCheck,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
+import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 const TallyBusyImport = lazy(() =>
   import("@/components/housekeeping/TallyBusyImport").then((m) => ({
     default: m.TallyBusyImport,
@@ -74,7 +76,7 @@ function HousekeepingPage() {
   const companyName = activeMembership?.companies?.name ?? "company";
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
   const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
-  const currentTab = search.tab ?? "opening";
+  const currentTab = search.tab ?? "verify_repair";
 
   const updateTab = (tab: string) => {
     navigate({
@@ -110,7 +112,10 @@ function HousekeepingPage() {
       )}
 
       <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-10">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-11">
+          <TabsTrigger value="verify_repair">
+            <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verify &amp; Repair
+          </TabsTrigger>
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
           </TabsTrigger>
@@ -144,6 +149,10 @@ function HousekeepingPage() {
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="verify_repair">
+          <VerifyAndRepairTool companyId={activeCompanyId} isAdmin={isAdmin} />
+        </TabsContent>
 
         <TabsContent value="opening">
           {activeCompanyId ? (
