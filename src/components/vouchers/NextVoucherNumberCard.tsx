@@ -36,7 +36,7 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
             .from("voucher_number_seq")
             .select("next_number")
             .eq("company_id", companyId)
-            .eq("voucher_type", voucherType)
+            .eq("voucher_type", voucherType as never)
             .maybeSingle(),
           supabase
             .from("vouchers")
