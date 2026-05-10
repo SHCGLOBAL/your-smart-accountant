@@ -1,6 +1,7 @@
 import { useCompany } from "./company-context";
 import { getStoredLang } from "./i18n";
 import { fmtIndianDate } from "./format-date";
+import { tReportText } from "./report-i18n-rules";
 
 /**
  * Returns the company / proprietor name and a financial-year sub-line
@@ -16,16 +17,16 @@ export function useReportPdfHeader(): {
   dateRangeSubtitle: (from: string, to: string) => string;
 } {
   const { activeMembership } = useCompany();
+  const lang = getStoredLang();
   const companyName = activeMembership?.companies?.name ?? "";
   const fyStart = activeMembership?.companies?.financial_year_start ?? null;
   const gstin = activeMembership?.companies?.gstin ?? null;
-  const fyText = formatFyRange(fyStart);
+  const fyText = tReportText(formatFyRange(fyStart), lang);
   const sub = [fyText, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join("  ·  ");
   const fyEnd = fyEndFromStart(fyStart);
   const dateRangeSubtitle = (from: string, to: string) => {
     if (fyStart && fyEnd && from === fyStart && to === fyEnd) return "";
-    const sep = getStoredLang() === "gu" ? "થી" : "to";
-    return `${fmtIndianDate(from)} ${sep} ${fmtIndianDate(to)}`;
+    return tReportText(`For the period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, lang);
   };
   return { companyName, companySubLine: sub, fyStart, fyEnd, dateRangeSubtitle };
 }
@@ -45,5 +46,6 @@ function formatFyRange(start: string | null | undefined): string {
   const mo = m[2];
   const d = m[3];
   const endY = y + 1;
-  return `${d}-${mo}-${y} to 31-03-${endY}`;
+  const shortEnd = String(endY).slice(-2);
+  return `FY ${y}-${shortEnd} (${d}-${mo}-${y} to 31-03-${endY})`;
 }
