@@ -11,6 +11,7 @@ import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
+import { openLedgerReport } from "@/lib/voucher-return";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
