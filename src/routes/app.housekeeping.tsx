@@ -556,14 +556,16 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
     setRunning(true);
     try {
       // Fetch all vouchers + their entries
-      const { data: vchs } = await supabase
+      const { data: vchs, error: vErr } = await supabase
         .from("vouchers")
         .select("id, voucher_number, voucher_date, voucher_type")
         .eq("company_id", companyId);
-      const { data: entries } = await supabase
+      if (vErr) throw vErr;
+      const { data: entries, error: eErr } = await supabase
         .from("voucher_entries")
         .select("voucher_id, debit_paise, credit_paise, vouchers!inner(company_id)")
         .eq("vouchers.company_id", companyId);
+      if (eErr) throw eErr;
 
       const totals = new Map<string, { dr: number; cr: number }>();
       for (const e of (entries || []) as { voucher_id: string; debit_paise: number; credit_paise: number }[]) {
@@ -680,12 +682,18 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
     if (!companyId) return;
     setScanning(true);
     try {
-      const [{ data: ledgers }, { data: items }, { data: entries }, { data: vItems }] = await Promise.all([
+      const [ledgerRes, itemRes, entryRes, vItemRes] = await Promise.all([
         supabase.from("ledgers").select("id, name").eq("company_id", companyId).eq("is_active", true),
         supabase.from("items").select("id, name").eq("company_id", companyId).eq("is_active", true),
         supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
         supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
       ]);
+      const failed = [ledgerRes, itemRes, entryRes, vItemRes].find((r) => r.error);
+      if (failed?.error) throw failed.error;
+      const { data: ledgers } = ledgerRes;
+      const { data: items } = itemRes;
+      const { data: entries } = entryRes;
+      const { data: vItems } = vItemRes;
       const usedLedgerIds = new Set(((entries || []) as { ledger_id: string }[]).map((e) => e.ledger_id));
       const usedItemIds = new Set(((vItems || []) as { item_id: string }[]).map((v) => v.item_id));
       setUnusedLedgers(((ledgers || []) as { id: string; name: string }[]).filter((l) => !usedLedgerIds.has(l.id)));
