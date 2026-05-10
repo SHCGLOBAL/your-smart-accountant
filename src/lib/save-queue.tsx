@@ -38,6 +38,7 @@ async function flush() {
       } catch (e) {
         job.attempts += 1;
         job.lastError = describeError(e);
+        console.error("Background save failed", { label: job.label, error: e });
         markFailure();
         bump();
         toast.error(`Save failed: ${job.label}`, { description: job.lastError });
