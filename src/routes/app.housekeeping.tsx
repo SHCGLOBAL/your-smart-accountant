@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
+import { describeError } from "@/lib/error-message";
 
 export const Route = createFileRoute("/app/housekeeping")({
   head: () => ({ meta: [{ title: "Housekeeping — Accounting Tools" }] }),
@@ -289,8 +290,7 @@ function MergeLedgersTool({ companyId, disabled }: { companyId: string | null; d
         .order("name");
       setLedgers((data || []) as LedgerOpt[]);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Merge failed: ${e.message || "unknown error"}`);
+      toast.error(`Merge failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
       setConfirmOpen(false);
@@ -426,8 +426,7 @@ function RenumberVouchersTool({ companyId, disabled }: { companyId: string | nul
       toast.success(`Renumbered ${preview.length} ${type} vouchers`);
       setPreview([]);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Renumber failed: ${e.message || "unknown"}`);
+      toast.error(`Renumber failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
       setConfirmOpen(false);
@@ -592,8 +591,7 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
       setHasRun(true);
       toast.success("Verification complete");
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Verification failed: ${e.message || "unknown"}`);
+      toast.error(`Verification failed: ${describeError(err)}`);
     } finally {
       setRunning(false);
     }
