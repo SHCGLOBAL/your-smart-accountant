@@ -6,6 +6,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveExport } from "./desktop-save";
+import { getStoredLang } from "@/lib/i18n";
+import { prepareReportFont } from "@/lib/pdf-fonts";
+import { tReportLabel, tReportRows } from "@/lib/report-i18n";
 
 export interface PdfTableOptions {
   title: string;
