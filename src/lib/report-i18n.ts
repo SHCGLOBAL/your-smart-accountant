@@ -233,8 +233,8 @@ export const LABELS: Record<string, Partial<Record<LangCode, string>>> = {
 
   // ---- Toolbar / chrome (also exposed as i18n keys, mirrored here so the
   //      exporter can localize button labels embedded in headers) ----
-  "From": { gu: "થી" },
   "To Date": { gu: "સુધી" },
+  "From Date": { gu: "તારીખથી" },
   "Print": { gu: "પ્રિન્ટ" },
   "Export": { gu: "નિકાસ" },
   "CSV": { gu: "CSV" },
@@ -246,8 +246,6 @@ export const LABELS: Record<string, Partial<Record<LangCode, string>>> = {
   "Loading...": { gu: "લોડ થઈ રહ્યું છે…" },
 
   // ---- T-account header variants seen across reports ----
-  "Dr.  Particulars": { gu: "ઉધાર  વિગતો" },
-  "Particulars  Cr.": { gu: "વિગતો  જમા" },
   "Amount (Rs)": { gu: "રકમ (રૂ.)" },
 
   // ---- Empty-state copy ----
