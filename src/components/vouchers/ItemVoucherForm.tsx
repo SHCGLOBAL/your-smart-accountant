@@ -504,6 +504,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               </SelectContent>
             </Select>
           </div>
+          </div>
         </CardContent>
       </Card>
 
