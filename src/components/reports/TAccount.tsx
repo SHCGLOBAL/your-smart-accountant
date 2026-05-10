@@ -1,5 +1,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
+
+function loc(node: React.ReactNode, lang: string): React.ReactNode {
+  return typeof node === "string" ? tReportText(node, lang as never) : node;
+}
 
 /**
  * T-format account renderer.
@@ -80,6 +86,8 @@ export function TAccount({
   rightTotal,
   className,
 }: TAccountProps) {
+  const { lang } = useI18n();
+  const totalLabel = tReportText("Total", lang);
   const max = Math.max(leftRows.length, rightRows.length);
   // pad shorter side with empty rows so the separator lines up
   const lpad: (TRow | null)[] = [...leftRows];
@@ -96,21 +104,21 @@ export function TAccount({
     >
       {(title || subtitle) && (
         <div className="border-b-2 border-foreground px-4 py-2 text-center print:border-black print:py-1">
-          {title && <div className="text-base font-semibold">{title}</div>}
+          {title && <div className="text-base font-semibold">{loc(title, lang)}</div>}
           {subtitle && (
-            <div className="text-xs text-muted-foreground">{subtitle}</div>
+            <div className="text-xs text-muted-foreground">{loc(subtitle, lang)}</div>
           )}
         </div>
       )}
       {/* Column headers */}
       <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-xs font-semibold uppercase tracking-wide print:border-black">
         <div className="flex items-center justify-between gap-3 border-r-2 border-foreground px-3 py-1.5 print:border-black">
-          <span>{leftHeader}</span>
-          <span>{amountHeader}</span>
+          <span>{loc(leftHeader, lang)}</span>
+          <span>{loc(amountHeader, lang)}</span>
         </div>
         <div className="flex items-center justify-between gap-3 px-3 py-1.5">
-          <span>{rightHeader}</span>
-          <span>{amountHeader}</span>
+          <span>{loc(rightHeader, lang)}</span>
+          <span>{loc(amountHeader, lang)}</span>
         </div>
       </div>
       {/* Body */}
@@ -149,11 +157,11 @@ export function TAccount({
       {/* Totals strip */}
       <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-sm font-semibold print:border-black">
         <div className="flex items-center justify-between gap-3 border-r-2 border-foreground px-3 py-2 print:border-black">
-          <span>Total</span>
+          <span>{totalLabel}</span>
           <span className="font-mono tabular-nums">{leftTotal}</span>
         </div>
         <div className="flex items-center justify-between gap-3 px-3 py-2">
-          <span>Total</span>
+          <span>{totalLabel}</span>
           <span className="font-mono tabular-nums">{rightTotal}</span>
         </div>
       </div>

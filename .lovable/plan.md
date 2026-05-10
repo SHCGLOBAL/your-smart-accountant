@@ -1,51 +1,81 @@
-## Goal
-When the app language is switched to ગુજરાતી, every printed/exported book of account and financial report should render its labels and headings in Gujarati. Ledger names, item names, party names, amounts and dates remain as entered (per your choice).
+## Why "not even halfway"
 
-## Scope of reports
-Day Book, Ledger, Group Ledger, Cash/Bank Book, Sales Register, Purchase Register, Trial Balance, Profit & Loss, Balance Sheet, Trading, Outstanding/Receivables/Payables, Ageing, Stock Summary, GST Books (GSTR1/2B/3B, GST Sales/Purchase Book).
+The current Gujarati pipeline only translates an English→Gujarati string table inside the **PDF/Excel exporter**. Everywhere else still ships English. Concrete gaps after auditing the codebase:
+
+1. **On-screen report UI is fully English** — `ReportToolbar` (From, To, CSV, Excel, PDF, Print), `ReportViewer` print header (`As on`, `For the period`, `GSTIN:`, `FY 2025-26 (… to …)`), `EmptyState` titles, "Loading…", PrintModeDialog, Word preview window strings — none of these go through any translation.
+2. **In-page report text is hard-coded** — every report route (Day Book, Ledger, Trial Balance, P&L, BS, Cash/Bank, Trading, Outstanding, Receivables/Payables, Ageing, Stock Summary, GSTR-1/2B/3B, GST books, BRS) builds titles, subtitles (`for the period 2025-04-01 to 2026-03-31`), section labels, T-account headers (`Dr. Out / Purchases / Payments`), narration prefixes, and column heads inline as English literals that never enter the report-i18n table.
+3. **Export-only translation is leaky** — `tReportLabel` matches whole strings, so anything with interpolation (`Sales — ACME Traders`, `Subtotal — Indirect Expenses (₹12,345)`, `Page 1 of 5`, `Ageing 0–30 days`) falls through unchanged. Voucher-type values from the DB (`sales`, `purchase`, …) are mapped to English `TYPE_LABEL` before the exporter sees them.
+4. **Dictionary itself is partial** — ~200 entries covers ~40 % of the labels actually printed. Missing: Stock Summary columns (Inwards/Outwards/Balance Qty, Closing Value), GSTR-1 sections (B2B, B2CS, CDNR, HSN Summary, Documents Issued), GSTR-3B boxes (3.1, 4(A)(5), 5, 6.1), BRS (Reconciled, Unreconciled, Statement Balance, Book Balance), Ageing buckets (Not due, 0–30, 31–60…), Outstanding (Bill ref, Pending, Overdue), receivables/payables totals, every "Note" / "Remarks" / "Place of Supply" / "Reverse Charge" / "Round Off" / "Net Receivable" / "Net Payable" / "TDS" / "TCS" / "Adjustment" / "Suspense" string.
+5. **Numerals + amount-in-words** — confirmed out of scope (per your earlier choice). Plan keeps that decision.
+
+## Goal
+
+Every books-of-account & financial-report **screen, print preview, PDF, Excel, CSV and Word export** renders labels, headings, toolbars, section titles, footers and dynamic phrases in proper Gujarati when app language = ગુજરાતી. Switching language back to English instantly reverts.
 
 ## Approach
 
-### 1. Embed a Unicode Gujarati font in jsPDF
-jsPDF's built-in Helvetica cannot render Gujarati glyphs (would print as boxes). We will:
-- Add `NotoSansGujarati-Regular.ttf` and `-Bold.ttf` as static assets.
-- Create `src/lib/pdf-fonts.ts` that lazily fetches the TTFs, base64-encodes them, and registers them on the jsPDF instance via `doc.addFileToVFS` + `doc.addFont` under family `NotoGujarati`.
-- Expose `await ensureGujaratiFont(doc)` and `applyReportFont(doc, lang)` helpers that switch the active font to NotoGujarati when `lang === "gu"` and back to helvetica otherwise.
+### Phase 1 — Single source-of-truth dictionary
+- Promote `src/lib/report-i18n.ts` from "label table" to a **report glossary** with three layers:
+  1. **Exact matches** (what exists today, expanded to ~600 entries: see Coverage list below).
+  2. **Token rules** — small, ordered list of regex → template that handle common interpolation patterns (`^Sales — (.*)$` → `વેચાણ — $1`, `^Subtotal — (.+) \((.+)\)$` → `પેટા કુલ — ${tReportLabel($1)} (${$2})`, `^Page (\d+) of (\d+)$` → `પાનું $1 / $2`, `^Ageing (\d+)[-–](\d+) days$` → `${1}–${2} દિવસ`, `^For the period:?\s+(.+) to (.+)$`, `^FY (\d+)-(\d+)`, `^GSTIN:\s+(.+)$`).
+  3. **Word-level fallback** — a closed set of keywords (`days`, `years`, `pcs`, `kg`, `Net`, `Gross`, `Less:`, `Add:`, `Round Off`) substituted only when the surrounding string already matched a rule (never on free text like ledger names).
+- Add `tReportText(text, lang)` (used for free-form on-screen labels) and keep `tReportLabel` (strict, for PDF/Excel cells) as a thinner wrapper.
+- Add a vetted `gu` translation review pass: each entry reviewed against Tally Gujarati glossary + your earlier feedback ("poor vocabulary"). Replace stilted translations:
+  - "Stock Summary" → સ્ટોકનો સારાંશ (current: "સ્ટોક સારાંશ" — keep but verify)
+  - "Outstanding" → બાકી લેણદેણ → **ચઢેલી રકમ** (more idiomatic for Gujarati merchants)
+  - "Bank Reconciliation" → બેંક મેળવણી → **બેંક સામેલેણ**
+  - "Net Profit" → ચોખ્ખો નફો ✓
+  - "By/To" prefixes → keep as `જમા:` / `ઉધાર:` (currently silently stripped — wrong for ledger printouts where merchants expect them).
+  - …(full diff lives in the dictionary commit; preview shown below)
 
-### 2. Centralize report-print labels
-- Extend `src/lib/i18n.tsx` with a `report.*` key namespace covering every printed label: report titles ("Day Book", "Ledger", "Trial Balance", "Profit & Loss", "Balance Sheet", "Sales Register", …), column headers ("Date", "Particulars", "Vch No.", "Vch Type", "Debit", "Credit", "Balance", "Qty", "Rate", "Amount", "GSTIN", "CGST", "SGST", "IGST", …), section/footer labels ("Opening Balance", "Closing Balance", "Total", "Grand Total", "By", "To", "As at", "For the period", "Page x of y").
-- Provide full `en` and `gu` translations; other languages fall back to English (existing behavior).
+### Phase 2 — Translate the on-screen report shell
+- `ReportToolbar`: replace literals (`From`, `To`, `CSV`, `Excel`, `PDF`, `Print`) with `t("toolbar.*")` keys added to `i18n.tsx`.
+- `ReportViewer`: pipe `title`, `accountHeading`, `subtitle`, `periodText`, `addressLine`, `fyText` through `tReportText`. `As on / For the period / GSTIN / FY` use rule-based templates so dates inside stay DD-MM-YYYY.
+- `PrintModeDialog`, `EmptyState`, "Loading…", Word `<title>` and the Print Preview popup's `<button>Print/Close</button>` and "Nothing to preview yet" message all go through `t("…")`.
+- `TAccount` header props (`leftHeader`, `rightHeader`, `leftTotal` label) are localized at the component boundary so every report inherits the fix.
 
-### 3. Wire labels + font into the export pipeline
-- Update `src/lib/exporters.ts` (PDF + Excel/CSV builders) to accept a `lang` param. Before drawing, call `await ensureGujaratiFont(doc)` and `applyReportFont(doc, lang)`; pass the localized header/footer strings through.
-- Update `src/lib/report-pdf-header.ts` to localize "As on", company address labels, "Printed on", "Page".
-- Each report route (`app.reports.*`) currently builds its rows + headers inline. Replace the hard-coded English strings used for the print/export with `t("report.<key>")` from `useI18n()`. The on-screen UI already uses i18n; this change just routes the same translated strings into the exporter.
+### Phase 3 — Translate inline report content
+- For each `app.reports.*.tsx`, run the strings that compose **rendered text** (titles, subtitles, T-account headers, badges, group names, narration prefixes like `Sales — `, voucher-type labels) through `tReportText`. The only literals left untranslated are user data (party names, ledger names, item names, narrations, numerals).
+- Centralize voucher-type labels: replace per-route `TYPE_LABEL` maps with one helper `voucherTypeLabel(type, lang)`.
+- Centralize group-account labels (Capital Account, Sundry Debtors, …) inside `account-groups-runtime.tsx` so Trial Balance, Group Ledger, P&L and Balance Sheet share the same translated headings.
 
-### 4. On-screen "Print preview" panes
-Some reports (TrialBalance, ProfitLoss, BalanceSheet, Ledger printable view) render an HTML print layout. Add `lang={lang}` and a CSS class `.print-gu { font-family: "Noto Sans Gujarati", "Shrutib", system-ui, sans-serif; }` in `src/styles.css`, applied when `lang === "gu"`, so browser-print also looks correct.
+### Phase 4 — Quality + verification
+- Add `src/lib/__tests__/report-i18n.test.ts` covering:
+  - Every entry in `LABELS` round-trips through `tReportLabel`.
+  - Token rules: `Sales — ACME` → `વેચાણ — ACME`; ledger names untouched; dates stay DD-MM-YYYY.
+  - English passthrough is a no-op when `lang === "en"`.
+  - Free text containing only a ledger name is not mangled.
+- Manual QA matrix (documented in `docs/i18n-qa.md`): toggle ગુજરાતી, open each of the 17 reports, capture screen + PDF, confirm headings/footers/columns are Gujarati, data unchanged.
+- Run `npm run build` + the new tests; only ship after both pass.
 
-### 5. Trigger
-Pure "follow app language": `useI18n().lang` is read inside each report's export/print handler — no extra UI control. Switching the language switcher in the top bar instantly changes future printouts.
+## Coverage targets (added to dictionary in this pass)
 
-## Technical details
+Day Book, Ledger, Group Ledger, Cash Book, Bank Book, Cash & Bank, Sales Register, Purchase Register, Trial Balance, Trading, Profit & Loss, Balance Sheet, Outstanding, Bill-by-Bill, Receivables, Payables, Ageing (all buckets), Stock Summary (Opening/Inwards/Outwards/Closing × Qty/Value), GSTR-1 (B2B, B2CS, B2CL, CDNR, CDNUR, EXP, NIL/Exempt/Non-GST, HSN, Docs Issued), GSTR-2B (ITC available, ITC reversed, Ineligible), GSTR-3B (3.1, 3.2, 4, 5, 6.1, 6.2 with each row label), GST Sales/Purchase Book, BRS (Statement / Book / Reconciled / Unreconciled / Difference), all toolbar verbs, all empty-state copy, all print-preview chrome.
 
-Files to add
-- `src/assets/fonts/NotoSansGujarati-Regular.ttf`, `…-Bold.ttf` (downloaded from Google Fonts, ~250 KB each, lazy-loaded so the main bundle is unaffected).
-- `src/lib/pdf-fonts.ts` — font loader/cache + `applyReportFont`.
+Approx new entries: **~400** added to `LABELS`, **~25** rule-based templates, **~30** new `t("toolbar.*")` keys in `i18n.tsx` for `en` + `gu` (other languages fall back to English as today).
 
-Files to edit
-- `src/lib/i18n.tsx` — add `report.*` keys for `en` and `gu`.
-- `src/lib/exporters.ts` — accept `{ lang }`, await font, apply font, use localized headers passed in.
-- `src/lib/report-pdf-header.ts` — localized header/footer.
-- `src/lib/invoice-pdf.ts` — same font hook so voucher prints render Gujarati labels too (labels only; numbers/names unchanged).
-- All `src/routes/app.reports.*.tsx` files (Day Book, Ledger, Group Ledger, Cash/Bank, Sales/Purchase Register, Trial Balance, P&L, Balance Sheet, Trading, Outstanding, Receivables, Payables, Ageing, Stock Summary, GST books) — pass `lang` and localized headers into the exporter calls.
-- `src/styles.css` — `.print-gu` font stack + `@font-face` for screen print.
+## Files to add
+- `src/lib/report-i18n-rules.ts` — ordered template rules + `tReportText`.
+- `src/lib/voucher-type-label.ts` — single voucher-type translator.
+- `src/lib/__tests__/report-i18n.test.ts` — dictionary + rules tests.
+- `docs/i18n-qa.md` — QA matrix.
 
-Out of scope (per your answer)
-- Translating ledger/item/party names, transliterating numerals, or amount-in-words in Gujarati.
+## Files to edit
+- `src/lib/report-i18n.ts` — expand `LABELS` (~+400), revise stilted translations, expose `tReportText`.
+- `src/lib/i18n.tsx` — add `toolbar.*`, `report.viewer.*`, `report.empty.*` keys for `en` + `gu`.
+- `src/components/reports/ReportViewer.tsx`, `ReportToolbar.tsx`, `PrintModeDialog.tsx`, `TAccount.tsx`, `GstBook.tsx`, `PeriodLockCard.tsx`, `ValidationPanel.tsx` — wire through `useI18n()` / `tReportText`.
+- `src/components/EmptyState.tsx` — accept already-translated strings; no behaviour change.
+- All `src/routes/app.reports.*.tsx` (17 files) — translate inline literals via `tReportText`; replace per-route `TYPE_LABEL` with helper.
+- `src/lib/account-groups-runtime.tsx` — translate group display names at read.
+- `src/lib/exporters.ts` — call `tReportText` (not just `tReportLabel`) so subtitle interpolations pass through rule layer.
+
+## Out of scope
+- Translating ledger / item / party names or narrations (user data).
+- Transliterating numerals or amount-in-words.
+- Other Indian languages (hi/mr/bn/ta/te/ml/kn) — they continue to fall back to English exactly as today; no regression and no new strings required.
 
 ## Validation
-- Switch language to ગુજરાતી → open Day Book → Print PDF → headings ("તારીખ", "વિગત", "ઉધાર", "જમા", "બાકી") render correctly with no tofu boxes.
-- Repeat for Trial Balance, P&L, Balance Sheet, Ledger, Sales Register.
-- Switch back to English → prints revert to Helvetica/English headings.
-- Verify CSV/Excel exports also carry Gujarati column headers (UTF-8).
+1. `bunx vitest run src/lib/__tests__/report-i18n.test.ts` — green.
+2. `bun run build` — green.
+3. Manual: switch language to ગુજરાતી → open each of the 17 reports → confirm screen, PDF, Excel and print preview all show Gujarati labels with hyphenated dates, numbers untouched, no English leaks. Switch back to English → identical to today.
+4. Spot-check three multi-page PDFs (Day Book, Ledger, Trial Balance) — every page header/footer + cell renders in Noto Sans Gujarati without tofu.

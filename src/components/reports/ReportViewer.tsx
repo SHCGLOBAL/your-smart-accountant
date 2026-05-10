@@ -4,6 +4,8 @@ import { useCompany } from "@/lib/company-context";
 import { PrintModeDialog, type PrintMode } from "./PrintModeDialog";
 import { exportElementAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -94,22 +96,27 @@ export function ReportViewer({
   children,
 }: ReportViewerProps) {
   const { activeMembership } = useCompany();
+  const { lang } = useI18n();
+  const tt = React.useCallback((s: string) => tReportText(s, lang), [lang]);
   const company = companyName ?? activeMembership?.companies?.name ?? "";
   const city = companyCity ?? null;
   const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
   const fyStart = activeMembership?.companies?.financial_year_start ?? null;
-  const fyText = React.useMemo(() => formatFyRange(fyStart), [fyStart]);
+  const fyText = React.useMemo(() => tt(formatFyRange(fyStart)), [fyStart, tt]);
   const periodText = asOf
-    ? `As on ${fmtIndianDate(asOf)}`
+    ? tt(`As on ${fmtIndianDate(asOf)}`)
     : fromDate && toDate
-      ? `For the period: ${fmtIndianDate(fromDate)} to ${fmtIndianDate(toDate)}`
+      ? tt(`For the period: ${fmtIndianDate(fromDate)} to ${fmtIndianDate(toDate)}`)
       : "";
   const addressLine = [city, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join(" · ");
+
+  const localizedTitle = tt(title);
+  const localizedHeading = accountHeading ? tt(accountHeading) : "";
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = React.useState(false);
 
-  const subtitleText = typeof subtitle === "string" ? subtitle : "";
+  const subtitleText = typeof subtitle === "string" ? tt(subtitle) : "";
 
   const doWord = React.useCallback(() => {
     if (onExportWord) {
@@ -120,7 +127,7 @@ export function ReportViewer({
     const headerHtml = `
       <div class="report-print-header">
         <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt">${escape(company)}</div>
-        <div style="font-size:11pt;font-weight:600">${escape(accountHeading || title)}</div>
+        <div style="font-size:11pt;font-weight:600">${escape(localizedHeading || localizedTitle)}</div>
         ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
         ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
         ${addressLine ? `<div style="font-size:8.5pt;color:#444">${escape(addressLine)}</div>` : ""}
@@ -129,12 +136,12 @@ export function ReportViewer({
     const stem = (exportFileBase || title).replace(/[^A-Za-z0-9._-]+/g, "-");
     exportElementAsWord({
       element: rootRef.current,
-      title,
+      title: localizedTitle,
       fileName: `${stem}.doc`,
       headerHtml,
       orientation,
     });
-  }, [onExportWord, company, title, accountHeading, subtitleText, periodText, addressLine, exportFileBase, orientation]);
+  }, [onExportWord, company, localizedTitle, localizedHeading, subtitleText, periodText, addressLine, exportFileBase, orientation, title]);
 
   const handlePick = React.useCallback(
     (mode: PrintMode) => {
@@ -144,10 +151,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
-        else if (mode === "preview") openPrintPreview(rootRef.current, company, accountHeading || title, orientation);
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
       }, 50);
     },
-    [onExportPdf, doWord, company, accountHeading, title, orientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
@@ -198,9 +205,9 @@ export function ReportViewer({
             <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
           )}
           <div className="report-print-title text-sm font-semibold mt-0.5">
-            {accountHeading || title}
+            {localizedHeading || localizedTitle}
           </div>
-          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+          {subtitle && <div className="text-xs text-muted-foreground">{typeof subtitle === "string" ? subtitleText : subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
           {fyText && <div className="text-[10px] text-muted-foreground">{fyText}</div>}
           {addressLine && (

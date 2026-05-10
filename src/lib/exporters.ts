@@ -9,11 +9,11 @@ import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
-import { formatDatesInText } from "@/lib/format-date";
+import { tReportText } from "@/lib/report-i18n-rules";
 
 function localizeExportText(text: string, lang = getStoredLang()): string {
-  const dated = formatDatesInText(text);
-  return lang === "en" ? dated : tReportLabel(dated, lang);
+  if (!text) return text;
+  return tReportText(text, lang);
 }
 
 function localizeExportRows<T>(rows: T[][], lang = getStoredLang()): T[][] {
