@@ -8,6 +8,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 
