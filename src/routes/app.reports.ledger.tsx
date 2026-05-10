@@ -361,7 +361,7 @@ function LedgerStatement() {
           ];
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
-        subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+        subtitle: pdfHeader.dateRangeSubtitle(from, to),
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
         head: [head],
