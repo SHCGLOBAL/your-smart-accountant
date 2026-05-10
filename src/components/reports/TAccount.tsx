@@ -1,5 +1,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
+
+function loc(node: React.ReactNode, lang: string): React.ReactNode {
+  return typeof node === "string" ? tReportText(node, lang as never) : node;
+}
 
 /**
  * T-format account renderer.
@@ -80,6 +86,8 @@ export function TAccount({
   rightTotal,
   className,
 }: TAccountProps) {
+  const { lang } = useI18n();
+  const totalLabel = tReportText("Total", lang);
   const max = Math.max(leftRows.length, rightRows.length);
   // pad shorter side with empty rows so the separator lines up
   const lpad: (TRow | null)[] = [...leftRows];

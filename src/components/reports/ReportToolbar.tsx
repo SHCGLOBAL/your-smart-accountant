@@ -4,6 +4,8 @@ import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
 import { FyDatePicker, useFyRange } from "@/components/ui/fy-date-picker";
 import { format } from "date-fns";
 import * as React from "react";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
 
 interface Props {
   from: string;
@@ -30,16 +32,18 @@ export function ReportToolbar({
   extra,
   hideDates,
 }: Props) {
+  const { lang } = useI18n();
+  const tt = (s: string) => tReportText(s, lang);
   return (
     <div className="flex flex-wrap items-end gap-3 print:hidden">
       {!hideDates && (
         <>
           <div className="space-y-1">
-            <Label className="text-xs">From</Label>
+            <Label className="text-xs">{tt("From Date")}</Label>
             <FyDatePicker value={from} onChange={onFrom} className="w-[170px]" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">To</Label>
+            <Label className="text-xs">{tt("To Date")}</Label>
             <FyDatePicker value={to} onChange={onTo} className="w-[170px]" />
           </div>
         </>
@@ -48,22 +52,22 @@ export function ReportToolbar({
       <div className="ml-auto flex gap-2">
         {onExportCsv && (
           <Button variant="outline" size="sm" onClick={onExportCsv}>
-            <Download className="mr-1 h-4 w-4" /> CSV
+            <Download className="mr-1 h-4 w-4" /> {tt("CSV")}
           </Button>
         )}
         {onExportXlsx && (
           <Button variant="outline" size="sm" onClick={onExportXlsx}>
-            <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel
+            <FileSpreadsheet className="mr-1 h-4 w-4" /> {tt("Excel")}
           </Button>
         )}
         {onExportPdf && (
           <Button variant="outline" size="sm" onClick={onExportPdf}>
-            <FileText className="mr-1 h-4 w-4" /> PDF
+            <FileText className="mr-1 h-4 w-4" /> {tt("PDF")}
           </Button>
         )}
         {onPrint && (
           <Button variant="outline" size="sm" onClick={onPrint}>
-            <Printer className="mr-1 h-4 w-4" /> Print
+            <Printer className="mr-1 h-4 w-4" /> {tt("Print")}
           </Button>
         )}
       </div>

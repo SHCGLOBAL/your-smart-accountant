@@ -1,6 +1,8 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Eye, FileText, FileType2, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
 
 export type PrintMode = "preview" | "system" | "pdf" | "word";
 
@@ -15,45 +17,46 @@ interface Props {
 
 /**
  * Print mode picker — triggered by Ctrl+P inside a ReportViewer.
- * Three buttons: System Printer (browser print), PDF, Word.
  */
 export function PrintModeDialog({ open, onOpenChange, onPick, hasPdf = true, hasWord = true }: Props) {
+  const { lang } = useI18n();
+  const tt = (s: string) => tReportText(s, lang);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Print this report</DialogTitle>
+          <DialogTitle>{tt("Print this report")}</DialogTitle>
           <DialogDescription>
-            Choose where to send the report. Press <kbd className="rounded border bg-muted px-1 text-xs">Esc</kbd> to cancel.
+            {tt("Choose where to send the report.")} <kbd className="rounded border bg-muted px-1 text-xs">Esc</kbd>
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 pt-2">
           <ModeButton
             icon={<Eye className="h-5 w-5" />}
-            label="Print Preview"
-            hint="Opens a preview window with the report formatted for print."
+            label={tt("Print Preview")}
+            hint={tt("Opens a preview window with the report formatted for print.")}
             shortcut="V"
             onClick={() => onPick("preview")}
           />
           <ModeButton
             icon={<Printer className="h-5 w-5" />}
-            label="System Printer"
-            hint="Opens the browser print dialog (your Windows default printer)."
+            label={tt("System Printer")}
+            hint={tt("Opens the browser print dialog (your Windows default printer).")}
             shortcut="P"
             onClick={() => onPick("system")}
           />
           <ModeButton
             icon={<FileText className="h-5 w-5" />}
-            label="Save as PDF"
-            hint="Generates a print-ready PDF in your Reports folder."
+            label={tt("Save as PDF")}
+            hint={tt("Generates a print-ready PDF in your Reports folder.")}
             shortcut="D"
             disabled={!hasPdf}
             onClick={() => onPick("pdf")}
           />
           <ModeButton
             icon={<FileType2 className="h-5 w-5" />}
-            label="Save as Word (.doc)"
-            hint="Editable Word document with the same table layout."
+            label={tt("Save as Word (.doc)")}
+            hint={tt("Editable Word document with the same table layout.")}
             shortcut="W"
             disabled={!hasWord}
             onClick={() => onPick("word")}
