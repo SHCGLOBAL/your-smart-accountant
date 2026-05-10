@@ -391,6 +391,199 @@ function LedgerStatement() {
     }
   };
 
+  // ---------- All-Ledgers (batch) builder ----------
+  type AllRow = { date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
+  type AllSection = { ledger: LedgerOpt; opening: number; rows: AllRow[]; dr: number; cr: number; closing: number };
+  const [allMode, setAllMode] = useState(false);
+  const [allSections, setAllSections] = useState<AllSection[] | null>(null);
+  const [allLoading, setAllLoading] = useState(false);
+
+  const buildAllLedgersData = async (): Promise<AllSection[]> => {
+    if (!activeCompanyId || ledgers.length === 0) return [];
+    const { data: ent } = await supabase
+      .from("voucher_entries")
+      .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+      .eq("vouchers.company_id", activeCompanyId)
+      .gte("vouchers.voucher_date", from)
+      .lte("vouchers.voucher_date", to);
+    const allEntries = ((ent || []) as unknown) as (EntryRow & { ledger_id: string })[];
+
+    const { data: prior } = await supabase
+      .from("voucher_entries")
+      .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+      .eq("vouchers.company_id", activeCompanyId)
+      .lt("vouchers.voucher_date", from);
+    const movement = new Map<string, number>();
+    for (const p of (prior || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+      movement.set(p.ledger_id, (movement.get(p.ledger_id) ?? 0) + p.debit_paise - p.credit_paise);
+    }
+
+    const voucherIds = Array.from(new Set(allEntries.map((e) => e.vouchers?.id).filter(Boolean) as string[]));
+    const sibsByVoucher = new Map<string, { ledger_id: string }[]>();
+    const nameById = new Map<string, string>();
+    if (voucherIds.length > 0) {
+      const { data: sibs } = await supabase
+        .from("voucher_entries").select("voucher_id, ledger_id").in("voucher_id", voucherIds);
+      const ledgerIds = new Set<string>();
+      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string }[]) {
+        const arr = sibsByVoucher.get(s.voucher_id) ?? [];
+        arr.push({ ledger_id: s.ledger_id });
+        sibsByVoucher.set(s.voucher_id, arr);
+        ledgerIds.add(s.ledger_id);
+      }
+      const { data: names } = await supabase
+        .from("ledgers").select("id, name").in("id", Array.from(ledgerIds));
+      for (const n of (names || []) as { id: string; name: string }[]) nameById.set(n.id, n.name);
+    }
+
+    const byLedger = new Map<string, (EntryRow & { ledger_id: string })[]>();
+    for (const e of allEntries) {
+      const arr = byLedger.get(e.ledger_id) ?? [];
+      arr.push(e);
+      byLedger.set(e.ledger_id, arr);
+    }
+
+    const sections: AllSection[] = [];
+    for (const l of ledgers) {
+      const obSigned = (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
+      const opening = obSigned + (movement.get(l.id) ?? 0);
+      const list = sortEntriesByVoucherAsc(byLedger.get(l.id) ?? []);
+      if (list.length === 0 && opening === 0) continue;
+      let bal = opening, dr = 0, cr = 0;
+      const rows: AllRow[] = [];
+      for (const e of list) {
+        const v = e.vouchers; if (!v) continue;
+        const sibs = sibsByVoucher.get(v.id) ?? [];
+        const partyNames = sibs.map((s) => nameById.get(s.ledger_id)).filter((n): n is string => !!n && n !== l.name);
+        bal += e.debit_paise - e.credit_paise;
+        dr += e.debit_paise; cr += e.credit_paise;
+        rows.push({
+          date: v.voucher_date,
+          particulars: partyNames.length ? partyNames.join(", ") : "—",
+          vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
+          vchNo: v.voucher_number,
+          narration: narrationOf(e, v),
+          debit: e.debit_paise, credit: e.credit_paise, balance: bal,
+        });
+      }
+      sections.push({ ledger: l, opening, rows, dr, cr, closing: opening + dr - cr });
+    }
+    return sections;
+  };
+
+  const ensureAllSections = async (): Promise<AllSection[]> => {
+    if (allSections) return allSections;
+    setAllLoading(true);
+    try {
+      const s = await buildAllLedgersData();
+      setAllSections(s);
+      return s;
+    } finally {
+      setAllLoading(false);
+    }
+  };
+
+  useEffect(() => { setAllSections(null); }, [from, to, activeCompanyId]);
+
+  const onViewAll = async () => { await ensureAllSections(); setAllMode(true); };
+
+  const onExportAllPdf = async () => {
+    const data = await ensureAllSections();
+    if (data.length === 0) { toast.info("No ledgers with activity in this period."); return; }
+    const sections: PdfSection[] = data.map((s) => {
+      const showNarr = s.rows.some((row) => (row.narration || "").trim().length > 0);
+      const head = showNarr
+        ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
+        : ["Date", "Particulars", "Vch Type", "Vch No", "Debit", "Credit", "Balance"];
+      const openingRow = showNarr
+        ? ["", "Opening Balance", "", "", "", "", "", fmtBal(s.opening)]
+        : ["", "Opening Balance", "", "", "", "", fmtBal(s.opening)];
+      const bodyRows = s.rows.map((row) => {
+        const base = [fmtIndianDate(row.date), row.particulars, row.vchType, row.vchNo];
+        const tail = [
+          row.debit ? r(row.debit).toFixed(2) : "",
+          row.credit ? r(row.credit).toFixed(2) : "",
+          fmtBal(row.balance),
+        ];
+        return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
+      });
+      const foot = showNarr
+        ? [
+            ["Total", "", "", "", "", r(s.dr).toFixed(2), r(s.cr).toFixed(2), ""],
+            ["Closing Balance", "", "", "", "", "", "", fmtBal(s.closing)],
+          ]
+        : [
+            ["Total", "", "", "", r(s.dr).toFixed(2), r(s.cr).toFixed(2), ""],
+            ["Closing Balance", "", "", "", "", "", fmtBal(s.closing)],
+          ];
+      return {
+        sectionTitle: `Ledger A/c — ${s.ledger.name}`,
+        head: [head], body: [openingRow, ...bodyRows], foot,
+        rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
+      };
+    });
+    downloadPdfMultiTable({
+      title: "All Ledgers",
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      fileName: `all-ledgers-${from}_to_${to}.pdf`,
+      orientation: "l",
+      sections,
+    });
+  };
+
+  const onExportAllWord = async () => {
+    const data = await ensureAllSections();
+    if (data.length === 0) { toast.info("No ledgers with activity in this period."); return; }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const fmtMoney = (p: number) => p ? r(p).toFixed(2) : "";
+    const periodLine = `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`;
+    const headerHtml = `
+      <div class="report-print-header">
+        ${pdfHeader.companyName ? `<div style="font-weight:bold;font-size:13pt">${esc(pdfHeader.companyName.toUpperCase())}</div>` : ""}
+        ${pdfHeader.companySubLine ? `<div style="font-size:9pt">${esc(pdfHeader.companySubLine)}</div>` : ""}
+        <div style="font-weight:bold;font-size:12pt;margin-top:4pt">All Ledgers</div>
+        <div style="font-size:10pt">${esc(periodLine)}</div>
+      </div>`;
+    const sectionsHtml = data.map((s, idx) => {
+      const showNarr = s.rows.some((row) => (row.narration || "").trim().length > 0);
+      const head = `<thead><tr>
+          <th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th>
+          ${showNarr ? "<th>Narration</th>" : ""}
+          <th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th>
+        </tr></thead>`;
+      const opening = `<tr class="row-bold"><td colspan="${showNarr ? 7 : 6}">Opening Balance</td><td class="num">${esc(fmtBal(s.opening))}</td></tr>`;
+      const body = s.rows.map((row) => `<tr>
+          <td>${esc(fmtIndianDate(row.date))}</td>
+          <td>${esc(row.particulars)}</td>
+          <td>${esc(row.vchType)}</td>
+          <td>${esc(row.vchNo)}</td>
+          ${showNarr ? `<td>${esc(row.narration)}</td>` : ""}
+          <td class="num">${fmtMoney(row.debit)}</td>
+          <td class="num">${fmtMoney(row.credit)}</td>
+          <td class="num">${esc(fmtBal(row.balance))}</td>
+        </tr>`).join("");
+      const foot = `
+        <tr class="row-bold"><td colspan="${showNarr ? 5 : 4}">Total</td>
+          <td class="num">${r(s.dr).toFixed(2)}</td>
+          <td class="num">${r(s.cr).toFixed(2)}</td><td></td></tr>
+        <tr class="row-bold"><td colspan="${showNarr ? 7 : 6}">Closing Balance</td>
+          <td class="num">${esc(fmtBal(s.closing))}</td></tr>`;
+      return `<div class="${idx > 0 ? "page-break" : ""}">
+          <h2 class="ledger-heading">Ledger A/c — ${esc(s.ledger.name)}</h2>
+          <table>${head}<tbody>${opening}${body}</tbody><tfoot>${foot}</tfoot></table>
+        </div>`;
+    }).join("");
+    exportHtmlAsWord({
+      bodyHtml: sectionsHtml,
+      title: "All Ledgers",
+      fileName: `all-ledgers-${from}_to_${to}.doc`,
+      headerHtml,
+      orientation: "landscape",
+    });
+  };
+
   const toolbar = (
     <Card>
       <CardContent className="p-3">
