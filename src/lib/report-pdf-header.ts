@@ -1,4 +1,5 @@
 import { useCompany } from "./company-context";
+import { getStoredLang } from "./i18n";
 
 /**
  * Returns the company / proprietor name and a financial-year sub-line
@@ -22,7 +23,8 @@ export function useReportPdfHeader(): {
   const fyEnd = fyEndFromStart(fyStart);
   const dateRangeSubtitle = (from: string, to: string) => {
     if (fyStart && fyEnd && from === fyStart && to === fyEnd) return "";
-    return `${fmtDmy(from)} to ${fmtDmy(to)}`;
+    const sep = getStoredLang() === "gu" ? "થી" : "to";
+    return `${fmtDmy(from)} ${sep} ${fmtDmy(to)}`;
   };
   return { companyName, companySubLine: sub, fyStart, fyEnd, dateRangeSubtitle };
 }

@@ -6,6 +6,9 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveExport } from "./desktop-save";
+import { getStoredLang } from "@/lib/i18n";
+import { prepareReportFont } from "@/lib/pdf-fonts";
+import { tReportLabel, tReportRows } from "@/lib/report-i18n";
 
 export interface PdfTableOptions {
   title: string;
@@ -25,94 +28,106 @@ export interface PdfTableOptions {
 }
 
 export function downloadPdfTable(opts: PdfTableOptions): void {
-  const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
+  void (async () => {
+    const lang = getStoredLang();
+    const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
+    const FONT = await prepareReportFont(doc, lang);
+    const pageW = doc.internal.pageSize.getWidth();
 
-  let y = 28;
-  if (opts.companyName) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+    const title = tReportLabel(opts.title, lang);
+    const subtitle = opts.subtitle ? tReportLabel(opts.subtitle, lang) : undefined;
+    const head = tReportRows(opts.head, lang);
+    const body = tReportRows(opts.body as (string | number)[][], lang);
+    const foot = opts.foot ? tReportRows(opts.foot as (string | number)[][], lang) : undefined;
+
+    let y = 28;
+    if (opts.companyName) {
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(13);
+      doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+      y += 14;
+    }
+    if (opts.companySubLine) {
+      doc.setFont(FONT, "normal");
+      doc.setFontSize(9);
+      doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
+      y += 12;
+    }
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(12);
+    doc.text(title, pageW / 2, y, { align: "center" });
     y += 14;
-  }
-  if (opts.companySubLine) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
-    y += 12;
-  }
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text(opts.title, pageW / 2, y, { align: "center" });
-  y += 14;
-  if (opts.subtitle) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(opts.subtitle, pageW / 2, y, { align: "center" });
-    y += 12;
-  }
-  const tableStartY = y + 4;
+    if (subtitle) {
+      doc.setFont(FONT, "normal");
+      doc.setFontSize(10);
+      doc.text(subtitle, pageW / 2, y, { align: "center" });
+      y += 12;
+    }
+    const tableStartY = y + 4;
 
-  const columnStyles: Record<number, { halign: "right" }> = {};
-  (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+    const columnStyles: Record<number, { halign: "right" }> = {};
+    (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
 
-  autoTable(doc, {
-    startY: tableStartY,
-    head: opts.head,
-    body: opts.body,
-    foot: opts.foot,
-    showFoot: "lastPage",
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-    headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-    footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
-    columnStyles,
-    margin: { top: tableStartY },
-    didDrawPage: (data) => {
-      // Repeat company / FY / title on every page (page 2+).
-      if (data.pageNumber > 1) {
-        let hy = 28;
-        if (opts.companyName) {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(13);
-          doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
-          hy += 14;
+    autoTable(doc, {
+      startY: tableStartY,
+      head,
+      body,
+      foot,
+      showFoot: "lastPage",
+      theme: "grid",
+      styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
+      headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
+      footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+      columnStyles,
+      margin: { top: tableStartY },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          let hy = 28;
+          if (opts.companyName) {
+            doc.setFont(FONT, "bold");
+            doc.setFontSize(13);
+            doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
+            hy += 14;
+          }
+          if (opts.companySubLine) {
+            doc.setFont(FONT, "normal");
+            doc.setFontSize(9);
+            doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
+            hy += 12;
+          }
+          doc.setFont(FONT, "bold");
+          doc.setFontSize(12);
+          doc.text(title, pageW / 2, hy, { align: "center" });
+          if (subtitle) {
+            hy += 14;
+            doc.setFont(FONT, "normal");
+            doc.setFontSize(10);
+            doc.text(subtitle, pageW / 2, hy, { align: "center" });
+          }
         }
-        if (opts.companySubLine) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
-          hy += 12;
-        }
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.text(opts.title, pageW / 2, hy, { align: "center" });
-        if (opts.subtitle) {
-          hy += 14;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
-          doc.text(opts.subtitle, pageW / 2, hy, { align: "center" });
-        }
-      }
-      const pageW2 = doc.internal.pageSize.getWidth();
-      const str = `Page ${doc.getNumberOfPages()} of {total_pages_count_string}`;
-      doc.setFontSize(8);
-      doc.setTextColor(120);
-      doc.text(str, pageW2 / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
-      doc.setTextColor(0);
-    },
-  });
-  if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
-    (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
-  }
+        const pageW2 = doc.internal.pageSize.getWidth();
+        const pageLabel = tReportLabel("Page", lang);
+        const ofLabel = tReportLabel("of", lang);
+        const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(str, pageW2 / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
+        doc.setTextColor(0);
+      },
+    });
+    if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
+      (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
+    }
 
-  const buf = doc.output("arraybuffer");
-  void saveExport({
-    subFolder: opts.subFolder || "Reports",
-    fileName: opts.fileName,
-    contents: buf,
-    mime: "application/pdf",
-  });
+    const buf = doc.output("arraybuffer");
+    await saveExport({
+      subFolder: opts.subFolder || "Reports",
+      fileName: opts.fileName,
+      contents: buf,
+      mime: "application/pdf",
+    });
+  })();
 }
 
 export interface XlsxSheet {
@@ -121,10 +136,13 @@ export interface XlsxSheet {
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
+  const lang = getStoredLang();
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
-    const ws = XLSX.utils.aoa_to_sheet(s.rows);
-    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+    const rows = lang === "en" ? s.rows : tReportRows(s.rows as (string | number)[][], lang);
+    const sheetName = lang === "en" ? s.name : tReportLabel(s.name, lang);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   }
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
   void saveExport({
@@ -165,87 +183,96 @@ export interface PdfMultiTableOptions {
 /** Renders multiple report sections (e.g. one per ledger) into a single PDF.
  *  Every section starts on a fresh page and reuses the same company header. */
 export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
-  const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
+  void (async () => {
+    const lang = getStoredLang();
+    const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
+    const FONT = await prepareReportFont(doc, lang);
+    const pageW = doc.internal.pageSize.getWidth();
 
-  const drawPageHeader = (): number => {
-    let y = 28;
-    if (opts.companyName) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+    const title = tReportLabel(opts.title, lang);
+    const subtitle = opts.subtitle ? tReportLabel(opts.subtitle, lang) : undefined;
+
+    const drawPageHeader = (): number => {
+      let y = 28;
+      if (opts.companyName) {
+        doc.setFont(FONT, "bold");
+        doc.setFontSize(13);
+        doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+        y += 14;
+      }
+      if (opts.companySubLine) {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(9);
+        doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
+        y += 12;
+      }
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(title, pageW / 2, y, { align: "center" });
       y += 14;
-    }
-    if (opts.companySubLine) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
-      y += 12;
-    }
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(opts.title, pageW / 2, y, { align: "center" });
-    y += 14;
-    if (opts.subtitle) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(opts.subtitle, pageW / 2, y, { align: "center" });
-      y += 12;
-    }
-    return y + 4;
-  };
+      if (subtitle) {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(10);
+        doc.text(subtitle, pageW / 2, y, { align: "center" });
+        y += 12;
+      }
+      return y + 4;
+    };
 
-  opts.sections.forEach((section, idx) => {
-    if (idx > 0) doc.addPage();
-    let y = drawPageHeader();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(section.sectionTitle, pageW / 2, y, { align: "center" });
-    y += 13;
-    if (section.sectionSubtitle) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(section.sectionSubtitle, pageW / 2, y, { align: "center" });
-      y += 11;
-    }
-    const columnStyles: Record<number, { halign: "right" }> = {};
-    (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
-    autoTable(doc, {
-      startY: y + 4,
-      head: section.head,
-      body: section.body,
-      foot: section.foot,
-      showFoot: "lastPage",
-      theme: "grid",
-      styles: { fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-      headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-      footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
-      columnStyles,
-      margin: { top: y + 4 },
-      didDrawPage: (data) => {
-        // For continuation pages within a section, repeat the doc-level header only.
-        if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
-          drawPageHeader();
-        }
-        const str = `Page ${doc.getNumberOfPages()} of {total_pages_count_string}`;
-        doc.setFontSize(8);
-        doc.setTextColor(120);
-        doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
-        doc.setTextColor(0);
-      },
+    opts.sections.forEach((section, idx) => {
+      if (idx > 0) doc.addPage();
+      let y = drawPageHeader();
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(11);
+      doc.text(tReportLabel(section.sectionTitle, lang), pageW / 2, y, { align: "center" });
+      y += 13;
+      if (section.sectionSubtitle) {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(9);
+        doc.text(tReportLabel(section.sectionSubtitle, lang), pageW / 2, y, { align: "center" });
+        y += 11;
+      }
+      const columnStyles: Record<number, { halign: "right" }> = {};
+      (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+      autoTable(doc, {
+        startY: y + 4,
+        head: tReportRows(section.head, lang),
+        body: tReportRows(section.body as (string | number)[][], lang),
+        foot: section.foot ? tReportRows(section.foot as (string | number)[][], lang) : undefined,
+        showFoot: "lastPage",
+        theme: "grid",
+        styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
+        headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
+        footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+        columnStyles,
+        margin: { top: y + 4 },
+        didDrawPage: (data) => {
+          if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
+            drawPageHeader();
+          }
+          const pageLabel = tReportLabel("Page", lang);
+          const ofLabel = tReportLabel("of", lang);
+          const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
+          doc.setFont(FONT, "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
+          doc.setTextColor(0);
+        },
+      });
     });
-  });
 
-  if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
-    (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
-  }
+    if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
+      (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
+    }
 
-  const buf = doc.output("arraybuffer");
-  void saveExport({
-    subFolder: opts.subFolder || "Reports",
-    fileName: opts.fileName,
-    contents: buf,
-    mime: "application/pdf",
-  });
+    const buf = doc.output("arraybuffer");
+    await saveExport({
+      subFolder: opts.subFolder || "Reports",
+      fileName: opts.fileName,
+      contents: buf,
+      mime: "application/pdf",
+    });
+  })();
 }
 
