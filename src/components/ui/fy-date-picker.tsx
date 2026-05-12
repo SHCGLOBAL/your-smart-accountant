@@ -191,17 +191,18 @@ export function FyDatePicker({
   }
 
   return (
-    <div className={cn("relative flex items-center", className)}>
+    <div ref={containerRef} className={cn("relative flex items-center", className)}>
       <Input
         value={text}
         disabled={disabled}
-        placeholder={placeholder ?? "DD/MM"}
-        onChange={(e) => setText(e.target.value)}
+        placeholder={placeholder ?? "DDMM"}
+        inputMode="numeric"
+        onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            commitText((e.target as HTMLInputElement).value);
+            commitText((e.target as HTMLInputElement).value, { advance: true });
           }
         }}
         className="h-9 pr-9"
