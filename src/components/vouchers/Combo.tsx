@@ -57,12 +57,41 @@ export function Combo({
     [options, value],
   );
 
+  const advanceFocus = React.useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    // Find the nearest form/container and walk focusables to find the next one.
+    const root =
+      (trigger.closest("form") as HTMLElement | null) ||
+      (trigger.closest("[data-fast-form]") as HTMLElement | null) ||
+      document.body;
+    const focusables = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="combobox"]:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null || el === trigger);
+    const idx = focusables.indexOf(trigger);
+    const next = idx >= 0 ? focusables[idx + 1] : null;
+    if (next) {
+      next.focus();
+      if (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement) {
+        try { next.select(); } catch { /* noop */ }
+      }
+    } else {
+      trigger.focus();
+    }
+  }, []);
+
   const handleSelect = (val: string) => {
     onChange(val);
     setOpen(false);
     setQuery("");
-    // Return focus to trigger so Enter-as-Tab can advance
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    // After selecting an option, auto-advance to the next field (Tally/Busy-style).
+    requestAnimationFrame(() => {
+      // Briefly focus trigger first so any close-handlers settle, then advance.
+      triggerRef.current?.focus();
+      requestAnimationFrame(() => advanceFocus());
+    });
   };
 
   return (
