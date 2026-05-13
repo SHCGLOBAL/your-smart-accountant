@@ -11,6 +11,8 @@ import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
