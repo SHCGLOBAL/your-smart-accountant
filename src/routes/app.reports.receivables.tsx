@@ -193,70 +193,79 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
           <p className="mt-2 text-xs text-muted-foreground">
             As on <strong>{to}</strong>. {isRecv && "Use the WhatsApp / Email buttons to send a reminder; the message uses the template from Settings."}
           </p>
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Party</TableHead>
-                <TableHead>Oldest</TableHead>
-                <TableHead className="text-right">Days</TableHead>
-                <TableHead className="text-right">Credit Days</TableHead>
-                <TableHead className="text-right">Overdue</TableHead>
-                {BUCKETS.map((b) => <TableHead key={b.label} className="text-right">{b.label}</TableHead>)}
-                <TableHead className="text-right">Total</TableHead>
-                {isRecv && <TableHead className="text-center print:hidden">Remind</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <OutstandingGrid rows={rows} isRecv={isRecv} slug={slug} sendWhatsApp={sendWhatsApp} sendEmail={sendEmail} />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={isRecv ? 11 : 10} className="p-6 text-center text-sm text-muted-foreground">
-                    Nothing outstanding.
-                  </TableCell>
+                  <TableHead>Party</TableHead>
+                  <TableHead>Oldest</TableHead>
+                  <TableHead className="text-right">Days</TableHead>
+                  <TableHead className="text-right">Credit Days</TableHead>
+                  <TableHead className="text-right">Overdue</TableHead>
+                  {BUCKETS.map((b) => <TableHead key={b.label} className="text-right">{b.label}</TableHead>)}
+                  <TableHead className="text-right">Total</TableHead>
+                  {isRecv && <TableHead className="text-center print:hidden">Remind</TableHead>}
                 </TableRow>
-              )}
-              {rows.map((x) => (
-                <TableRow key={x.ledger.id}>
-                  <TableCell>{x.name}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{x.oldestDate ?? "—"}</TableCell>
-                  <TableCell className="text-right">{x.days}</TableCell>
-                  <TableCell className="text-right">{x.credit_days}</TableCell>
-                  <TableCell className={`text-right ${x.overdue > 0 ? "text-destructive font-semibold" : ""}`}>{x.overdue}</TableCell>
-                  {x.buckets.map((b, i) => (
-                    <TableCell key={i} className="text-right font-mono">{b ? formatINR(b) : ""}</TableCell>
-                  ))}
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(x.outstanding)}</TableCell>
-                  {isRecv && (
-                    <TableCell className="print:hidden">
-                      <div className="flex justify-center gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
-                          <MessageCircle className="h-4 w-4 text-accent-foreground" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
-                          <Mail className="h-4 w-4 text-primary" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isRecv ? 11 : 10} className="p-6 text-center text-sm text-muted-foreground">
+                      Nothing outstanding.
                     </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {rows.length > 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-right font-semibold">TOTAL</TableCell>
-                  {totalsByBucket.map((b, i) => (
-                    <TableCell key={i} className="text-right font-mono font-semibold">{b ? formatINR(b) : ""}</TableCell>
-                  ))}
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totalOut)}</TableCell>
-                  {isRecv && <TableCell className="print:hidden" />}
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </TableRow>
+                )}
+                {rows.map((x) => (
+                  <TableRow key={x.ledger.id}>
+                    <TableCell>{x.name}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{x.oldestDate ?? "—"}</TableCell>
+                    <TableCell className="text-right">{x.days}</TableCell>
+                    <TableCell className="text-right">{x.credit_days}</TableCell>
+                    <TableCell className={`text-right ${x.overdue > 0 ? "text-destructive font-semibold" : ""}`}>{x.overdue}</TableCell>
+                    {x.buckets.map((b, i) => (
+                      <TableCell key={i} className="text-right font-mono">{b ? formatINR(b) : ""}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(x.outstanding)}</TableCell>
+                    {isRecv && (
+                      <TableCell className="print:hidden">
+                        <div className="flex justify-center gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
+                            <MessageCircle className="h-4 w-4 text-accent-foreground" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
+                            <Mail className="h-4 w-4 text-primary" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+                {rows.length > 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-right font-semibold">TOTAL</TableCell>
+                    {totalsByBucket.map((b, i) => (
+                      <TableCell key={i} className="text-right font-mono font-semibold">{b ? formatINR(b) : ""}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(totalOut)}</TableCell>
+                    {isRecv && <TableCell className="print:hidden" />}
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
