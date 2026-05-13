@@ -21,8 +21,9 @@ import { fmtIndianDate } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 
-type ViewMode = "columnar" | "horizontal";
+type ViewMode = "columnar" | "horizontal" | "grid";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
 
 export const Route = createFileRoute("/app/reports/ledger")({
@@ -31,7 +32,7 @@ export const Route = createFileRoute("/app/reports/ledger")({
     ledgerId: typeof s.ledgerId === "string" ? s.ledgerId : undefined,
     from: typeof s.from === "string" ? s.from : undefined,
     to: typeof s.to === "string" ? s.to : undefined,
-    view: s.view === "horizontal" ? "horizontal" : s.view === "columnar" ? "columnar" : undefined,
+    view: s.view === "horizontal" ? "horizontal" : s.view === "grid" ? "grid" : s.view === "columnar" ? "columnar" : undefined,
   }),
   component: LedgerStatement,
 });
@@ -647,6 +648,9 @@ function LedgerStatement() {
                   <ToggleGroupItem value="horizontal" className="px-3 text-xs">
                     Horizontal / T-Format
                   </ToggleGroupItem>
+                  <ToggleGroupItem value="grid" className="px-3 text-xs">
+                    Grid (Excel-like)
+                  </ToggleGroupItem>
                 </ToggleGroup>
               </div>
               <div className="space-y-1">
@@ -672,6 +676,18 @@ function LedgerStatement() {
       </CardContent>
     </Card>
   );
+
+  type LedgerRowVm = (typeof columnarRows)[number];
+  const ledgerGridColumns: DGColumn<LedgerRowVm>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.date, cell: (x) => fmtIndianDate(x.date) },
+    { id: "particulars", header: "Particulars", type: "text", width: 240, accessor: (x) => x.particulars, groupable: true },
+    { id: "vchType", header: "Vch Type", type: "enum", width: 110, accessor: (x) => x.vchType, groupable: true },
+    { id: "vchNo", header: "Vch No", type: "text", width: 110, accessor: (x) => x.vchNo },
+    { id: "narration", header: "Narration", type: "text", width: 260, accessor: (x) => x.narration },
+    { id: "debit", header: "Debit", type: "number", width: 130, align: "right", accessor: (x) => x.debit / 100, cell: (x) => x.debit ? formatINR(x.debit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+    { id: "credit", header: "Credit", type: "number", width: 130, align: "right", accessor: (x) => x.credit / 100, cell: (x) => x.credit ? formatINR(x.credit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+    { id: "balance", header: "Balance", type: "number", width: 140, align: "right", accessor: (x) => x.balance / 100, cell: (x) => fmtBal(x.balance) },
+  ], []);
 
   return (
     <ReportViewer
@@ -806,7 +822,7 @@ function LedgerStatement() {
             </table>
           </CardContent>
         </Card>
-      ) : (
+      ) : view === "horizontal" ? (
         <>
           <TAccount
             title={`${ledger.name} Account`}
@@ -823,6 +839,23 @@ function LedgerStatement() {
             </CardContent>
           </Card>
         </>
+      ) : (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId="ledger"
+              rows={columnarRows}
+              columns={ledgerGridColumns}
+              globalSearch={(x) => `${x.vchNo} ${x.particulars} ${x.narration}`}
+              onRowClick={(x) => openVoucherDetail(navigate, x.voucherId)}
+              height={520}
+            />
+            <div className="mt-2 flex justify-between border-t pt-2 text-sm">
+              <span className="text-muted-foreground">Opening: <span className="font-mono">{fmtBal(openingBeforeFrom)}</span></span>
+              <span className="font-semibold">Closing: <span className="font-mono">{fmtBal(closing)}</span></span>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </ReportViewer>
   );

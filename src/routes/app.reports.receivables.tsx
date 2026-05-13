@@ -14,6 +14,8 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { renderReminder, whatsappLink, mailtoLink, logReminder } from "@/lib/reminders";
 import { toast } from "sonner";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/receivables")({
   head: () => ({ meta: [{ title: "Outstanding Receivables — Reports" }] }),
@@ -55,8 +57,8 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [reminderTpl, setReminderTpl] = useState<string>("");
-
   const isRecv = mode === "receivables";
+  const { view, setView } = useReportView(isRecv ? "receivables" : "payables");
   const partyType = isRecv ? "sundry_debtor" : "sundry_creditor";
   const companyName = activeMembership?.companies.name || "Company";
 
@@ -191,70 +193,149 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
           <p className="mt-2 text-xs text-muted-foreground">
             As on <strong>{to}</strong>. {isRecv && "Use the WhatsApp / Email buttons to send a reminder; the message uses the template from Settings."}
           </p>
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Party</TableHead>
-                <TableHead>Oldest</TableHead>
-                <TableHead className="text-right">Days</TableHead>
-                <TableHead className="text-right">Credit Days</TableHead>
-                <TableHead className="text-right">Overdue</TableHead>
-                {BUCKETS.map((b) => <TableHead key={b.label} className="text-right">{b.label}</TableHead>)}
-                <TableHead className="text-right">Total</TableHead>
-                {isRecv && <TableHead className="text-center print:hidden">Remind</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <OutstandingGrid rows={rows} isRecv={isRecv} slug={slug} sendWhatsApp={sendWhatsApp} sendEmail={sendEmail} />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={isRecv ? 11 : 10} className="p-6 text-center text-sm text-muted-foreground">
-                    Nothing outstanding.
-                  </TableCell>
+                  <TableHead>Party</TableHead>
+                  <TableHead>Oldest</TableHead>
+                  <TableHead className="text-right">Days</TableHead>
+                  <TableHead className="text-right">Credit Days</TableHead>
+                  <TableHead className="text-right">Overdue</TableHead>
+                  {BUCKETS.map((b) => <TableHead key={b.label} className="text-right">{b.label}</TableHead>)}
+                  <TableHead className="text-right">Total</TableHead>
+                  {isRecv && <TableHead className="text-center print:hidden">Remind</TableHead>}
                 </TableRow>
-              )}
-              {rows.map((x) => (
-                <TableRow key={x.ledger.id}>
-                  <TableCell>{x.name}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{x.oldestDate ?? "—"}</TableCell>
-                  <TableCell className="text-right">{x.days}</TableCell>
-                  <TableCell className="text-right">{x.credit_days}</TableCell>
-                  <TableCell className={`text-right ${x.overdue > 0 ? "text-destructive font-semibold" : ""}`}>{x.overdue}</TableCell>
-                  {x.buckets.map((b, i) => (
-                    <TableCell key={i} className="text-right font-mono">{b ? formatINR(b) : ""}</TableCell>
-                  ))}
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(x.outstanding)}</TableCell>
-                  {isRecv && (
-                    <TableCell className="print:hidden">
-                      <div className="flex justify-center gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
-                          <MessageCircle className="h-4 w-4 text-accent-foreground" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
-                          <Mail className="h-4 w-4 text-primary" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isRecv ? 11 : 10} className="p-6 text-center text-sm text-muted-foreground">
+                      Nothing outstanding.
                     </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {rows.length > 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-right font-semibold">TOTAL</TableCell>
-                  {totalsByBucket.map((b, i) => (
-                    <TableCell key={i} className="text-right font-mono font-semibold">{b ? formatINR(b) : ""}</TableCell>
-                  ))}
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totalOut)}</TableCell>
-                  {isRecv && <TableCell className="print:hidden" />}
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </TableRow>
+                )}
+                {rows.map((x) => (
+                  <TableRow key={x.ledger.id}>
+                    <TableCell>{x.name}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{x.oldestDate ?? "—"}</TableCell>
+                    <TableCell className="text-right">{x.days}</TableCell>
+                    <TableCell className="text-right">{x.credit_days}</TableCell>
+                    <TableCell className={`text-right ${x.overdue > 0 ? "text-destructive font-semibold" : ""}`}>{x.overdue}</TableCell>
+                    {x.buckets.map((b, i) => (
+                      <TableCell key={i} className="text-right font-mono">{b ? formatINR(b) : ""}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(x.outstanding)}</TableCell>
+                    {isRecv && (
+                      <TableCell className="print:hidden">
+                        <div className="flex justify-center gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
+                            <MessageCircle className="h-4 w-4 text-accent-foreground" />
+                          </Button>
+                          <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
+                            <Mail className="h-4 w-4 text-primary" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+                {rows.length > 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-right font-semibold">TOTAL</TableCell>
+                    {totalsByBucket.map((b, i) => (
+                      <TableCell key={i} className="text-right font-mono font-semibold">{b ? formatINR(b) : ""}</TableCell>
+                    ))}
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(totalOut)}</TableCell>
+                    {isRecv && <TableCell className="print:hidden" />}
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  );
+}
+
+interface AgeingRowVm {
+  ledger: Ledger;
+  name: string;
+  days: number;
+  credit_days: number;
+  overdue: number;
+  outstanding: number;
+  buckets: number[];
+  oldestDate: string;
+}
+
+function OutstandingGrid({
+  rows,
+  isRecv,
+  slug,
+  sendWhatsApp,
+  sendEmail,
+}: {
+  rows: AgeingRowVm[];
+  isRecv: boolean;
+  slug: string;
+  sendWhatsApp: (r: AgeingRowVm) => void;
+  sendEmail: (r: AgeingRowVm) => void;
+}) {
+  const cols: DGColumn<AgeingRowVm>[] = [
+    { id: "party", header: "Party", type: "text", width: 240, accessor: (x) => x.name, groupable: true },
+    { id: "oldest", header: "Oldest", type: "date", width: 110, accessor: (x) => x.oldestDate ?? "", cell: (x) => x.oldestDate ?? "—" },
+    { id: "days", header: "Days", type: "number", width: 80, align: "right", accessor: (x) => x.days },
+    { id: "creditDays", header: "Credit Days", type: "number", width: 110, align: "right", accessor: (x) => x.credit_days },
+    { id: "overdue", header: "Overdue", type: "number", width: 100, align: "right", accessor: (x) => x.overdue },
+    ...BUCKETS.map((b, i): DGColumn<AgeingRowVm> => ({
+      id: `b${i}`, header: b.label, type: "number", width: 110, align: "right",
+      accessor: (x) => x.buckets[i] / 100,
+      cell: (x) => x.buckets[i] ? formatINR(x.buckets[i]) : "",
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    })),
+    {
+      id: "total", header: "Total", type: "number", width: 140, align: "right",
+      accessor: (x) => x.outstanding / 100,
+      cell: (x) => formatINR(x.outstanding),
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    },
+    ...(isRecv ? [{
+      id: "remind", header: "Remind", type: "text" as const, width: 110, align: "center" as const,
+      accessor: () => "",
+      cell: (x: AgeingRowVm) => (
+        <div className="flex justify-center gap-1">
+          <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); sendWhatsApp(x); }} title="WhatsApp reminder">
+            <MessageCircle className="h-4 w-4 text-accent-foreground" />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); sendEmail(x); }} title="Email reminder">
+            <Mail className="h-4 w-4 text-primary" />
+          </Button>
+        </div>
+      ),
+    }] : []),
+  ];
+  return (
+    <DataGrid
+      reportId={slug}
+      rows={rows}
+      columns={cols}
+      globalSearch={(x) => x.name}
+      height={520}
+    />
   );
 }

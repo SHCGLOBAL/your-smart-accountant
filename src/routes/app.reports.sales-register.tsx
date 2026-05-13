@@ -12,6 +12,8 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/sales-register")({
   head: () => ({ meta: [{ title: "Sales Register — Reports" }] }),
@@ -37,6 +39,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<VRow[]>([]);
+  const { view, setView } = useReportView(`${kind}-register`);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -81,6 +84,18 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
 
   const title = kind === "sales" ? "Sales Register" : "Purchase Register";
   const slug = kind === "sales" ? "sales-register" : "purchase-register";
+
+  const gridColumns: DGColumn<VRow>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
+    { id: "number", header: "Number", type: "text", width: 130, accessor: (x) => x.voucher_number },
+    { id: "party", header: "Party", type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
+    { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
+    { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "total", header: "Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+  ], []);
 
   const head = ["Date", "Number", "Party", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total"];
   const body = (): (string | number)[][] => [
@@ -143,56 +158,72 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             }
             onPrint={() => window.print()}
           />
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Number</TableHead>
-                <TableHead>Party</TableHead>
-                <TableHead>GSTIN</TableHead>
-                <TableHead className="text-right">Taxable</TableHead>
-                <TableHead className="text-right">CGST</TableHead>
-                <TableHead className="text-right">SGST</TableHead>
-                <TableHead className="text-right">IGST</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((x) => (
-                <TableRow
-                  key={x.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => openVoucherDetail(navigate, x.id)}
-                  title="Click to edit"
-                >
-                  <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
-                  <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
-                  <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.igst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(x.total_paise)}</TableCell>
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId={slug}
+              rows={rows}
+              columns={gridColumns}
+              globalSearch={(x) => `${x.voucher_number} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`}
+              onRowClick={(x) => openVoucherDetail(navigate, x.id)}
+              height={520}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Number</TableHead>
+                  <TableHead>Party</TableHead>
+                  <TableHead>GSTIN</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-              ))}
-              <TableRow>
-                <TableCell colSpan={4} className="text-right font-semibold">TOTAL</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.igst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.total)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {rows.map((x) => (
+                  <TableRow
+                    key={x.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openVoucherDetail(navigate, x.id)}
+                    title="Click to edit"
+                  >
+                    <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
+                    <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
+                    <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.igst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(x.total_paise)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={4} className="text-right font-semibold">TOTAL</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.igst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.total)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">

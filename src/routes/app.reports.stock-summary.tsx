@@ -9,6 +9,8 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/stock-summary")({
   head: () => ({ meta: [{ title: "Stock Summary — Reports" }] }),
@@ -40,6 +42,7 @@ function StockSummary() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
+  const { view, setView } = useReportView("stock-summary");
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -100,6 +103,20 @@ function StockSummary() {
     ["TOTAL", "", "", "", "", "", "", (totalValue/100).toFixed(2)],
   ];
 
+  type RowVm = (typeof rows)[number];
+  const gridColumns: DGColumn<RowVm>[] = useMemo(() => [
+    { id: "name", header: "Item", type: "text", width: 240, accessor: (x) => x.name, cell: (x) => (
+      <span>{x.name}{x.lowStock && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">LOW</span>}</span>
+    ) },
+    { id: "hsn", header: "HSN", type: "text", width: 110, accessor: (x) => x.hsn_code ?? "", groupable: true },
+    { id: "unit", header: "Unit", type: "enum", width: 80, accessor: (x) => x.unit, groupable: true },
+    { id: "opening", header: "Opening", type: "number", width: 110, align: "right", accessor: (x) => x.opening, aggregator: "sum" },
+    { id: "inward", header: "Inward", type: "number", width: 110, align: "right", accessor: (x) => x.inWindow, aggregator: "sum" },
+    { id: "outward", header: "Outward", type: "number", width: 110, align: "right", accessor: (x) => x.outWindow, aggregator: "sum" },
+    { id: "closing", header: "Closing", type: "number", width: 110, align: "right", accessor: (x) => x.closing, aggregator: "sum" },
+    { id: "value", header: "Value", type: "number", width: 140, align: "right", accessor: (x) => x.stockValue / 100, cell: (x) => formatINR(x.stockValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+  ], []);
+
   return (
     <div className="space-y-3">
       <Card>
@@ -128,47 +145,62 @@ function StockSummary() {
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using each item's opening rate.</p>
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead>HSN</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead className="text-right">Opening</TableHead>
-                <TableHead className="text-right">Inward</TableHead>
-                <TableHead className="text-right">Outward</TableHead>
-                <TableHead className="text-right">Closing</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((x) => (
-                <TableRow key={x.id} className={x.lowStock ? "bg-destructive/5" : ""}>
-                  <TableCell>
-                    {x.name}
-                    {x.lowStock && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">LOW</span>}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{x.hsn_code ?? "—"}</TableCell>
-                  <TableCell>{x.unit}</TableCell>
-                  <TableCell className="text-right">{x.opening}</TableCell>
-                  <TableCell className="text-right text-primary">{x.inWindow}</TableCell>
-                  <TableCell className="text-right">{x.outWindow}</TableCell>
-                  <TableCell className="text-right font-semibold">{x.closing}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.stockValue)}</TableCell>
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId="stock-summary"
+              rows={rows}
+              columns={gridColumns}
+              globalSearch={(x) => `${x.name} ${x.hsn_code ?? ""} ${x.unit}`}
+              height={520}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>HSN</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Opening</TableHead>
+                  <TableHead className="text-right">Inward</TableHead>
+                  <TableHead className="text-right">Outward</TableHead>
+                  <TableHead className="text-right">Closing</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
                 </TableRow>
-              ))}
-              <TableRow>
-                <TableCell colSpan={7} className="text-right font-semibold">Total Stock Value</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totalValue)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {rows.map((x) => (
+                  <TableRow key={x.id} className={x.lowStock ? "bg-destructive/5" : ""}>
+                    <TableCell>
+                      {x.name}
+                      {x.lowStock && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">LOW</span>}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{x.hsn_code ?? "—"}</TableCell>
+                    <TableCell>{x.unit}</TableCell>
+                    <TableCell className="text-right">{x.opening}</TableCell>
+                    <TableCell className="text-right text-primary">{x.inWindow}</TableCell>
+                    <TableCell className="text-right">{x.outWindow}</TableCell>
+                    <TableCell className="text-right font-semibold">{x.closing}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.stockValue)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={7} className="text-right font-semibold">Total Stock Value</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totalValue)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
