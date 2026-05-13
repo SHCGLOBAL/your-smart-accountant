@@ -14,6 +14,8 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { renderReminder, whatsappLink, mailtoLink, logReminder } from "@/lib/reminders";
 import { toast } from "sonner";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/receivables")({
   head: () => ({ meta: [{ title: "Outstanding Receivables — Reports" }] }),
