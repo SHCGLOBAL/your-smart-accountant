@@ -677,6 +677,18 @@ function LedgerStatement() {
     </Card>
   );
 
+  type LedgerRowVm = (typeof columnarRows)[number];
+  const ledgerGridColumns: DGColumn<LedgerRowVm>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.date, cell: (x) => fmtIndianDate(x.date) },
+    { id: "particulars", header: "Particulars", type: "text", width: 240, accessor: (x) => x.particulars, groupable: true },
+    { id: "vchType", header: "Vch Type", type: "enum", width: 110, accessor: (x) => x.vchType, groupable: true },
+    { id: "vchNo", header: "Vch No", type: "text", width: 110, accessor: (x) => x.vchNo },
+    { id: "narration", header: "Narration", type: "text", width: 260, accessor: (x) => x.narration },
+    { id: "debit", header: "Debit", type: "number", width: 130, align: "right", accessor: (x) => x.debit / 100, cell: (x) => x.debit ? formatINR(x.debit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+    { id: "credit", header: "Credit", type: "number", width: 130, align: "right", accessor: (x) => x.credit / 100, cell: (x) => x.credit ? formatINR(x.credit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+    { id: "balance", header: "Balance", type: "number", width: 140, align: "right", accessor: (x) => x.balance / 100, cell: (x) => fmtBal(x.balance) },
+  ], []);
+
   return (
     <ReportViewer
       title="Ledger Statement"
