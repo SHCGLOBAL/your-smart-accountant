@@ -14,7 +14,9 @@ import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { fmtIndianDate } from "@/lib/format-date";
 import { EmptyState } from "@/components/EmptyState";
-import { BookOpen } from "lucide-react";
+import { BookOpen, LayoutGrid, Columns2 } from "lucide-react";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/app/reports/day-book")({
   head: () => ({ meta: [{ title: "Day Book — Reports" }] }),
