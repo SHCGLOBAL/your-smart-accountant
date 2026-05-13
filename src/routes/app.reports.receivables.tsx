@@ -269,3 +269,73 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
     </div>
   );
 }
+
+interface AgeingRowVm {
+  ledger: Ledger;
+  name: string;
+  days: number;
+  credit_days: number;
+  overdue: number;
+  outstanding: number;
+  buckets: number[];
+  oldestDate: string | null;
+}
+
+function OutstandingGrid({
+  rows,
+  isRecv,
+  slug,
+  sendWhatsApp,
+  sendEmail,
+}: {
+  rows: AgeingRowVm[];
+  isRecv: boolean;
+  slug: string;
+  sendWhatsApp: (r: AgeingRowVm) => void;
+  sendEmail: (r: AgeingRowVm) => void;
+}) {
+  const cols: DGColumn<AgeingRowVm>[] = [
+    { id: "party", header: "Party", type: "text", width: 240, accessor: (x) => x.name, groupable: true },
+    { id: "oldest", header: "Oldest", type: "date", width: 110, accessor: (x) => x.oldestDate ?? "" },
+    { id: "days", header: "Days", type: "number", width: 80, align: "right", accessor: (x) => x.days },
+    { id: "creditDays", header: "Credit Days", type: "number", width: 110, align: "right", accessor: (x) => x.credit_days },
+    { id: "overdue", header: "Overdue", type: "number", width: 100, align: "right", accessor: (x) => x.overdue },
+    ...BUCKETS.map((b, i): DGColumn<AgeingRowVm> => ({
+      id: `b${i}`, header: b.label, type: "number", width: 110, align: "right",
+      accessor: (x) => x.buckets[i] / 100,
+      cell: (x) => x.buckets[i] ? formatINR(x.buckets[i]) : "",
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    })),
+    {
+      id: "total", header: "Total", type: "number", width: 140, align: "right",
+      accessor: (x) => x.outstanding / 100,
+      cell: (x) => formatINR(x.outstanding),
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    },
+    ...(isRecv ? [{
+      id: "remind", header: "Remind", type: "text" as const, width: 110, align: "center" as const,
+      accessor: () => "",
+      cell: (x: AgeingRowVm) => (
+        <div className="flex justify-center gap-1">
+          <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); sendWhatsApp(x); }} title="WhatsApp reminder">
+            <MessageCircle className="h-4 w-4 text-accent-foreground" />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); sendEmail(x); }} title="Email reminder">
+            <Mail className="h-4 w-4 text-primary" />
+          </Button>
+        </div>
+      ),
+    }] : []),
+  ];
+  return (
+    <DataGrid
+      reportId={slug}
+      rows={rows}
+      columns={cols}
+      globalSearch={(x) => x.name}
+      height={520}
+    />
+  );
+}
