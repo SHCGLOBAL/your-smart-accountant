@@ -296,7 +296,7 @@ function OutstandingGrid({
 }) {
   const cols: DGColumn<AgeingRowVm>[] = [
     { id: "party", header: "Party", type: "text", width: 240, accessor: (x) => x.name, groupable: true },
-    { id: "oldest", header: "Oldest", type: "date", width: 110, accessor: (x) => x.oldestDate ?? "" },
+    { id: "oldest", header: "Oldest", type: "date", width: 110, accessor: (x) => x.oldestDate ?? "", cell: (x) => x.oldestDate ?? "—" },
     { id: "days", header: "Days", type: "number", width: 80, align: "right", accessor: (x) => x.days },
     { id: "creditDays", header: "Credit Days", type: "number", width: 110, align: "right", accessor: (x) => x.credit_days },
     { id: "overdue", header: "Overdue", type: "number", width: 100, align: "right", accessor: (x) => x.overdue },
