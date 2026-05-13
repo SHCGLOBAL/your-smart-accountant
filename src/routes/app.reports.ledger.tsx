@@ -21,8 +21,9 @@ import { fmtIndianDate } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 
-type ViewMode = "columnar" | "horizontal";
+type ViewMode = "columnar" | "horizontal" | "grid";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
 
 export const Route = createFileRoute("/app/reports/ledger")({
