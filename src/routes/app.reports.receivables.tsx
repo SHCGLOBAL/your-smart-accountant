@@ -278,7 +278,7 @@ interface AgeingRowVm {
   overdue: number;
   outstanding: number;
   buckets: number[];
-  oldestDate: string | null;
+  oldestDate: string | null | undefined;
 }
 
 function OutstandingGrid({
