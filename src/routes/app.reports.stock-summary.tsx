@@ -42,6 +42,7 @@ function StockSummary() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
+  const { view, setView } = useReportView("stock-summary");
 
   useEffect(() => {
     if (!activeCompanyId) return;
