@@ -127,6 +127,21 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     });
   };
 
+  const gridColumns: DGColumn<Row>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
+    { id: "billNo", header: billLabel, type: "text", width: 130, accessor: (x) => kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number) },
+    { id: "billDate", header: billDateLabel, type: "date", width: 110, accessor: (x) => kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date), cell: (x) => fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)) },
+    { id: "party", header: partyLabel, type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
+    { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
+    { id: "pos", header: "POS", type: "text", width: 80, accessor: (x) => x.place_of_supply_code || x.ledgers?.state_code || "", groupable: true },
+    { id: "type", header: "Type", type: "enum", width: 80, accessor: (x) => x.is_interstate ? "Inter" : "Intra", groupable: true },
+    { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "total", header: "Invoice Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+  ], [kind, billLabel, billDateLabel, partyLabel]);
+
   return (
     <div className="space-y-3">
       <Card>
@@ -142,75 +157,90 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
             onExportPdf={onPdf}
             onPrint={() => window.print()}
           />
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>{billLabel}</TableHead>
-                  <TableHead>{billDateLabel}</TableHead>
-                  <TableHead>{partyLabel}</TableHead>
-                  <TableHead>GSTIN</TableHead>
-                  <TableHead>POS</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Taxable</TableHead>
-                  <TableHead className="text-right">CGST</TableHead>
-                  <TableHead className="text-right">SGST</TableHead>
-                  <TableHead className="text-right">IGST</TableHead>
-                  <TableHead className="text-right">Invoice Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.length === 0 ? (
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId={`gst-${kind}-book`}
+              rows={rows}
+              columns={gridColumns}
+              globalSearch={(x) => `${x.voucher_number} ${x.vendor_invoice_no ?? ""} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`}
+              height={520}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                      No entries in this period.
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>{billLabel}</TableHead>
+                    <TableHead>{billDateLabel}</TableHead>
+                    <TableHead>{partyLabel}</TableHead>
+                    <TableHead>GSTIN</TableHead>
+                    <TableHead>POS</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Taxable</TableHead>
+                    <TableHead className="text-right">CGST</TableHead>
+                    <TableHead className="text-right">SGST</TableHead>
+                    <TableHead className="text-right">IGST</TableHead>
+                    <TableHead className="text-right">Invoice Total</TableHead>
                   </TableRow>
-                ) : (
-                  rows.map((x) => (
-                    <TableRow key={x.id}>
-                      <TableCell className="whitespace-nowrap">{fmtIndianDate(x.voucher_date)}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
+                </TableHeader>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                        No entries in this period.
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date)}
-                      </TableCell>
-                      <TableCell>{x.ledgers?.name || "—"}</TableCell>
-                      <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
-                      <TableCell className="text-xs">{x.place_of_supply_code || x.ledgers?.state_code || "—"}</TableCell>
-                      <TableCell className="text-xs">{x.is_interstate ? "Inter" : "Intra"}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(x.subtotal_paise)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(x.cgst_paise)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(x.sgst_paise)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(x.igst_paise)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{formatINR(x.total_paise)}</TableCell>
                     </TableRow>
-                  ))
+                  ) : (
+                    rows.map((x) => (
+                      <TableRow key={x.id}>
+                        <TableCell className="whitespace-nowrap">{fmtIndianDate(x.voucher_date)}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date)}
+                        </TableCell>
+                        <TableCell>{x.ledgers?.name || "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
+                        <TableCell className="text-xs">{x.place_of_supply_code || x.ledgers?.state_code || "—"}</TableCell>
+                        <TableCell className="text-xs">{x.is_interstate ? "Inter" : "Intra"}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(x.subtotal_paise)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(x.cgst_paise)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(x.sgst_paise)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatINR(x.igst_paise)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{formatINR(x.total_paise)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+                {rows.length > 0 && (
+                  <tfoot>
+                    <TableRow className="font-semibold border-t-2">
+                      <TableCell colSpan={7} className="text-right">Totals</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(totals.taxable)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(totals.cgst)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(totals.sgst)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(totals.igst)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatINR(totals.total)}</TableCell>
+                    </TableRow>
+                  </tfoot>
                 )}
-              </TableBody>
-              {rows.length > 0 && (
-                <tfoot>
-                  <TableRow className="font-semibold border-t-2">
-                    <TableCell colSpan={7} className="text-right">Totals</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totals.taxable)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totals.cgst)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totals.sgst)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totals.igst)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatINR(totals.total)}</TableCell>
-                  </TableRow>
-                </tfoot>
-              )}
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
