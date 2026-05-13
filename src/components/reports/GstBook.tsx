@@ -38,6 +38,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const pdfHeader = useReportPdfHeader();
   const [rows, setRows] = useState<Row[]>([]);
+  const { view, setView } = useReportView(`gst-${kind}-book`);
 
   const types: VoucherType[] = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
 
