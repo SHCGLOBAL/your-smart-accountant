@@ -9,6 +9,8 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/stock-summary")({
   head: () => ({ meta: [{ title: "Stock Summary — Reports" }] }),
