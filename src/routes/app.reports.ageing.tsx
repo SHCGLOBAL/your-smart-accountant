@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 
 export const Route = createFileRoute("/app/reports/ageing")({
   head: () => ({ meta: [{ title: "Ageing Analysis — Reports" }] }),
