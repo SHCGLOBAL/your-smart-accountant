@@ -810,7 +810,7 @@ function LedgerStatement() {
             </table>
           </CardContent>
         </Card>
-      ) : (
+      ) : view === "horizontal" ? (
         <>
           <TAccount
             title={`${ledger.name} Account`}
@@ -827,6 +827,23 @@ function LedgerStatement() {
             </CardContent>
           </Card>
         </>
+      ) : (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId="ledger"
+              rows={columnarRows}
+              columns={ledgerGridColumns}
+              globalSearch={(x) => `${x.vchNo} ${x.particulars} ${x.narration}`}
+              onRowClick={(x) => openVoucherDetail(navigate, x.voucherId)}
+              height={520}
+            />
+            <div className="mt-2 flex justify-between border-t pt-2 text-sm">
+              <span className="text-muted-foreground">Opening: <span className="font-mono">{fmtBal(openingBeforeFrom)}</span></span>
+              <span className="font-semibold">Closing: <span className="font-mono">{fmtBal(closing)}</span></span>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </ReportViewer>
   );
