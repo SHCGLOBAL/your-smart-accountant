@@ -40,6 +40,7 @@ function TrialBalance() {
   const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("trial-balance");
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
 
