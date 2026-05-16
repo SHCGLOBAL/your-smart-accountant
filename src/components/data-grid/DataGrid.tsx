@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import { useMemo, useRef, useState, useCallback, useEffect, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ColumnFilterButton } from "./ColumnFilter";
