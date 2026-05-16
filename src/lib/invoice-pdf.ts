@@ -324,7 +324,7 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
       doc.setFont("helvetica", "normal");
     }
     doc.text(k, boxX + 8, yy);
-    doc.text(`Rs. ${val}`, boxX + boxW - 8, yy, { align: "right" });
+    doc.text(`${exportCurrencySymbol()} ${val}`, boxX + boxW - 8, yy, { align: "right" });
   });
 
   // Amount in words (left)
