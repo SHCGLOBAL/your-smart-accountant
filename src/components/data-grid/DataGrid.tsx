@@ -1,12 +1,15 @@
 import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { ColumnFilterButton } from "./ColumnFilter";
 import { GridToolbar } from "./GridToolbar";
 import { useGridState } from "./useGridState";
 import { computeAggregates, deriveEnumValues, processRows, type FlatRow } from "./grid-engine";
-import type { DGColumn, GridState } from "./types";
+import { PivotPanel } from "./PivotPanel";
+import { usePivot } from "./usePivot";
+import type { DGColumn, GridState, PivotStatePersisted } from "./types";
 
 export interface DataGridProps<T> {
   rows: T[];
@@ -69,16 +72,30 @@ export function DataGrid<T>({
     [rows, columns, state, expanded, globalSearch],
   );
 
+  // Filtered rows (without grouping) feed both the parent callback and the pivot engine
+  const filteredRows = useMemo(
+    () => flat.filter((r): r is { kind: "row"; row: T; index: number } => r.kind === "row").map((r) => r.row),
+    [flat],
+  );
+
   // Notify parent (debounced via ref to avoid loops)
   const lastNotifyRef = useRef<{ rows: T[]; aggregates: Record<string, number> } | null>(null);
-  const visibleData = useMemo(() => {
-    if (!onProcessedChange) return null;
-    return flat.filter((r): r is { kind: "row"; row: T; index: number } => r.kind === "row").map((r) => r.row);
-  }, [flat, onProcessedChange]);
-  if (onProcessedChange && visibleData && lastNotifyRef.current?.rows !== visibleData) {
-    lastNotifyRef.current = { rows: visibleData, aggregates };
-    queueMicrotask(() => onProcessedChange(visibleData, aggregates));
+  if (onProcessedChange && lastNotifyRef.current?.rows !== filteredRows) {
+    lastNotifyRef.current = { rows: filteredRows, aggregates };
+    queueMicrotask(() => onProcessedChange(filteredRows, aggregates));
   }
+
+  // Pivot state/config
+  const pivotState: PivotStatePersisted = state.pivot ?? { enabled: false, rows: [], cols: [], values: [] };
+  const pivotEnabled = !!pivotState.enabled;
+  const setPivot = useCallback((p: PivotStatePersisted) => {
+    setState((s) => ({ ...s, pivot: p }));
+  }, [setState]);
+  const pivotConfig = useMemo(
+    () => ({ rows: pivotState.rows, cols: pivotState.cols, values: pivotState.values }),
+    [pivotState.rows, pivotState.cols, pivotState.values],
+  );
+  const pivot = usePivot({ rows: filteredRows, columns, config: pivotConfig, enabled: pivotEnabled });
 
   const parentRef = useRef<HTMLDivElement>(null);
   const rowH = rowHeight ?? (state.density === "compact" ? 28 : 36);
@@ -152,9 +169,33 @@ export function DataGrid<T>({
             totalCount={rows.length}
           />
         </div>
-        {toolbarExtras && <div className="flex shrink-0 items-center gap-1">{toolbarExtras}</div>}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            size="sm"
+            variant={pivotEnabled ? "default" : "outline"}
+            className="h-8"
+            onClick={() => setPivot({ ...pivotState, enabled: !pivotEnabled })}
+            title="Toggle pivot mode"
+          >
+            <TableProperties className="mr-1 h-3.5 w-3.5" /> Pivot
+          </Button>
+          {toolbarExtras}
+        </div>
       </div>
 
+      {pivotEnabled ? (
+        <PivotPanel
+          columns={columns}
+          config={pivotConfig}
+          setConfig={(c) => setPivot({ ...pivotState, rows: c.rows, cols: c.cols, values: c.values })}
+          result={pivot.result}
+          loading={pivot.loading}
+          error={pivot.error}
+          ms={pivot.ms}
+          sourceCount={filteredRows.length}
+          onExit={() => setPivot({ ...pivotState, enabled: false })}
+        />
+      ) : (
       <div className="rounded-md border bg-card">
         {/* Header */}
         <div
@@ -297,6 +338,7 @@ export function DataGrid<T>({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
