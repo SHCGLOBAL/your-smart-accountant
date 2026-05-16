@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { toast } from "sonner";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { GstSectionTable } from "@/components/reports/GstSectionTable";
 
 export const Route = createFileRoute("/app/reports/gstr2b")({
   head: () => ({ meta: [{ title: "GSTR-2B Reconciliation — Reports" }] }),
