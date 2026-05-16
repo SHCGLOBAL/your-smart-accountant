@@ -215,6 +215,9 @@ function HousekeepingPage() {
             }
           />
         </TabsContent>
+        <TabsContent value="self_test">
+          <SelfTestPanel companyId={activeCompanyId} />
+        </TabsContent>
       </Tabs>
     </div>
   );
