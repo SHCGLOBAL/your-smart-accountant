@@ -73,9 +73,10 @@ export function GridToolbar<T>({
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             value={state.search}
             onChange={(e) => setState((s) => ({ ...s, search: e.target.value }))}
-            placeholder="Search…"
+            placeholder="Search…  (press /)"
             className="h-8 w-56 pl-7"
           />
         </div>
