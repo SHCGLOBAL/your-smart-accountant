@@ -256,6 +256,7 @@ function AppLayout() {
               </Button>
             </div>
           </header>
+          <BackupNudgeBanner />
           <AccountGroupsProvider>
           <MastersProvider>
           <FocusHintsProvider>
