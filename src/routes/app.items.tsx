@@ -36,6 +36,8 @@ import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
 import { GST_RATES, UNITS } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
 import { itemFormSchema as schema } from "@/lib/schemas/item";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
