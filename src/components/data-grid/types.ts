@@ -55,6 +55,13 @@ export interface ColumnFilter {
   value: unknown;
 }
 
+export interface PivotStatePersisted {
+  enabled: boolean;
+  rows: string[];
+  cols: string[];
+  values: { id: string; agg: Aggregator }[];
+}
+
 export interface GridState {
   sort: SortRule[];
   filters: ColumnFilter[];
@@ -62,6 +69,7 @@ export interface GridState {
   hiddenCols: string[];
   density: "comfortable" | "compact";
   search: string;
+  pivot?: PivotStatePersisted;
 }
 
 export const DEFAULT_GRID_STATE: GridState = {
@@ -71,6 +79,7 @@ export const DEFAULT_GRID_STATE: GridState = {
   hiddenCols: [],
   density: "comfortable",
   search: "",
+  pivot: { enabled: false, rows: [], cols: [], values: [] },
 };
 
 export interface SavedView {
