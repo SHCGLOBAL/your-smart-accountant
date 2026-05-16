@@ -162,6 +162,32 @@ function TradingAccount() {
           </p>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="trading"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: "Dr. Particulars",
+                buckets: drBuckets,
+                extras: [
+                  ...(openingStock ? [{ group: "Stock", name: "Opening Stock", valuePaise: openingStock }] : []),
+                  ...(gp > 0 ? [{ group: "Result", name: "Gross Profit c/d", valuePaise: gp }] : []),
+                ],
+              },
+              {
+                side: "Cr. Particulars",
+                buckets: crBuckets,
+                extras: [
+                  ...(closingStock ? [{ group: "Stock", name: "Closing Stock", valuePaise: closingStock }] : []),
+                  ...(gp < 0 ? [{ group: "Result", name: "Gross Loss c/d", valuePaise: -gp }] : []),
+                ],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title="Trading Account"
         subtitle={`for the period ${from} to ${to}`}
@@ -170,6 +196,7 @@ function TradingAccount() {
         leftTotal={formatINR(grandLeft)}
         rightTotal={formatINR(grandRight)}
       />
+      )}
     </div>
   );
 }
