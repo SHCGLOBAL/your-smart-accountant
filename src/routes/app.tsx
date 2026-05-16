@@ -11,6 +11,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -216,6 +217,7 @@ function AppLayout() {
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
               <LanguageSwitcher compact />
+              <CurrencySwitcher compact />
               {isTrial && (
                 <>
                   <Badge variant="outline" className="hidden border-amber-500/60 bg-amber-500/10 text-amber-700 sm:inline-flex dark:text-amber-300" title="This company is kept as a continuous local copy on this PC.">
