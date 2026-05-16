@@ -145,18 +145,33 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
   })();
 }
 
+export type XlsxCell = string | number | XLSX.CellObject;
 export interface XlsxSheet {
   name: string;
-  rows: (string | number)[][]; // first row may be header
+  rows: XlsxCell[][]; // first row may be header
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
   const lang = getStoredLang();
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
-    const rows = localizeExportRows(s.rows as (string | number)[][], lang);
+    // Localise string cells while preserving any pre-built cell objects
+    const localized: XlsxCell[][] = s.rows.map((row) =>
+      row.map((cell) =>
+        typeof cell === "string" ? (localizeExportText(cell, lang) as XlsxCell) : cell,
+      ),
+    );
+    // Auto-promote money/date strings to typed numeric/date cells
+    const promoted = promoteRows(localized as unknown[][]) as XlsxCell[][];
     const sheetName = localizeExportText(s.name, lang);
-    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const ws = XLSX.utils.aoa_to_sheet(promoted);
+    // Compute reasonable column widths from header lengths
+    const header = promoted[0] ?? [];
+    ws["!cols"] = header.map((cell) => {
+      const text = typeof cell === "string" ? cell : (cell as XLSX.CellObject)?.v ?? "";
+      const len = String(text).length;
+      return { wch: Math.max(10, Math.min(40, len + 4)) };
+    });
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   }
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
