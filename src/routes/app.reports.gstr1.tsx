@@ -48,6 +48,7 @@ function GSTR1Page() {
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [sales, setSales] = useState<VoucherRow[]>([]);
   const [cdnotes, setCdnotes] = useState<VoucherRow[]>([]);
+  const { view, setView } = useReportView("gstr1");
 
   // Determine effective period
   const period = useMemo(() => {
