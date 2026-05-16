@@ -72,16 +72,30 @@ export function DataGrid<T>({
     [rows, columns, state, expanded, globalSearch],
   );
 
+  // Filtered rows (without grouping) feed both the parent callback and the pivot engine
+  const filteredRows = useMemo(
+    () => flat.filter((r): r is { kind: "row"; row: T; index: number } => r.kind === "row").map((r) => r.row),
+    [flat],
+  );
+
   // Notify parent (debounced via ref to avoid loops)
   const lastNotifyRef = useRef<{ rows: T[]; aggregates: Record<string, number> } | null>(null);
-  const visibleData = useMemo(() => {
-    if (!onProcessedChange) return null;
-    return flat.filter((r): r is { kind: "row"; row: T; index: number } => r.kind === "row").map((r) => r.row);
-  }, [flat, onProcessedChange]);
-  if (onProcessedChange && visibleData && lastNotifyRef.current?.rows !== visibleData) {
-    lastNotifyRef.current = { rows: visibleData, aggregates };
-    queueMicrotask(() => onProcessedChange(visibleData, aggregates));
+  if (onProcessedChange && lastNotifyRef.current?.rows !== filteredRows) {
+    lastNotifyRef.current = { rows: filteredRows, aggregates };
+    queueMicrotask(() => onProcessedChange(filteredRows, aggregates));
   }
+
+  // Pivot state/config
+  const pivotState: PivotStatePersisted = state.pivot ?? { enabled: false, rows: [], cols: [], values: [] };
+  const pivotEnabled = !!pivotState.enabled;
+  const setPivot = useCallback((p: PivotStatePersisted) => {
+    setState((s) => ({ ...s, pivot: p }));
+  }, [setState]);
+  const pivotConfig = useMemo(
+    () => ({ rows: pivotState.rows, cols: pivotState.cols, values: pivotState.values }),
+    [pivotState.rows, pivotState.cols, pivotState.values],
+  );
+  const pivot = usePivot({ rows: filteredRows, columns, config: pivotConfig, enabled: pivotEnabled });
 
   const parentRef = useRef<HTMLDivElement>(null);
   const rowH = rowHeight ?? (state.density === "compact" ? 28 : 36);
