@@ -274,18 +274,22 @@ export function DataGrid<T>({
           className="grid border-b bg-muted/40 text-xs font-medium uppercase tracking-wide overflow-x-auto"
           style={{ gridTemplateColumns: gridTemplate }}
         >
-          {visibleColumns.map((c) => {
+          {visibleColumns.map((c, idx) => {
             const sortRule = state.sort.find((r) => r.id === c.id);
             const filter = state.filters.find((f) => f.id === c.id);
+            const isPinned = idx < pinnedCount;
             return (
               <div
                 key={c.id}
                 className={cn(
-                  "flex items-center gap-1 border-r px-2 py-1.5 select-none",
+                  "relative flex items-center gap-1 border-r px-2 py-1.5 select-none",
                   cellAlign(c) === "right" && "justify-end",
                   cellAlign(c) === "center" && "justify-center",
+                  isPinned && "sticky z-20 bg-muted/40 shadow-[1px_0_0_hsl(var(--border))]",
                 )}
+                style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
               >
+                {isPinned && <Pin className="h-2.5 w-2.5 text-primary shrink-0" />}
                 <button
                   className="flex items-center gap-1 truncate text-left hover:text-foreground"
                   onClick={(e) => toggleSort(c.id, e.shiftKey)}
@@ -300,6 +304,21 @@ export function DataGrid<T>({
                   enumOptions={enumOptionsByCol[c.id] ?? []}
                   current={filter}
                   onApply={(f) => setState((s) => setColFilter(s, c.id, f))}
+                />
+                {/* Resize handle */}
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  onPointerDown={(e) => onResizeStart(e, c)}
+                  onDoubleClick={() =>
+                    setState((s) => {
+                      const next = { ...(s.colWidths ?? {}) };
+                      delete next[c.id];
+                      return { ...s, colWidths: next };
+                    })
+                  }
+                  title="Drag to resize. Double-click to auto-reset."
+                  className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-primary/40"
                 />
               </div>
             );
