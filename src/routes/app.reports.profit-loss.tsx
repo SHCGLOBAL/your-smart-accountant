@@ -33,6 +33,7 @@ function ProfitLoss() {
   const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("profit-loss");
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
