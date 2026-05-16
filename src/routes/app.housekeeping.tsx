@@ -150,6 +150,9 @@ function HousekeepingPage() {
           <TabsTrigger value="closure">
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
           </TabsTrigger>
+          <TabsTrigger value="self_test">
+            <Activity className="mr-1 h-3.5 w-3.5" /> Self-test
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="verify_repair">
