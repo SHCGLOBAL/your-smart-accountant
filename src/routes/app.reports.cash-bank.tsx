@@ -295,20 +295,26 @@ function CashBankBook() {
           onExportPdf={onExportPdf}
           onPrint={() => window.print()}
           extra={
-            <div className="space-y-1">
-              <Label className="text-xs">Cash / Bank Ledger</Label>
-              <Select value={ledgerId} onValueChange={setLedgerId}>
-                <SelectTrigger className="h-9 w-[260px]">
-                  <SelectValue placeholder="Select ledger" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashBankLedgers.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name} ({l.type === "cash" ? "Cash" : "Bank"})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Cash / Bank Ledger</Label>
+                <Select value={ledgerId} onValueChange={setLedgerId}>
+                  <SelectTrigger className="h-9 w-[260px]">
+                    <SelectValue placeholder="Select ledger" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cashBankLedgers.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} ({l.type === "cash" ? "Cash" : "Bank"})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">View</Label>
+                <ViewSwitcher view={view} onChange={setView} />
+              </div>
             </div>
           }
         />
