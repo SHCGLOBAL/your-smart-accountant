@@ -43,6 +43,7 @@ function BalanceSheet() {
     : "Net Loss (current period)";
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("balance-sheet");
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
