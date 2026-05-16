@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
+import { exportCurrencySymbol } from "@/lib/export-format";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 
@@ -323,7 +324,7 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
       doc.setFont("helvetica", "normal");
     }
     doc.text(k, boxX + 8, yy);
-    doc.text(`Rs. ${val}`, boxX + boxW - 8, yy, { align: "right" });
+    doc.text(`${exportCurrencySymbol()} ${val}`, boxX + boxW - 8, yy, { align: "right" });
   });
 
   // Amount in words (left)
