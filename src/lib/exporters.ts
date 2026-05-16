@@ -10,6 +10,7 @@ import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
+import { promoteRows } from "@/lib/export-format";
 
 function localizeExportText(text: string, lang = getStoredLang()): string {
   if (!text) return text;
