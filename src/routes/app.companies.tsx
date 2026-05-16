@@ -60,6 +60,8 @@ interface FormState {
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
   trial_local: boolean;
+  currency_code: string;
+  date_format: "dd-mm-yyyy" | "dd/mm/yyyy" | "mm-dd-yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "dd-mmm-yyyy";
 }
 
 const empty: FormState = {
@@ -86,6 +88,8 @@ const empty: FormState = {
   inventory_enabled: true,
   annual_turnover_lakhs: "",
   trial_local: false,
+  currency_code: "INR",
+  date_format: "dd-mm-yyyy",
 };
 
 function CompaniesPage() {
@@ -154,6 +158,8 @@ function CompaniesPage() {
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
       trial_local: (data as { mode?: string }).mode === "trial_local",
+      currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
+      date_format: (((data as { date_format?: FormState["date_format"] }).date_format) ?? "dd-mm-yyyy"),
     });
     setOpen(true);
   };
@@ -221,6 +227,8 @@ function CompaniesPage() {
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
       mode: parsed.data.trial_local ? "trial_local" : "normal",
+      currency_code: parsed.data.currency_code || "INR",
+      date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
 
     if (editingId) {
