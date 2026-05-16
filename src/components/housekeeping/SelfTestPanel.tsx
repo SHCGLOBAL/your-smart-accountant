@@ -157,13 +157,12 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
 
       // 5. Settings row
       await mark("settings", async () => {
-        const { data, error } = await supabase
+        const { count, error } = await supabase
           .from("company_settings")
-          .select("company_id")
-          .eq("company_id", companyId)
-          .maybeSingle();
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", companyId);
         if (error) return { status: "error", message: error.message };
-        return data
+        return (count ?? 0) > 0
           ? { status: "ok", message: "Settings row present" }
           : { status: "warn", message: "Settings row missing — open Settings once" };
       });
