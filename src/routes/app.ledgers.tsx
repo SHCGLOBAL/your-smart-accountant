@@ -537,16 +537,19 @@ function LedgersPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 gap-2 flex-wrap">
           <CardTitle className="text-base">All ledgers ({ledgers.length})</CardTitle>
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, GSTIN, phone…"
-              className="pl-8"
-            />
+          <div className="flex items-center gap-2">
+            <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, GSTIN, phone…"
+                className="pl-8"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
