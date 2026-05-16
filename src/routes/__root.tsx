@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { I18nProvider } from "@/lib/i18n";
+import { CurrencyProvider } from "@/lib/currency";
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
@@ -81,12 +82,14 @@ function RootComponent() {
   return (
     <ThemeProvider>
       <I18nProvider>
-        <AuthProvider>
-          <CompanyProvider>
-            <Outlet />
-            <Toaster richColors position="top-right" />
-          </CompanyProvider>
-        </AuthProvider>
+        <CurrencyProvider>
+          <AuthProvider>
+            <CompanyProvider>
+              <Outlet />
+              <Toaster richColors position="top-right" />
+            </CompanyProvider>
+          </AuthProvider>
+        </CurrencyProvider>
       </I18nProvider>
     </ThemeProvider>
   );
