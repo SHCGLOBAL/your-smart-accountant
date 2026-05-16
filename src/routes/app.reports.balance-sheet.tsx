@@ -166,6 +166,26 @@ function BalanceSheet() {
           </div>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="balance-sheet"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: liabHeader,
+                buckets: liabBuckets,
+                extras: profitPaise > 0 ? [{ group: "Result", name: profitLabelPos, valuePaise: profitPaise }] : [],
+              },
+              {
+                side: assetHeader,
+                buckets: assetBuckets,
+                extras: profitPaise < 0 ? [{ group: "Result", name: profitLabelNeg, valuePaise: -profitPaise }] : [],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title="Balance Sheet"
         subtitle={`as on ${to}`}
@@ -176,6 +196,7 @@ function BalanceSheet() {
         leftTotal={formatINR(grandL)}
         rightTotal={formatINR(grandA)}
       />
+      )}
     </div>
   );
 }
