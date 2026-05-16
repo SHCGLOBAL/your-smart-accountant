@@ -36,6 +36,8 @@ import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
 import { GST_RATES, UNITS } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
 import { itemFormSchema as schema } from "@/lib/schemas/item";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
@@ -91,6 +93,7 @@ function ItemsPage() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const { view, setView } = useReportView("masters-items");
 
   const load = async () => {
     if (!activeCompanyId) {
@@ -394,7 +397,8 @@ function ItemsPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
             <Button
               variant={showLowOnly ? "default" : "outline"}
               size="sm"
@@ -427,6 +431,28 @@ function ItemsPage() {
                   : "Try a different search term."
               }
             />
+          ) : view === "grid" ? (
+            <div className="p-3">
+              <DataGrid<Item>
+                reportId="masters-items"
+                rows={filtered}
+                columns={[
+                  { id: "name", header: "Name", type: "text", width: 240, accessor: (i) => i.name, groupable: true },
+                  { id: "hsn", header: "HSN", type: "text", width: 120, accessor: (i) => i.hsn_code ?? "", groupable: true },
+                  { id: "unit", header: "Unit", type: "enum", width: 100, accessor: (i) => i.unit, groupable: true },
+                  { id: "gst", header: "GST %", type: "number", width: 90, align: "right", accessor: (i) => i.gst_rate, groupable: true, aggregator: "avg" },
+                  { id: "purchase", header: "Purchase ₹", type: "number", width: 130, align: "right", accessor: (i) => i.purchase_price_paise / 100, cell: (i) => i.purchase_price_paise ? formatINR(i.purchase_price_paise) : "—", aggregator: "avg", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+                  { id: "sale", header: "Sale ₹", type: "number", width: 130, align: "right", accessor: (i) => i.sale_price_paise / 100, cell: (i) => i.sale_price_paise ? formatINR(i.sale_price_paise) : "—", aggregator: "avg", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+                  { id: "qty", header: "Stock qty", type: "number", width: 110, align: "right", accessor: (i) => i.opening_stock_qty, aggregator: "sum" },
+                  { id: "reorder", header: "Reorder", type: "number", width: 100, align: "right", accessor: (i) => i.reorder_level },
+                  { id: "value", header: "Stock value", type: "number", width: 140, align: "right", accessor: (i) => (i.opening_stock_qty * i.opening_stock_rate_paise) / 100, cell: (i) => { const v = i.opening_stock_qty * i.opening_stock_rate_paise; return v ? formatINR(v) : "—"; }, aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+                  { id: "low", header: "Low?", type: "enum", width: 80, accessor: (i) => isLow(i) ? "Low" : "OK", groupable: true },
+                ] satisfies DGColumn<Item>[]}
+                onRowClick={canWrite ? (i) => openEdit(i) : undefined}
+                globalSearch={(i) => `${i.name} ${i.hsn_code ?? ""} ${i.unit}`}
+                height={560}
+              />
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
