@@ -49,8 +49,10 @@ export function GridToolbar<T>({
   saveView,
   applyView,
   deleteView,
+  setDefaultView,
   filteredCount,
   totalCount,
+  searchInputRef,
 }: Props<T>) {
   const [savingName, setSavingName] = useState("");
   const colsById = useMemo(() => new Map(columns.map((c) => [c.id, c])), [columns]);
