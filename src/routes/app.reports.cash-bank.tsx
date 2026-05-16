@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
