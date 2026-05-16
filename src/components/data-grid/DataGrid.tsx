@@ -380,20 +380,25 @@ export function DataGrid<T>({
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
                   onClick={onRowClick ? () => onRowClick(item.row) : undefined}
                 >
-                  {visibleColumns.map((c) => (
-                    <div
-                      key={c.id}
-                      className={cn(
-                        "flex items-center truncate border-r px-2",
-                        cellAlign(c) === "right" && "justify-end font-mono tabular-nums",
-                        cellAlign(c) === "center" && "justify-center",
-                      )}
-                    >
-                      <span className="truncate">
-                        {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
-                      </span>
-                    </div>
-                  ))}
+                  {visibleColumns.map((c, idx) => {
+                    const isPinned = idx < pinnedCount;
+                    return (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          "flex items-center truncate border-r px-2",
+                          cellAlign(c) === "right" && "justify-end font-mono tabular-nums",
+                          cellAlign(c) === "center" && "justify-center",
+                          isPinned && "sticky z-10 bg-card shadow-[1px_0_0_hsl(var(--border))]",
+                        )}
+                        style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
+                      >
+                        <span className="truncate">
+                          {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
