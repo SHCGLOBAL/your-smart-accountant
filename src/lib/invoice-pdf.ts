@@ -5,6 +5,7 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
+import { exportCurrencySymbol } from "@/lib/export-format";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 
