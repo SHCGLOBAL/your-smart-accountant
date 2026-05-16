@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
+import { useMemo, useRef, useState, useCallback, useEffect, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ColumnFilterButton } from "./ColumnFilter";
@@ -51,13 +51,24 @@ export function DataGrid<T>({
   rowHeight,
   onProcessedChange,
 }: DataGridProps<T>) {
-  const { state, setState, reset, views, saveView, applyView, deleteView } = useGridState(reportId);
+  const { state, setState, reset, views, saveView, applyView, deleteView, setDefaultView } = useGridState(reportId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const visibleColumns = useMemo(
-    () => columns.filter((c) => !state.hiddenCols.includes(c.id) && !c.hidden),
-    [columns, state.hiddenCols],
-  );
+  // Reorder columns: pinned-left first, then the rest. Hidden columns stripped.
+  const visibleColumns = useMemo(() => {
+    const shown = columns.filter((c) => !state.hiddenCols.includes(c.id) && !c.hidden);
+    const pinIds = state.pinnedLeft ?? [];
+    const pinned = pinIds
+      .map((id) => shown.find((c) => c.id === id))
+      .filter((c): c is DGColumn<T> => !!c);
+    const rest = shown.filter((c) => !pinIds.includes(c.id));
+    return [...pinned, ...rest];
+  }, [columns, state.hiddenCols, state.pinnedLeft]);
+
+  const pinnedCount = (state.pinnedLeft ?? []).filter((id) =>
+    visibleColumns.some((c) => c.id === id)
+  ).length;
 
   const enumOptionsByCol = useMemo(() => {
     const out: Record<string, string[]> = {};
@@ -146,11 +157,70 @@ export function DataGrid<T>({
   const cellAlign = (c: DGColumn<T>) =>
     c.align ?? (c.type === "number" ? "right" : "left");
 
+  // Column widths (with persisted overrides)
+  const colWidth = useCallback((c: DGColumn<T>) => {
+    const w = state.colWidths?.[c.id];
+    if (typeof w === "number" && w > 0) return w;
+    return c.width ?? 160;
+  }, [state.colWidths]);
+
   // Compute grid template columns
   const gridTemplate = useMemo(
-    () => visibleColumns.map((c) => `${c.width ?? 160}px`).join(" "),
-    [visibleColumns],
+    () => visibleColumns.map((c) => `${colWidth(c)}px`).join(" "),
+    [visibleColumns, colWidth],
   );
+
+  // Pinned column left offsets (px)
+  const pinnedOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {};
+    let acc = 0;
+    for (let i = 0; i < pinnedCount; i++) {
+      const c = visibleColumns[i];
+      offsets[c.id] = acc;
+      acc += colWidth(c);
+    }
+    return offsets;
+  }, [visibleColumns, pinnedCount, colWidth]);
+
+  // Resize handler
+  const onResizeStart = useCallback((e: React.PointerEvent, col: DGColumn<T>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colWidth(col);
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(col.minWidth ?? 60, Math.round(startW + (ev.clientX - startX)));
+      setState((s) => ({ ...s, colWidths: { ...(s.colWidths ?? {}), [col.id]: next } }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [colWidth, setState]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.key === "/" && !inField) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "Escape" && target === searchInputRef.current) {
+        setState((s) => ({ ...s, search: "" }));
+        searchInputRef.current?.blur();
+      } else if (e.key === "R" && e.shiftKey && !inField) {
+        e.preventDefault();
+        reset();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reset, setState]);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -165,8 +235,10 @@ export function DataGrid<T>({
             saveView={saveView}
             applyView={applyView}
             deleteView={deleteView}
+            setDefaultView={setDefaultView}
             filteredCount={visibleCount}
             totalCount={rows.length}
+            searchInputRef={searchInputRef}
           />
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -202,18 +274,22 @@ export function DataGrid<T>({
           className="grid border-b bg-muted/40 text-xs font-medium uppercase tracking-wide overflow-x-auto"
           style={{ gridTemplateColumns: gridTemplate }}
         >
-          {visibleColumns.map((c) => {
+          {visibleColumns.map((c, idx) => {
             const sortRule = state.sort.find((r) => r.id === c.id);
             const filter = state.filters.find((f) => f.id === c.id);
+            const isPinned = idx < pinnedCount;
             return (
               <div
                 key={c.id}
                 className={cn(
-                  "flex items-center gap-1 border-r px-2 py-1.5 select-none",
+                  "relative flex items-center gap-1 border-r px-2 py-1.5 select-none",
                   cellAlign(c) === "right" && "justify-end",
                   cellAlign(c) === "center" && "justify-center",
+                  isPinned && "sticky z-20 bg-muted/40 shadow-[1px_0_0_hsl(var(--border))]",
                 )}
+                style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
               >
+                {isPinned && <Pin className="h-2.5 w-2.5 text-primary shrink-0" />}
                 <button
                   className="flex items-center gap-1 truncate text-left hover:text-foreground"
                   onClick={(e) => toggleSort(c.id, e.shiftKey)}
@@ -228,6 +304,21 @@ export function DataGrid<T>({
                   enumOptions={enumOptionsByCol[c.id] ?? []}
                   current={filter}
                   onApply={(f) => setState((s) => setColFilter(s, c.id, f))}
+                />
+                {/* Resize handle */}
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  onPointerDown={(e) => onResizeStart(e, c)}
+                  onDoubleClick={() =>
+                    setState((s) => {
+                      const next = { ...(s.colWidths ?? {}) };
+                      delete next[c.id];
+                      return { ...s, colWidths: next };
+                    })
+                  }
+                  title="Drag to resize. Double-click to auto-reset."
+                  className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-primary/40"
                 />
               </div>
             );
@@ -289,20 +380,25 @@ export function DataGrid<T>({
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
                   onClick={onRowClick ? () => onRowClick(item.row) : undefined}
                 >
-                  {visibleColumns.map((c) => (
-                    <div
-                      key={c.id}
-                      className={cn(
-                        "flex items-center truncate border-r px-2",
-                        cellAlign(c) === "right" && "justify-end font-mono tabular-nums",
-                        cellAlign(c) === "center" && "justify-center",
-                      )}
-                    >
-                      <span className="truncate">
-                        {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
-                      </span>
-                    </div>
-                  ))}
+                  {visibleColumns.map((c, idx) => {
+                    const isPinned = idx < pinnedCount;
+                    return (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          "flex items-center truncate border-r px-2",
+                          cellAlign(c) === "right" && "justify-end font-mono tabular-nums",
+                          cellAlign(c) === "center" && "justify-center",
+                          isPinned && "sticky z-10 bg-card shadow-[1px_0_0_hsl(var(--border))]",
+                        )}
+                        style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
+                      >
+                        <span className="truncate">
+                          {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -315,26 +411,31 @@ export function DataGrid<T>({
             className="grid border-t bg-muted/50 text-sm font-semibold"
             style={{ gridTemplateColumns: gridTemplate }}
           >
-            {visibleColumns.map((c, i) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "border-r px-2 py-1.5 truncate",
-                  cellAlign(c) === "right" && "text-right font-mono tabular-nums",
-                  cellAlign(c) === "center" && "text-center",
-                )}
-              >
-                {i === 0 && (footerLabel ?? "Total")}
-                {c.aggregator && i !== 0 && (
-                  c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)
-                )}
-                {i === 0 && c.aggregator && (
-                  <span className="ml-2 font-mono tabular-nums">
-                    {c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)}
-                  </span>
-                )}
-              </div>
-            ))}
+            {visibleColumns.map((c, i) => {
+              const isPinned = i < pinnedCount;
+              return (
+                <div
+                  key={c.id}
+                  className={cn(
+                    "border-r px-2 py-1.5 truncate",
+                    cellAlign(c) === "right" && "text-right font-mono tabular-nums",
+                    cellAlign(c) === "center" && "text-center",
+                    isPinned && "sticky z-10 bg-muted/50 shadow-[1px_0_0_hsl(var(--border))]",
+                  )}
+                  style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
+                >
+                  {i === 0 && (footerLabel ?? "Total")}
+                  {c.aggregator && i !== 0 && (
+                    c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)
+                  )}
+                  {i === 0 && c.aggregator && (
+                    <span className="ml-2 font-mono tabular-nums">
+                      {c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

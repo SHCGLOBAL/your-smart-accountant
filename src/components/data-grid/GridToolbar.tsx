@@ -18,8 +18,12 @@ import {
   Save,
   Search,
   SlidersHorizontal,
+  Star,
   X,
+  Keyboard,
+  Pin,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DGColumn, GridState, SavedView } from "./types";
 
 interface Props<T> {
@@ -31,8 +35,10 @@ interface Props<T> {
   saveView: (name: string) => void;
   applyView: (name: string) => void;
   deleteView: (name: string) => void;
+  setDefaultView: (name: string | null) => void;
   filteredCount: number;
   totalCount: number;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export function GridToolbar<T>({
@@ -44,8 +50,10 @@ export function GridToolbar<T>({
   saveView,
   applyView,
   deleteView,
+  setDefaultView,
   filteredCount,
   totalCount,
+  searchInputRef,
 }: Props<T>) {
   const [savingName, setSavingName] = useState("");
   const colsById = useMemo(() => new Map(columns.map((c) => [c.id, c])), [columns]);
@@ -66,9 +74,10 @@ export function GridToolbar<T>({
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             value={state.search}
             onChange={(e) => setState((s) => ({ ...s, search: e.target.value }))}
-            placeholder="Search…"
+            placeholder="Search…  (press /)"
             className="h-8 w-56 pl-7"
           />
         </div>
@@ -101,23 +110,50 @@ export function GridToolbar<T>({
               <Columns3 className="mr-1 h-3.5 w-3.5" /> Columns
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 max-h-80 overflow-auto">
-            {columns.map((c) => (
-              <DropdownMenuCheckboxItem
-                key={c.id}
-                checked={!state.hiddenCols.includes(c.id)}
-                onCheckedChange={(checked) =>
-                  setState((s) => ({
-                    ...s,
-                    hiddenCols: checked
-                      ? s.hiddenCols.filter((x) => x !== c.id)
-                      : [...s.hiddenCols, c.id],
-                  }))
-                }
-              >
-                {String(c.header)}
-              </DropdownMenuCheckboxItem>
-            ))}
+          <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
+            <DropdownMenuLabel className="text-xs">Show / pin columns</DropdownMenuLabel>
+            {columns.map((c) => {
+              const pinned = (state.pinnedLeft ?? []).includes(c.id);
+              return (
+                <div key={c.id} className="flex items-center gap-1 pr-1">
+                  <DropdownMenuCheckboxItem
+                    className="flex-1"
+                    checked={!state.hiddenCols.includes(c.id)}
+                    onCheckedChange={(checked) =>
+                      setState((s) => ({
+                        ...s,
+                        hiddenCols: checked
+                          ? s.hiddenCols.filter((x) => x !== c.id)
+                          : [...s.hiddenCols, c.id],
+                      }))
+                    }
+                  >
+                    {String(c.header)}
+                  </DropdownMenuCheckboxItem>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    title={pinned ? "Unpin" : "Pin to left"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setState((s) => {
+                        const cur = s.pinnedLeft ?? [];
+                        return {
+                          ...s,
+                          pinnedLeft: cur.includes(c.id)
+                            ? cur.filter((x) => x !== c.id)
+                            : [...cur, c.id],
+                        };
+                      });
+                    }}
+                  >
+                    <Pin className={`h-3 w-3 ${pinned ? "fill-current text-primary" : ""}`} />
+                  </Button>
+                </div>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -144,10 +180,20 @@ export function GridToolbar<T>({
               <div className="px-2 py-1 text-xs text-muted-foreground">None saved</div>
             )}
             {views.map((v) => (
-              <div key={v.name} className="flex items-center justify-between gap-2 px-1">
+              <div key={v.name} className="flex items-center justify-between gap-1 px-1">
                 <DropdownMenuItem className="flex-1" onClick={() => applyView(v.name)}>
                   {v.name}
+                  {v.isDefault && <span className="ml-1 text-[10px] text-muted-foreground">(default)</span>}
                 </DropdownMenuItem>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDefaultView(v.isDefault ? null : v.name); }}
+                  title={v.isDefault ? "Unset default" : "Set as default"}
+                >
+                  <Star className={`h-3 w-3 ${v.isDefault ? "fill-current text-amber-500" : ""}`} />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -178,9 +224,28 @@ export function GridToolbar<T>({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="sm" className="h-8" onClick={reset} title="Reset filters/sort/group">
+        <Button variant="ghost" size="sm" className="h-8" onClick={reset} title="Reset filters/sort/group (Shift+R)">
           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset
         </Button>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" type="button">
+                <Keyboard className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end" className="text-xs">
+              <div className="space-y-0.5">
+                <div><kbd className="font-mono">/</kbd> focus search</div>
+                <div><kbd className="font-mono">Esc</kbd> clear search</div>
+                <div><kbd className="font-mono">Shift+R</kbd> reset</div>
+                <div><kbd className="font-mono">Shift+click</kbd> header → multi-sort</div>
+                <div>Drag header edge to resize</div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <div className="ml-auto text-xs text-muted-foreground">
           {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} rows
