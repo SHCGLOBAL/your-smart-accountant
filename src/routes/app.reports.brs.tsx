@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
