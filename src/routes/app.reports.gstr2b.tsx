@@ -237,10 +237,11 @@ function Gstr2BPage() {
             <Label>Upload GSTR-2B (CSV or JSON from GST portal)</Label>
             <Input type="file" accept=".csv,.json" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
-          <div className="text-xs flex items-end gap-2">
+          <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>
             <Badge variant="secondary">{stats.mismatch} mismatch</Badge>
             <Badge variant="outline">{stats.unmatched} unmatched</Badge>
+            <div className="ml-auto"><ViewSwitcher view={view} onChange={setView} classicLabel="Table" /></div>
           </div>
         </CardContent>
       </Card>
