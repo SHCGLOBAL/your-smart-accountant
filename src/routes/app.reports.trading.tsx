@@ -29,6 +29,7 @@ function TradingAccount() {
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const { view, setView } = useReportView("trading");
 
   useEffect(() => {
     if (!activeCompanyId) return;
