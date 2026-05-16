@@ -93,6 +93,7 @@ function ItemsPage() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const { view, setView } = useReportView("masters-items");
 
   const load = async () => {
     if (!activeCompanyId) {
