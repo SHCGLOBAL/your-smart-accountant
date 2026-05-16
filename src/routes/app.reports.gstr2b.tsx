@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { toast } from "sonner";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { GstSectionTable } from "@/components/reports/GstSectionTable";
 
 export const Route = createFileRoute("/app/reports/gstr2b")({
   head: () => ({ meta: [{ title: "GSTR-2B Reconciliation — Reports" }] }),
@@ -142,6 +144,7 @@ function Gstr2BPage() {
   });
   const [lines, setLines] = useState<G2BLine[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const { view, setView } = useReportView("gstr2b");
   const [importId, setImportId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -234,15 +237,36 @@ function Gstr2BPage() {
             <Label>Upload GSTR-2B (CSV or JSON from GST portal)</Label>
             <Input type="file" accept=".csv,.json" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
-          <div className="text-xs flex items-end gap-2">
+          <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>
             <Badge variant="secondary">{stats.mismatch} mismatch</Badge>
             <Badge variant="outline">{stats.unmatched} unmatched</Badge>
+            <div className="ml-auto"><ViewSwitcher view={view} onChange={setView} classicLabel="Table" /></div>
           </div>
         </CardContent>
       </Card>
 
       {lines.length > 0 && (
+        view === "grid" ? (
+          <GstSectionTable
+            view={view}
+            reportId="gstr2b"
+            title="2B lines vs Purchase Register"
+            headers={["Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST"]}
+            rows={lines.map((l) => [
+              l.supplier_gstin,
+              l.supplier_name ?? "",
+              l.invoice_no,
+              l.invoice_date ?? "",
+              l.match_status,
+              formatINR(l.invoice_value_paise),
+              formatINR(l.igst_paise),
+              formatINR(l.cgst_paise),
+              formatINR(l.sgst_paise),
+            ])}
+            numericFromCol={5}
+          />
+        ) : (
         <Card>
           <CardContent className="p-0">
             <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold">2B lines vs Purchase Register</div>
@@ -278,8 +302,26 @@ function Gstr2BPage() {
             </Table>
           </CardContent>
         </Card>
+        )
       )}
 
+      {view === "grid" && missing.length > 0 ? (
+        <GstSectionTable
+          view={view}
+          reportId="gstr2b"
+          title={`Missing ITC: purchases in your books not appearing in GSTR-2B (${missing.length})`}
+          headers={["Date", "Voucher #", "Supplier", "GSTIN", "Vendor Inv #", "Value"]}
+          rows={missing.map((p) => [
+            fmtIndianDate(p.voucher_date),
+            p.voucher_number,
+            p.ledgers?.name || "—",
+            p.ledgers?.gstin || "—",
+            p.vendor_invoice_no || "—",
+            formatINR(p.total_paise),
+          ])}
+          numericFromCol={5}
+        />
+      ) : (
       <Card>
         <CardContent className="p-0">
           <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold text-destructive">
@@ -309,6 +351,7 @@ function Gstr2BPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

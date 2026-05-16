@@ -17,6 +17,9 @@ import {
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { useAccountGroups } from "@/lib/account-groups-runtime";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
@@ -40,6 +43,7 @@ function BalanceSheet() {
     : "Net Loss (current period)";
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("balance-sheet");
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
@@ -137,6 +141,7 @@ function BalanceSheet() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
+            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Closing position as on <strong>{to}</strong>. Heads grouped per Income-Tax / Schedule III norms
@@ -161,6 +166,26 @@ function BalanceSheet() {
           </div>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="balance-sheet"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: liabHeader,
+                buckets: liabBuckets,
+                extras: profitPaise > 0 ? [{ group: "Result", name: profitLabelPos, valuePaise: profitPaise }] : [],
+              },
+              {
+                side: assetHeader,
+                buckets: assetBuckets,
+                extras: profitPaise < 0 ? [{ group: "Result", name: profitLabelNeg, valuePaise: -profitPaise }] : [],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title="Balance Sheet"
         subtitle={`as on ${to}`}
@@ -171,6 +196,7 @@ function BalanceSheet() {
         leftTotal={formatINR(grandL)}
         rightTotal={formatINR(grandA)}
       />
+      )}
     </div>
   );
 }

@@ -12,6 +12,9 @@ import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { supabase } from "@/integrations/supabase/client";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/app/reports/trading")({
   head: () => ({ meta: [{ title: "Trading Account — Reports" }] }),
@@ -26,6 +29,7 @@ function TradingAccount() {
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const { view, setView } = useReportView("trading");
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -149,6 +153,7 @@ function TradingAccount() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
+            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Sales, Purchases &amp; Direct Expenses grouped per IT-norms. Gross Profit / Loss flows to the P&amp;L account.
@@ -157,6 +162,32 @@ function TradingAccount() {
           </p>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="trading"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: "Dr. Particulars",
+                buckets: drBuckets,
+                extras: [
+                  ...(openingStock ? [{ group: "Stock", name: "Opening Stock", valuePaise: openingStock }] : []),
+                  ...(gp > 0 ? [{ group: "Result", name: "Gross Profit c/d", valuePaise: gp }] : []),
+                ],
+              },
+              {
+                side: "Cr. Particulars",
+                buckets: crBuckets,
+                extras: [
+                  ...(closingStock ? [{ group: "Stock", name: "Closing Stock", valuePaise: closingStock }] : []),
+                  ...(gp < 0 ? [{ group: "Result", name: "Gross Loss c/d", valuePaise: -gp }] : []),
+                ],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title="Trading Account"
         subtitle={`for the period ${from} to ${to}`}
@@ -165,6 +196,7 @@ function TradingAccount() {
         leftTotal={formatINR(grandLeft)}
         rightTotal={formatINR(grandRight)}
       />
+      )}
     </div>
   );
 }

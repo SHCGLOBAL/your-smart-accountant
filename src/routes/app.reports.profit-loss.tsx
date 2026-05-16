@@ -12,6 +12,9 @@ import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { openLedgerReport } from "@/lib/voucher-return";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
@@ -30,6 +33,7 @@ function ProfitLoss() {
   const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("profit-loss");
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
@@ -125,6 +129,7 @@ function ProfitLoss() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
+            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {isIE
@@ -133,6 +138,26 @@ function ProfitLoss() {
           </p>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="profit-loss"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: dr,
+                buckets: expenseBuckets,
+                extras: profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : [],
+              },
+              {
+                side: cr,
+                buckets: incomeBuckets,
+                extras: profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : [],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title={reportTitle}
         subtitle={`for the period ${from} to ${to}`}
@@ -143,6 +168,7 @@ function ProfitLoss() {
         leftTotal={formatINR(grandLeft)}
         rightTotal={formatINR(grandRight)}
       />
+      )}
     </div>
   );
 }
