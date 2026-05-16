@@ -13,6 +13,8 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import type { LedgerTypeValue } from "@/lib/constants";
 
