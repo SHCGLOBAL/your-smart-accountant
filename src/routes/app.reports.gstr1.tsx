@@ -252,34 +252,3 @@ function sumLine<K extends "txval" | "iamt" | "camt" | "samt" | "csamt">(itms: {
   return itms.reduce((s, l) => s + (l.itm_det[k] || 0), 0);
 }
 
-function SectionTable({ title, headers, rows }: { title: string; headers: string[]; rows: (string | number)[][] }) {
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="border-b px-4 py-3 font-medium">{title}</div>
-        {rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">No records.</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {headers.map((h, i) => (
-                  <TableHead key={i} className={i >= 3 ? "text-right" : ""}>{h}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((r, i) => (
-                <TableRow key={i}>
-                  {r.map((c, j) => (
-                    <TableCell key={j} className={`${j >= 3 ? "text-right font-mono" : "font-mono text-xs"}`}>{c}</TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
