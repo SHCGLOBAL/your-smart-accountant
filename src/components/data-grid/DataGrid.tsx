@@ -51,13 +51,24 @@ export function DataGrid<T>({
   rowHeight,
   onProcessedChange,
 }: DataGridProps<T>) {
-  const { state, setState, reset, views, saveView, applyView, deleteView } = useGridState(reportId);
+  const { state, setState, reset, views, saveView, applyView, deleteView, setDefaultView } = useGridState(reportId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const visibleColumns = useMemo(
-    () => columns.filter((c) => !state.hiddenCols.includes(c.id) && !c.hidden),
-    [columns, state.hiddenCols],
-  );
+  // Reorder columns: pinned-left first, then the rest. Hidden columns stripped.
+  const visibleColumns = useMemo(() => {
+    const shown = columns.filter((c) => !state.hiddenCols.includes(c.id) && !c.hidden);
+    const pinIds = state.pinnedLeft ?? [];
+    const pinned = pinIds
+      .map((id) => shown.find((c) => c.id === id))
+      .filter((c): c is DGColumn<T> => !!c);
+    const rest = shown.filter((c) => !pinIds.includes(c.id));
+    return [...pinned, ...rest];
+  }, [columns, state.hiddenCols, state.pinnedLeft]);
+
+  const pinnedCount = (state.pinnedLeft ?? []).filter((id) =>
+    visibleColumns.some((c) => c.id === id)
+  ).length;
 
   const enumOptionsByCol = useMemo(() => {
     const out: Record<string, string[]> = {};
