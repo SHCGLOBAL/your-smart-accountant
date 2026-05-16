@@ -109,23 +109,50 @@ export function GridToolbar<T>({
               <Columns3 className="mr-1 h-3.5 w-3.5" /> Columns
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 max-h-80 overflow-auto">
-            {columns.map((c) => (
-              <DropdownMenuCheckboxItem
-                key={c.id}
-                checked={!state.hiddenCols.includes(c.id)}
-                onCheckedChange={(checked) =>
-                  setState((s) => ({
-                    ...s,
-                    hiddenCols: checked
-                      ? s.hiddenCols.filter((x) => x !== c.id)
-                      : [...s.hiddenCols, c.id],
-                  }))
-                }
-              >
-                {String(c.header)}
-              </DropdownMenuCheckboxItem>
-            ))}
+          <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
+            <DropdownMenuLabel className="text-xs">Show / pin columns</DropdownMenuLabel>
+            {columns.map((c) => {
+              const pinned = (state.pinnedLeft ?? []).includes(c.id);
+              return (
+                <div key={c.id} className="flex items-center gap-1 pr-1">
+                  <DropdownMenuCheckboxItem
+                    className="flex-1"
+                    checked={!state.hiddenCols.includes(c.id)}
+                    onCheckedChange={(checked) =>
+                      setState((s) => ({
+                        ...s,
+                        hiddenCols: checked
+                          ? s.hiddenCols.filter((x) => x !== c.id)
+                          : [...s.hiddenCols, c.id],
+                      }))
+                    }
+                  >
+                    {String(c.header)}
+                  </DropdownMenuCheckboxItem>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    title={pinned ? "Unpin" : "Pin to left"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setState((s) => {
+                        const cur = s.pinnedLeft ?? [];
+                        return {
+                          ...s,
+                          pinnedLeft: cur.includes(c.id)
+                            ? cur.filter((x) => x !== c.id)
+                            : [...cur, c.id],
+                        };
+                      });
+                    }}
+                  >
+                    <Pin className={`h-3 w-3 ${pinned ? "fill-current text-primary" : ""}`} />
+                  </Button>
+                </div>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
 
