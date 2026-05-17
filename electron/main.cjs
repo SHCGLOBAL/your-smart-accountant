@@ -66,17 +66,31 @@ ipcMain.handle('save-company-file', async (_evt, payload) => {
     const { company, subFolder, fileName, contents, encoding } = payload || {};
     const dir = path.join(dataRoot(), safe(company), safe(subFolder || 'files'));
     fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, fileName);
+    let target = path.join(dir, fileName);
+    let buf;
     if (encoding === 'binary' && contents != null) {
-      let buf;
       if (Buffer.isBuffer(contents)) buf = contents;
       else if (contents instanceof Uint8Array) buf = Buffer.from(contents.buffer, contents.byteOffset, contents.byteLength);
       else if (contents instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(contents));
       else if (ArrayBuffer.isView(contents)) buf = Buffer.from(contents.buffer, contents.byteOffset, contents.byteLength);
       else buf = Buffer.from(contents);
-      fs.writeFileSync(target, buf);
     } else {
-      fs.writeFileSync(target, String(contents ?? ''), 'utf8');
+      buf = Buffer.from(String(contents ?? ''), 'utf8');
+    }
+    try {
+      fs.writeFileSync(target, buf);
+    } catch (e) {
+      // File is open/locked in a viewer (Adobe locks PDFs on Windows -> EBUSY/EPERM).
+      // Retry with a timestamped sibling filename so the export still succeeds.
+      if (e && (e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'EACCES')) {
+        const ext = path.extname(fileName);
+        const base = path.basename(fileName, ext);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        target = path.join(dir, `${base} (${stamp})${ext}`);
+        fs.writeFileSync(target, buf);
+      } else {
+        throw e;
+      }
     }
     // Auto-open in default app (silent — toast in the UI handles "show in folder").
     shell.openPath(target);
