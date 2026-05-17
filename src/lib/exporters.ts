@@ -38,6 +38,8 @@ export interface PdfTableOptions {
   rightAlignCols?: number[]; // column indexes that should be right aligned (numeric)
   /** Folder under the company export root. Defaults to "Reports". */
   subFolder?: string;
+  /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
+  dividerBeforeCol?: number;
 }
 
 export function downloadPdfTable(opts: PdfTableOptions): void {
@@ -91,11 +93,19 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
       headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
       footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
-      columnStyles,
-      margin: { top: tableStartY },
-      didParseCell: (data) => {
-        data.cell.styles.font = FONT;
-      },
+        columnStyles,
+        margin: { top: tableStartY },
+        didParseCell: (data) => {
+          data.cell.styles.font = FONT;
+        },
+        didDrawCell: (data) => {
+          if (opts.dividerBeforeCol != null && data.column.index === opts.dividerBeforeCol) {
+            doc.setLineWidth(1.6);
+            doc.setDrawColor(0, 0, 0);
+            doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+            doc.setLineWidth(0.5);
+          }
+        },
       didDrawPage: (data) => {
         if (data.pageNumber > 1) {
           let hy = 28;
