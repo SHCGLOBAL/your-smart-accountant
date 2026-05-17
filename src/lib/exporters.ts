@@ -40,6 +40,7 @@ export interface PdfTableOptions {
   subFolder?: string;
   /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
   dividerBeforeCol?: number;
+}
 
 export function downloadPdfTable(opts: PdfTableOptions): void {
   void (async () => {
