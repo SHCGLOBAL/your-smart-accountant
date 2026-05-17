@@ -330,10 +330,10 @@ function LedgerStatement() {
     else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
     for (const e of sortEntriesByVoucherAsc(entries)) {
       const v = e.vouchers;
-      const desc = narrationOf(e, v, (v?.voucher_type ?? "").replace(/_/g, " "));
-      const ref = v ? ` (${fmtIndianDate(v.voucher_date)} ${v.voucher_number})` : "";
-      if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
-      if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
+      const origin = originFor(v);
+      const detail = v ? `  [${hintFor(e, v)}]` : "";
+      if (e.debit_paise > 0) drExp.push({ label: `To ${origin} A/c${detail}`, paise: e.debit_paise });
+      if (e.credit_paise > 0) crExp.push({ label: `By ${origin} A/c${detail}`, paise: e.credit_paise });
     }
     if (drSubtotal > crSubtotal) crExp.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
     else if (crSubtotal > drSubtotal) drExp.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
