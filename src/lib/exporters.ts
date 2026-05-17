@@ -38,7 +38,8 @@ export interface PdfTableOptions {
   rightAlignCols?: number[]; // column indexes that should be right aligned (numeric)
   /** Folder under the company export root. Defaults to "Reports". */
   subFolder?: string;
-}
+  /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
+  dividerBeforeCol?: number;
 
 export function downloadPdfTable(opts: PdfTableOptions): void {
   void (async () => {
