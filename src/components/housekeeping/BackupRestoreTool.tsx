@@ -15,6 +15,7 @@ import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 
 interface Props {
