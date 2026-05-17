@@ -1,6 +1,7 @@
 // Backup & Restore utilities — JSON snapshot per-company or all-companies.
 // In Electron desktop builds, files are also written to C:\YourMehtaji\<Company>\backups\.
 import { supabase } from "@/integrations/supabase/client";
+import { wrapBackup, isBackupEnvelope, verifyEnvelope } from "@/lib/backup-policy";
 
 // ---------- Types ----------
 export interface CompanyBackup {
