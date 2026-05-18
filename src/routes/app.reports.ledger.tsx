@@ -892,7 +892,7 @@ function LedgerStatement() {
         </Card>
       ) : view === "horizontal" ? (
         <>
-          <TAccount
+          <TAccountColumnar
             title={`${ledger.name} Account`}
             subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
             leftRows={drRows}
