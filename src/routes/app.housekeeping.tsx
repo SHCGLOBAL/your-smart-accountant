@@ -173,9 +173,12 @@ function HousekeepingPage() {
         )}
         <TabsContent value="tally">
           {activeCompanyId ? (
-            <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading importer…</CardContent></Card>}>
-              <TallyBusyImport companyId={activeCompanyId} disabled={!isAdmin} />
-            </Suspense>
+            <div className="space-y-4">
+              <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading importer…</CardContent></Card>}>
+                <TallyBusyImport companyId={activeCompanyId} disabled={!isAdmin} />
+              </Suspense>
+              <ImportHistoryPanel companyId={activeCompanyId} disabled={!isAdmin} />
+            </div>
           ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
         </TabsContent>
         <TabsContent value="backup">
