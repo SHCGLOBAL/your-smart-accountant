@@ -449,8 +449,14 @@ export function AssistantChat() {
                 isPending={!!pendingCompany && m.preview === pendingCompany}
               />
             ))}
+            {thinking && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Mate is thinking…
+              </div>
+            )}
           </div>
         </ScrollArea>
+
 
         {/* Suggestion chips */}
         {messages.length <= 1 && (
