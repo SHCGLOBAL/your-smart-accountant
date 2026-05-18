@@ -598,6 +598,16 @@ function MessageBubble({
         }`}
       >
         <RichText text={msg.text} />
+        {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {msg.toolCalls.map((tc, i) => (
+              <Badge key={i} variant="outline" className="gap-1 text-[10px]">
+                <Wrench className="h-2.5 w-2.5" /> {tc.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         {!isUser && msg.preview && (
           <CompanyPreviewCard
             parsed={msg.preview}
