@@ -858,6 +858,7 @@ export async function postItems(
   companyId: string,
   rows: ItemRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("items").select("id, name").eq("company_id", companyId);
