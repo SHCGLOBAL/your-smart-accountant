@@ -2,7 +2,7 @@
 // - In the Electron desktop app: writes to
 //     %USERPROFILE%/Documents/YourMehtaji/Exports/<Company>/<subFolder>/<fileName>
 //   then auto-opens the file in the OS default viewer and shows a toast with
-//   a "Show in folder" action.
+//   "Show in folder" and "Cancel" actions.
 // - In the browser: falls back to a normal "Download" (saved to the user's
 //   Downloads folder, same behaviour as before).
 import { toast } from "sonner";
@@ -41,7 +41,11 @@ function activeCompanyName(): string {
   return localStorage.getItem(COMPANY_NAME_KEY) || "Default";
 }
 
-function browserDownload(fileName: string, contents: string | ArrayBuffer | Uint8Array, mime: string): void {
+function browserDownload(
+  fileName: string,
+  contents: string | ArrayBuffer | Uint8Array,
+  mime: string,
+): void {
   let blob: Blob;
   if (typeof contents === "string") {
     blob = new Blob([contents], { type: mime });
@@ -83,26 +87,39 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
   const b = bridge();
   if (!b) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
-    toast.success(opts.toastTitle || opts.fileName, {
+    const downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",
       closeButton: true,
+      cancel: {
+        label: "Cancel",
+        onClick: () => toast.dismiss(downloadToastId),
+      },
     });
     return;
   }
   const company = activeCompanyName();
   const res = await b.saveCompanyFile(company, opts.subFolder, opts.fileName, opts.contents);
   if (!res.ok || !res.path) {
-    toast.error("Could not save file", { description: res.error || "Unknown error", closeButton: true });
+    toast.error("Could not save file", {
+      description: res.error || "Unknown error",
+      closeButton: true,
+    });
     return;
   }
   const savedPath = res.path;
-  toast.success(opts.toastTitle || opts.fileName, {
+  const exportToastId = toast.success(opts.toastTitle || opts.fileName, {
     description: `Saved to ${savedPath}`,
     duration: 10000,
     closeButton: true,
     action: {
       label: "Show in folder",
-      onClick: () => { void b.showInFolder(savedPath); },
+      onClick: () => {
+        void b.showInFolder(savedPath);
+      },
+    },
+    cancel: {
+      label: "Cancel",
+      onClick: () => toast.dismiss(exportToastId),
     },
   });
 }
