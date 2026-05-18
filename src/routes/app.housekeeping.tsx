@@ -46,6 +46,7 @@ import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
+import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
 const TallyBusyImport = lazy(() =>
   import("@/components/housekeeping/TallyBusyImport").then((m) => ({
     default: m.TallyBusyImport,
