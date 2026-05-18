@@ -432,11 +432,67 @@ export async function parseAnyFile(
   const rows: ParsedRow[] = [];
   for (const sheet of wb.SheetNames) {
     const ws = wb.Sheets[sheet];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+      header: 1,
       defval: "",
       raw: false,
+      blankrows: false,
     });
-    for (const r of json) rows.push({ ...r, __sheet: sheet });
+    // Detect the header row by scanning the first ~30 rows for one that
+    // contains several known column keywords. Many ERP exports (Marg, Busy,
+    // Tally print reports) prefix the data with banner / title rows.
+    const HEADER_TOKENS = [
+      "date", "dt", "bill no", "bill no.", "voucher", "vch", "vchno",
+      "party", "ledger", "account", "name", "amount", "amt", "bill amt",
+      "taxable", "tax", "hsn", "qty", "rate", "debit", "credit", "narration",
+      "particulars", "gstin", "opening", "group", "under",
+    ];
+    let headerIdx = -1;
+    let bestScore = 0;
+    for (let i = 0; i < Math.min(aoa.length, 30); i++) {
+      const cells = (aoa[i] || []).map((c) => lc(c));
+      let score = 0;
+      for (const c of cells) {
+        if (!c) continue;
+        for (const t of HEADER_TOKENS) if (c === t || c.includes(t)) { score++; break; }
+      }
+      if (score >= 3 && score > bestScore) { bestScore = score; headerIdx = i; }
+    }
+    // Banner text above the header — useful as a voucher-type hint
+    // ("PURCHASE BOOK", "SALES REGISTER", etc).
+    let reportTitle = "";
+    if (headerIdx > 0) {
+      reportTitle = aoa.slice(0, headerIdx)
+        .map((r) => (r || []).map((c) => String(c ?? "").trim()).join(" "))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    if (headerIdx === -1) {
+      // Fall back to the original behavior: treat row 0 as the header.
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "", raw: false,
+      });
+      for (const r of json) rows.push({ ...r, __sheet: sheet, __report_title: reportTitle });
+    } else {
+      const header = (aoa[headerIdx] || []).map((c, i) => {
+        const s = String(c ?? "").trim();
+        return s || `col_${i + 1}`;
+      });
+      for (let i = headerIdx + 1; i < aoa.length; i++) {
+        const row = aoa[i] || [];
+        // Skip rows that look like dashed separators / blank lines.
+        const nonEmpty = row.filter((c) => String(c ?? "").trim() !== "");
+        if (nonEmpty.length === 0) continue;
+        const joined = nonEmpty.map((c) => String(c)).join("");
+        if (/^[-=_*\s]+$/.test(joined)) continue;
+        const obj: Record<string, unknown> = {};
+        for (let j = 0; j < header.length; j++) obj[header[j]] = row[j] ?? "";
+        obj.__sheet = sheet;
+        obj.__report_title = reportTitle;
+        rows.push(obj);
+      }
+    }
   }
   return rows;
 }
@@ -479,15 +535,29 @@ export function classifyRow(r: ParsedRow): RowKind {
   if (r.__tally_kind === "VOUCHER") return "voucher";
 
   const sheet = lc(r.__sheet || "");
-  if (sheet.includes("ledger") || sheet.includes("account")) return "ledger";
-  if (sheet.includes("item") || sheet.includes("stock") || sheet.includes("inventory")) return "item";
-  if (sheet.includes("daybook") || sheet.includes("day book") || sheet.includes("voucher") || sheet.includes("transaction")) return "voucher";
+  const title = lc(r.__report_title || "");
+  const context = `${sheet} ${title}`;
+  if (context.includes("ledger") || context.includes("account master")) return "ledger";
+  if (context.includes("item master") || context.includes("stock summary") || context.includes("inventory")) return "item";
+  if (
+    context.includes("daybook") || context.includes("day book") ||
+    context.includes("voucher") || context.includes("transaction") ||
+    context.includes("purchase book") || context.includes("purchase register") ||
+    context.includes("sales book") || context.includes("sales register") ||
+    context.includes("purchase statement") || context.includes("sales statement") ||
+    context.includes("journal register") || context.includes("receipt register") ||
+    context.includes("payment register")
+  ) return "voucher";
 
   // Column fingerprint
   const keys = Object.keys(r).map((k) => lc(k));
   const has = (s: string) => keys.some((k) => k.includes(s));
 
-  const voucherSig = (has("voucher") || has("vch")) && (has("date") || has("dt")) && (has("amount") || has("total"));
+  const voucherSig =
+    ((has("voucher") || has("vch") || has("bill no") || has("bill no.")) &&
+      (has("date") || has("dt")) &&
+      (has("amount") || has("total") || has("amt"))) ||
+    (has("date") && has("party") && (has("amount") || has("amt") || has("total")));
   if (voucherSig) return "voucher";
 
   const itemSig = (has("hsn") || has("sac")) || has("uom") || has("unit") || has("stock");
@@ -599,10 +669,11 @@ export function detectVoucherType(s: string): VoucherType {
 
 export function mapVoucher(r: ParsedRow): VoucherRecord | null {
   const date = normalizeDate(pickField(r, ["DATE", "Voucher Date", "Date", "Dt"]));
-  const vno = pickField(r, ["VOUCHERNUMBER", "Voucher Number", "Voucher No", "Vch No", "Bill No"]);
-  const vtype = detectVoucherType(pickField(r, ["VOUCHERTYPENAME", "Voucher Type", "Type"]));
+  const vno = pickField(r, ["VOUCHERNUMBER", "Voucher Number", "Voucher No", "Vch No", "Bill No", "Bill No.", "Invoice No", "Inv No"]);
+  const typeHint = pickField(r, ["VOUCHERTYPENAME", "Voucher Type", "Type"]) || String(r.__report_title || "");
+  const vtype = detectVoucherType(typeHint);
   const party = pickField(r, ["PARTYLEDGERNAME", "PARTYNAME", "Party", "Party Name", "Account", "Ledger"]);
-  const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Net Amount"]));
+  const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Bill Amt", "Bill Amt.", "Net Amount", "Net Amt", "Net Amt."]));
   if (!date || !vno) return null;
   return {
     date,
