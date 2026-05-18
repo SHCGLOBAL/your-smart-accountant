@@ -70,11 +70,15 @@ export function AssistantChat() {
   const { setTheme } = useTheme();
   const { setLang } = useI18n();
   const { user } = useAuth();
-  const { memberships, setActiveCompanyId, refresh } = useCompany();
+  const { memberships, activeCompanyId, setActiveCompanyId, refresh } = useCompany();
   const hasCompany = memberships.length > 0;
   const [creating, setCreating] = useState(false);
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
+  const [aiMode, setAiMode] = useState(true);
+  const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const callAssistant = useServerFn(assistantChat);
+
 
   useEffect(() => {
     const el = scrollerRef.current;
