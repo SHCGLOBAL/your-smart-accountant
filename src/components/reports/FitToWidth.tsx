@@ -2,12 +2,18 @@ import * as React from "react";
 
 /**
  * FitToWidth — scales its child down (never up) so it fits within the
- * available container width. Used to keep wide reports on screen without
- * a horizontal scrollbar.
+ * available container width.
+ *
+ * To make this work for tables/blocks that use `w-full` (which would
+ * otherwise always equal the container width and yield no scaling), the
+ * inner wrapper is rendered at its *intrinsic* width (`width: max-content`,
+ * `min-width: 100%`). Children then expand to their natural content width
+ * (long rows, whitespace-nowrap cells, wide tables) and we scale that down
+ * to fit the available space.
  */
 export function FitToWidth({
   children,
-  minScale = 0.55,
+  minScale = 0.5,
   className,
 }: {
   children: React.ReactNode;
@@ -26,22 +32,25 @@ export function FitToWidth({
 
     const measure = () => {
       const available = outer.clientWidth;
-      // Temporarily reset to natural width to measure
-      const prev = inner.style.transform;
+      if (!available) return;
+      // Reset transform to measure natural size.
+      const prevTransform = inner.style.transform;
       inner.style.transform = "none";
-      inner.style.width = "max-content";
-      const natural = inner.scrollWidth;
-      inner.style.width = "";
-      inner.style.transform = prev;
+      const natural = Math.max(inner.scrollWidth, inner.offsetWidth);
+      inner.style.transform = prevTransform;
 
-      if (!available || !natural) return;
-      const next = natural > available ? Math.max(minScale, available / natural) : 1;
+      if (!natural) return;
+      const next = natural > available + 0.5 ? Math.max(minScale, available / natural) : 1;
       setScale(next);
-      setInnerH(inner.getBoundingClientRect().height * next);
+      // After scale is applied, measure rendered height.
+      requestAnimationFrame(() => {
+        if (!innerRef.current) return;
+        setInnerH(innerRef.current.getBoundingClientRect().height);
+      });
     };
 
     measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(() => measure());
     ro.observe(outer);
     ro.observe(inner);
     return () => ro.disconnect();
@@ -58,7 +67,11 @@ export function FitToWidth({
         style={{
           transform: `scale(${scale})`,
           transformOrigin: "top left",
-          width: scale < 1 ? `${100 / scale}%` : "100%",
+          // Render at intrinsic content width so w-full children don't
+          // collapse to the container width. min-width keeps short content
+          // filling the available space.
+          width: "max-content",
+          minWidth: "100%",
         }}
       >
         {children}
