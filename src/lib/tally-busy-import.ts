@@ -807,6 +807,7 @@ export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
