@@ -669,10 +669,11 @@ export function detectVoucherType(s: string): VoucherType {
 
 export function mapVoucher(r: ParsedRow): VoucherRecord | null {
   const date = normalizeDate(pickField(r, ["DATE", "Voucher Date", "Date", "Dt"]));
-  const vno = pickField(r, ["VOUCHERNUMBER", "Voucher Number", "Voucher No", "Vch No", "Bill No"]);
-  const vtype = detectVoucherType(pickField(r, ["VOUCHERTYPENAME", "Voucher Type", "Type"]));
+  const vno = pickField(r, ["VOUCHERNUMBER", "Voucher Number", "Voucher No", "Vch No", "Bill No", "Bill No.", "Invoice No", "Inv No"]);
+  const typeHint = pickField(r, ["VOUCHERTYPENAME", "Voucher Type", "Type"]) || String(r.__report_title || "");
+  const vtype = detectVoucherType(typeHint);
   const party = pickField(r, ["PARTYLEDGERNAME", "PARTYNAME", "Party", "Party Name", "Account", "Ledger"]);
-  const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Net Amount"]));
+  const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Bill Amt", "Bill Amt.", "Net Amount", "Net Amt", "Net Amt."]));
   if (!date || !vno) return null;
   return {
     date,
