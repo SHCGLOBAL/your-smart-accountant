@@ -1795,6 +1795,8 @@ export type Database = {
           import_batch_id: string | null
           is_amendment: boolean
           is_interstate: boolean
+          itc_class: Database["public"]["Enums"]["itc_class"]
+          itc_eligible: boolean
           linked_voucher_ids: Json
           narration: string | null
           orig_invoice_date: string | null
@@ -1832,6 +1834,8 @@ export type Database = {
           import_batch_id?: string | null
           is_amendment?: boolean
           is_interstate?: boolean
+          itc_class?: Database["public"]["Enums"]["itc_class"]
+          itc_eligible?: boolean
           linked_voucher_ids?: Json
           narration?: string | null
           orig_invoice_date?: string | null
@@ -1869,6 +1873,8 @@ export type Database = {
           import_batch_id?: string | null
           is_amendment?: boolean
           is_interstate?: boolean
+          itc_class?: Database["public"]["Enums"]["itc_class"]
+          itc_eligible?: boolean
           linked_voucher_ids?: Json
           narration?: string | null
           orig_invoice_date?: string | null
@@ -2038,6 +2044,12 @@ export type Database = {
         | "overseas"
         | "deemed_export"
         | "uin_holder"
+      itc_class:
+        | "inputs"
+        | "capital_goods"
+        | "input_services"
+        | "ineligible"
+        | "na"
       ledger_type:
         | "sundry_debtor"
         | "sundry_creditor"
@@ -2221,6 +2233,13 @@ export const Constants = {
         "overseas",
         "deemed_export",
         "uin_holder",
+      ],
+      itc_class: [
+        "inputs",
+        "capital_goods",
+        "input_services",
+        "ineligible",
+        "na",
       ],
       ledger_type: [
         "sundry_debtor",

@@ -120,6 +120,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [narration, setNarration] = useState("");
   const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
+  const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
+  const [itcClass, setItcClass] = useState<"inputs" | "capital_goods" | "input_services" | "ineligible" | "na">(
+    isPurchaseSide ? "inputs" : "na",
+  );
+  const [itcEligible, setItcEligible] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
@@ -270,6 +275,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       companyId: activeCompanyId,
       voucherType, voucherDate: date, partyId,
       refNo, narration, placeOfSupply, interstate,
+      itcClass: isPurchaseSide ? itcClass : "na",
+      itcEligible: isPurchaseSide ? itcEligible : true,
       totals: { ...totals, round_off_paise: roundOffPaise },
       lines: lines.map((l, i) => ({ l, c: computed[i] })).filter((x) => x.l.item_id && x.c?.total_paise > 0),
     };
@@ -307,6 +314,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           round_off_paise: snap.totals.round_off_paise,
           total_paise: snap.totals.total_paise,
           place_of_supply_code: snap.placeOfSupply || null,
+          itc_class: snap.itcClass,
+          itc_eligible: snap.itcEligible,
         })
         .select("id").single();
       if (vErr) throw vErr;
@@ -506,6 +515,43 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             </Select>
           </div>
           </div>
+          {isPurchaseSide && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
+              <div className="space-y-1">
+                <Label>ITC Class</Label>
+                <Select value={itcClass} onValueChange={(v) => setItcClass(v as typeof itcClass)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inputs">Inputs (stock / raw material)</SelectItem>
+                    <SelectItem value="capital_goods">Capital Goods (assets)</SelectItem>
+                    <SelectItem value="input_services">Input Services (expense)</SelectItem>
+                    <SelectItem value="ineligible">Ineligible / Blocked (s.17(5))</SelectItem>
+                    <SelectItem value="na">Not Applicable</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Used in GSTR-3B 4(A) / 4(D) and GSTR-9 table 6 breakup.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label>ITC Eligible</Label>
+                <Select
+                  value={itcEligible ? "yes" : "no"}
+                  onValueChange={(v) => setItcEligible(v === "yes")}
+                  disabled={itcClass === "ineligible"}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes — claim credit</SelectItem>
+                    <SelectItem value="no">No — block credit (4D)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Set "No" for personal use, motor cars, etc. Tax stays in the bill total.
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
