@@ -1,5 +1,6 @@
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,15 +11,39 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
+import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
+import { supabase } from "@/integrations/supabase/client";
 
 export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
   const { t } = useI18n();
   const navigate = useNavigate();
 
-  const handleCompanyPick = (companyId: string) => {
+  const handleCompanyPick = async (companyId: string) => {
+    if (isCompanyUnlocked(companyId)) {
+      setActiveCompanyId(companyId);
+      navigate({ to: "/app" });
+      return;
+    }
+    // Check if company has a password set
+    const { data, error } = await supabase
+      .from("companies_picker")
+      .select("has_password")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (!data?.has_password) {
+      markCompanyUnlocked(companyId);
+      setActiveCompanyId(companyId);
+      navigate({ to: "/app" });
+      return;
+    }
+    // Needs password — send user to picker to enter it
     setActiveCompanyId(companyId);
-    navigate({ to: "/app" });
+    navigate({ to: "/" });
   };
 
   return (
