@@ -405,12 +405,24 @@ export function AssistantChat() {
           <div className="flex flex-col">
             <span className="text-sm font-semibold">Mate — your in-app assistant</span>
             <span className="text-[11px] text-muted-foreground">
-              Runs fully offline · knows the app's settings, screens & options
+              {aiMode
+                ? "AI-powered · can read your ledgers, balances, vouchers & GST data"
+                : "Offline guide · settings, screens & options"}
             </span>
           </div>
-          <Badge variant="secondary" className="ml-auto gap-1">
-            <Sparkles className="h-3 w-3" /> Offline
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant={aiMode ? "default" : "outline"}
+              size="sm"
+              className="h-7 gap-1 text-[11px]"
+              onClick={() => setAiMode((v) => !v)}
+              title="Toggle AI mode"
+            >
+              <Sparkles className="h-3 w-3" />
+              {aiMode ? "AI on" : "AI off"}
+            </Button>
+          </div>
+
         </div>
 
         <ScrollArea className="flex-1">
