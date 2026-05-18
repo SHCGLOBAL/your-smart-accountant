@@ -535,15 +535,29 @@ export function classifyRow(r: ParsedRow): RowKind {
   if (r.__tally_kind === "VOUCHER") return "voucher";
 
   const sheet = lc(r.__sheet || "");
-  if (sheet.includes("ledger") || sheet.includes("account")) return "ledger";
-  if (sheet.includes("item") || sheet.includes("stock") || sheet.includes("inventory")) return "item";
-  if (sheet.includes("daybook") || sheet.includes("day book") || sheet.includes("voucher") || sheet.includes("transaction")) return "voucher";
+  const title = lc(r.__report_title || "");
+  const context = `${sheet} ${title}`;
+  if (context.includes("ledger") || context.includes("account master")) return "ledger";
+  if (context.includes("item master") || context.includes("stock summary") || context.includes("inventory")) return "item";
+  if (
+    context.includes("daybook") || context.includes("day book") ||
+    context.includes("voucher") || context.includes("transaction") ||
+    context.includes("purchase book") || context.includes("purchase register") ||
+    context.includes("sales book") || context.includes("sales register") ||
+    context.includes("purchase statement") || context.includes("sales statement") ||
+    context.includes("journal register") || context.includes("receipt register") ||
+    context.includes("payment register")
+  ) return "voucher";
 
   // Column fingerprint
   const keys = Object.keys(r).map((k) => lc(k));
   const has = (s: string) => keys.some((k) => k.includes(s));
 
-  const voucherSig = (has("voucher") || has("vch")) && (has("date") || has("dt")) && (has("amount") || has("total"));
+  const voucherSig =
+    ((has("voucher") || has("vch") || has("bill no") || has("bill no.")) &&
+      (has("date") || has("dt")) &&
+      (has("amount") || has("total") || has("amt"))) ||
+    (has("date") && has("party") && (has("amount") || has("amt") || has("total")));
   if (voucherSig) return "voucher";
 
   const itemSig = (has("hsn") || has("sac")) || has("uom") || has("unit") || has("stock");
