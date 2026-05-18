@@ -352,37 +352,43 @@ function LedgerStatement() {
     ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
   ];
 
-  const horizontalBody = (): (string | number)[][] => {
-    type ExportRow = { label: string; paise: number };
-    const drExp: ExportRow[] = [];
-    const crExp: ExportRow[] = [];
-    if (openingBeforeFrom > 0) drExp.push({ label: "To Opening Balance", paise: openingBeforeFrom });
-    else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
-    for (const e of sortEntriesByVoucherAsc(entries)) {
-      const v = e.vouchers;
-      const origin = originFor(v);
-      const detail = v ? `  [${hintFor(e, v)}]` : "";
-      if (e.debit_paise > 0) drExp.push({ label: `To ${origin} A/c${detail}`, paise: e.debit_paise });
-      if (e.credit_paise > 0) crExp.push({ label: `By ${origin} A/c${detail}`, paise: e.credit_paise });
-    }
-    if (drSubtotal > crSubtotal) crExp.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
-    else if (crSubtotal > drSubtotal) drExp.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
-    const max = Math.max(drExp.length, crExp.length);
-    return Array.from({ length: max }).map((_, i) => [
-      drExp[i]?.label ?? "",
-      drExp[i] ? r(drExp[i].paise).toFixed(2) : "",
-      crExp[i]?.label ?? "",
-      crExp[i] ? r(crExp[i].paise).toFixed(2) : "",
-    ]);
-  };
+  // 12-column shape mirroring the on-screen T: Dr (Date, Particulars, Vch Type, Vch No, Chq/Ref, Amount) | Cr (same)
+  const horizontalBody = (): (string | number)[][] =>
+    Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => {
+      const l = drRows[i];
+      const r2 = crRows[i];
+      const cell = (v: React.ReactNode) => (v == null ? "" : String(v));
+      const amt = (v: React.ReactNode) => {
+        if (v == null) return "";
+        const s = String(v).replace(/[^\d.\-]/g, "");
+        return s ? Number(s).toFixed(2) : String(v);
+      };
+      return [
+        l ? cell(l.date) : "",
+        l ? cell(l.particulars) : "",
+        l ? cell(l.vchType) : "",
+        l ? cell(l.vchNo) : "",
+        l ? cell(l.chqRef) : "",
+        l ? amt(l.amount) : "",
+        r2 ? cell(r2.date) : "",
+        r2 ? cell(r2.particulars) : "",
+        r2 ? cell(r2.vchType) : "",
+        r2 ? cell(r2.vchNo) : "",
+        r2 ? cell(r2.chqRef) : "",
+        r2 ? amt(r2.amount) : "",
+      ];
+    });
+
+  const horizontalHead = ["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", amountHeader()];
 
   const csvRowsHorizontal = (): (string | number)[][] => [
-    [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
-    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", ""],
-    ["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()],
+    [`Ledger: ${ledger?.name ?? ""}`, ...Array(11).fill("")],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, ...Array(11).fill("")],
+    ["Dr.", "", "", "", "", "", "Cr.", "", "", "", "", ""],
+    [...horizontalHead, ...horizontalHead],
     ...horizontalBody(),
-    ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
-    ["", "", "Closing", r(closing).toFixed(2)],
+    ["Total", "", "", "", "", r(grandTotal).toFixed(2), "Total", "", "", "", "", r(grandTotal).toFixed(2)],
+    ["", "", "", "", "", "", "Closing Balance", "", "", "", "", fmtBal(closing)],
   ];
 
   const onExportCsv = () =>
