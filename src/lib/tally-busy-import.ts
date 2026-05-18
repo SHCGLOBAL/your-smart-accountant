@@ -830,6 +830,7 @@ export async function postLedgers(
       phone: r.phone || null,
       opening_balance_paise: Math.abs(paise(r.opening)),
       opening_balance_is_debit: r.opening >= 0,
+      import_batch_id: batchId || null,
     };
     const id = map.get(lc(r.name));
     if (id) {
