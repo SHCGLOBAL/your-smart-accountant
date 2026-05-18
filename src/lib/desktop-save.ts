@@ -41,7 +41,11 @@ function activeCompanyName(): string {
   return localStorage.getItem(COMPANY_NAME_KEY) || "Default";
 }
 
-function browserDownload(fileName: string, contents: string | ArrayBuffer | Uint8Array, mime: string): void {
+function browserDownload(
+  fileName: string,
+  contents: string | ArrayBuffer | Uint8Array,
+  mime: string,
+): void {
   let blob: Blob;
   if (typeof contents === "string") {
     blob = new Blob([contents], { type: mime });
@@ -83,8 +87,7 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
   const b = bridge();
   if (!b) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
-    let downloadToastId: string | number;
-    downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
+    const downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",
       closeButton: true,
       cancel: {
@@ -97,18 +100,22 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
   const company = activeCompanyName();
   const res = await b.saveCompanyFile(company, opts.subFolder, opts.fileName, opts.contents);
   if (!res.ok || !res.path) {
-    toast.error("Could not save file", { description: res.error || "Unknown error", closeButton: true });
+    toast.error("Could not save file", {
+      description: res.error || "Unknown error",
+      closeButton: true,
+    });
     return;
   }
   const savedPath = res.path;
-  let exportToastId: string | number;
-  exportToastId = toast.success(opts.toastTitle || opts.fileName, {
+  const exportToastId = toast.success(opts.toastTitle || opts.fileName, {
     description: `Saved to ${savedPath}`,
     duration: 10000,
     closeButton: true,
     action: {
       label: "Show in folder",
-      onClick: () => { void b.showInFolder(savedPath); },
+      onClick: () => {
+        void b.showInFolder(savedPath);
+      },
     },
     cancel: {
       label: "Cancel",
