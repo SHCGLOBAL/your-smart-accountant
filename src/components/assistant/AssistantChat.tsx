@@ -523,9 +523,10 @@ export function AssistantChat() {
                 : "Type: create company name: ABC Traders, GSTIN: …"
             }
             autoFocus
-            disabled={creating}
+            disabled={creating || thinking}
           />
-          <Button type="submit" size="icon" aria-label="Send" disabled={creating}>
+          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
+
             <Send className="h-4 w-4" />
           </Button>
         </form>
