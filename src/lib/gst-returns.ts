@@ -40,6 +40,8 @@ export interface VoucherRow {
   orig_invoice_no: string | null;
   orig_invoice_date: string | null;
   orig_period: string | null;
+  itc_class?: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na" | null;
+  itc_eligible?: boolean | null;
   ledgers: {
     name: string;
     gstin: string | null;
