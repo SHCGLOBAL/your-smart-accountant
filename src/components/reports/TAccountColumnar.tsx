@@ -32,37 +32,36 @@ export interface TAccountColumnarProps {
 
 const COL_HEADERS = ["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", "Amount"] as const;
 
-function Cells({ row }: { row: TColRow | null }) {
+function Cells({ row, isLeftSide }: { row: TColRow | null; isLeftSide: boolean }) {
+  const amountBorder = isLeftSide
+    ? "border-r-2 border-foreground print:border-black"
+    : "";
   if (!row) {
     return (
       <>
-        {COL_HEADERS.map((_, i) => (
-          <td key={i} className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
-        ))}
+        <td className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
+        <td className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
+        <td className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
+        <td className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
+        <td className="border-r border-foreground/40 px-2 py-1.5 print:border-black/60">&nbsp;</td>
+        <td className={cn("px-2 py-1.5", amountBorder)}>&nbsp;</td>
       </>
     );
   }
   const weight =
     row.emphasis === "total" ? "font-semibold" : row.emphasis === "bold" ? "font-medium" : "";
   const clickable = row.onClick ? "cursor-pointer hover:bg-muted/40" : "";
+  const base = cn("px-2 py-1.5 text-[12px] align-top", weight, clickable);
+  const border = "border-r border-foreground/40 print:border-black/60";
+  const onClick = row.onClick;
   return (
     <>
-      <td className={cn("border-r border-foreground/40 px-2 py-1.5 text-[12px] whitespace-nowrap print:border-black/60", weight, clickable)} onClick={row.onClick}>
-        {row.date ?? ""}
-      </td>
-      <td className={cn("border-r border-foreground/40 px-2 py-1.5 text-[12px] print:border-black/60", weight, clickable)} onClick={row.onClick}>
-        {row.particulars}
-      </td>
-      <td className={cn("border-r border-foreground/40 px-2 py-1.5 text-[12px] whitespace-nowrap print:border-black/60", weight, clickable)} onClick={row.onClick}>
-        {row.vchType ?? ""}
-      </td>
-      <td className={cn("border-r border-foreground/40 px-2 py-1.5 text-[12px] whitespace-nowrap print:border-black/60", weight, clickable)} onClick={row.onClick}>
-        {row.vchNo ?? ""}
-      </td>
-      <td className={cn("border-r border-foreground/40 px-2 py-1.5 text-[12px] whitespace-nowrap print:border-black/60", weight, clickable)} onClick={row.onClick}>
-        {row.chqRef ?? ""}
-      </td>
-      <td className={cn("px-2 py-1.5 text-[12px] text-right font-mono tabular-nums whitespace-nowrap", weight, clickable)} onClick={row.onClick}>
+      <td className={cn(base, border, "whitespace-nowrap")} onClick={onClick}>{row.date ?? ""}</td>
+      <td className={cn(base, border, "break-words")} onClick={onClick}>{row.particulars}</td>
+      <td className={cn(base, border, "whitespace-nowrap")} onClick={onClick}>{row.vchType ?? ""}</td>
+      <td className={cn(base, border, "whitespace-nowrap")} onClick={onClick}>{row.vchNo ?? ""}</td>
+      <td className={cn(base, border, "whitespace-nowrap")} onClick={onClick}>{row.chqRef ?? ""}</td>
+      <td className={cn(base, amountBorder, "text-right font-mono tabular-nums whitespace-nowrap")} onClick={onClick}>
         {row.amount}
       </td>
     </>
@@ -100,14 +99,12 @@ export function TAccountColumnar({
       )}
       <table className="w-full table-fixed border-collapse text-[12px]">
         <colgroup>
-          {/* Dr side */}
           <col style={{ width: "7%" }} />
           <col style={{ width: "17%" }} />
           <col style={{ width: "8%" }} />
           <col style={{ width: "8%" }} />
           <col style={{ width: "9%" }} />
           <col style={{ width: "11%" }} />
-          {/* Cr side */}
           <col style={{ width: "7%" }} />
           <col style={{ width: "17%" }} />
           <col style={{ width: "8%" }} />
@@ -116,7 +113,6 @@ export function TAccountColumnar({
           <col style={{ width: "11%" }} />
         </colgroup>
         <thead>
-          {/* Dr. / Cr. banner */}
           <tr className="bg-muted/60">
             <th colSpan={6} className="border-b-2 border-r-2 border-foreground px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-wide print:border-black">
               Dr.
@@ -141,8 +137,9 @@ export function TAccountColumnar({
               <th
                 key={`rh-${i}`}
                 className={cn(
-                  "border-b-2 border-r border-foreground/40 px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide print:border-black/60",
-                  i === 5 && "text-right border-r-0",
+                  "border-b-2 border-foreground/40 px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide print:border-black/60",
+                  i < 5 && "border-r border-foreground/40 print:border-black/60",
+                  i === 5 && "text-right",
                 )}
               >
                 {h}
@@ -158,10 +155,8 @@ export function TAccountColumnar({
           ) : (
             lpad.map((lrow, i) => (
               <tr key={i} className="border-t border-foreground/40 print:border-black/60">
-                {/* Dr cells */}
-                <Cells row={lrow} />
-                {/* Cr cells */}
-                <Cells row={rpad[i]} />
+                <Cells row={lrow} isLeftSide />
+                <Cells row={rpad[i]} isLeftSide={false} />
               </tr>
             ))
           )}
