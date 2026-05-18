@@ -676,13 +676,38 @@ export interface VoucherRecord {
 
 export function normalizeDate(s: string): string {
   if (!s) return "";
-  const t = s.trim();
+  const t = String(s).trim();
+  if (!t) return "";
+  // Excel serial date (days since 1899-12-30). Accepts integer or decimal.
+  if (/^\d{4,6}(\.\d+)?$/.test(t)) {
+    const n = parseFloat(t);
+    if (n > 20000 && n < 80000) {
+      const ms = Math.round((n - 25569) * 86400 * 1000);
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+  }
   if (/^\d{8}$/.test(t)) return `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}`;
-  const m = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  // dd-mm-yyyy / dd/mm/yyyy / dd.mm.yyyy
+  const m = t.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/);
   if (m) {
     let [, d, mo, y] = m;
     if (y.length === 2) y = (parseInt(y) > 50 ? "19" : "20") + y;
     return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  // dd-MMM-yyyy (e.g. 01-Apr-2026)
+  const m2 = t.match(/^(\d{1,2})[ /.\-]([A-Za-z]{3,9})[ /.\-](\d{2,4})$/);
+  if (m2) {
+    const months: Record<string, string> = {
+      jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+      jul: "07", aug: "08", sep: "09", sept: "09", oct: "10", nov: "11", dec: "12",
+    };
+    const mo = months[m2[2].slice(0, 3).toLowerCase()];
+    if (mo) {
+      let y = m2[3];
+      if (y.length === 2) y = (parseInt(y) > 50 ? "19" : "20") + y;
+      return `${y}-${mo}-${m2[1].padStart(2, "0")}`;
+    }
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
   const d = new Date(t);
