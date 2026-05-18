@@ -97,21 +97,8 @@ export function TAccountColumnar({
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
         </div>
       )}
-      <table className="w-full table-fixed border-collapse text-[12px]">
-        <colgroup>
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "17%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "9%" }} />
-          <col style={{ width: "11%" }} />
-          <col style={{ width: "7%" }} />
-          <col style={{ width: "17%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "9%" }} />
-          <col style={{ width: "11%" }} />
-        </colgroup>
+      <table className="w-full border-collapse text-[12px]">
+
         <thead>
           <tr className="bg-muted/60">
             <th colSpan={6} className="border-b-2 border-r-2 border-foreground px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-wide print:border-black">
