@@ -447,16 +447,22 @@ function LedgerStatement() {
         subtitle: pdfHeader.dateRangeSubtitle(from, to),
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
-        head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
+        head: [
+          [
+            { content: "Dr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
+            { content: "Cr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
+          ],
+          [...horizontalHead, ...horizontalHead],
+        ],
         body: horizontalBody(),
         foot: [
-          ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
-          ["", "", "Closing Balance", fmtBal(closing)],
+          ["Total", "", "", "", "", r(grandTotal).toFixed(2), "Total", "", "", "", "", r(grandTotal).toFixed(2)],
+          ["", "", "", "", "", "", "Closing Balance", "", "", "", "", fmtBal(closing)],
         ],
         fileName: `${fileBase}-horizontal.pdf`,
         orientation: "l",
-        rightAlignCols: [1, 3],
-        dividerBeforeCol: 2,
+        rightAlignCols: [5, 11],
+        dividerBeforeCol: 6,
       });
     }
   };
