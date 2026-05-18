@@ -27,7 +27,7 @@ export function CompanySwitcher() {
     }
     // Check if company has a password set
     const { data, error } = await supabase
-      .from("companies")
+      .from("companies_picker")
       .select("has_password")
       .eq("id", companyId)
       .maybeSingle();
