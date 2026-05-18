@@ -757,6 +757,13 @@ export interface BuiltGstr3B {
     itc_net: { iamt: number; camt: number; samt: number; csamt: number };
     itc_inelg: { ty: string; iamt: number; camt: number; samt: number; csamt: number }[];
   };
+  /** Information-only breakup of "Other ITC" by class (for GSTR-9 table 6 & UI). */
+  itc_class_breakup: {
+    inputs:         { iamt: number; camt: number; samt: number; csamt: number; txval: number };
+    capital_goods:  { iamt: number; camt: number; samt: number; csamt: number; txval: number };
+    input_services: { iamt: number; camt: number; samt: number; csamt: number; txval: number };
+    ineligible_blocked: { iamt: number; camt: number; samt: number; csamt: number; txval: number };
+  };
   inward_sup: { isup_details: { ty: "GST" | "NONGST"; inter: number; intra: number }[] };
   tax_pmt: {
     iamt: number; camt: number; samt: number; csamt: number;
