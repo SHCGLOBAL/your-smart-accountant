@@ -560,12 +560,20 @@ function LedgerStatement() {
       for (const e of list) {
         const v = e.vouchers; if (!v) continue;
         const sibs = sibsByVoucher.get(v.id) ?? [];
-        const partyNames = sibs.map((s) => nameById.get(s.ledger_id)).filter((n): n is string => !!n && n !== l.name);
+        const opposite = sibs.filter((s) =>
+          e.debit_paise > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+        );
+        const pool = (opposite.length > 0 ? opposite : sibs).filter((s) => s.ledger_id !== l.id);
+        const enriched = pool
+          .map((s) => infoById.get(s.ledger_id))
+          .filter((x): x is { name: string; type: string } => !!x);
+        const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+        const chosen = nonTax.length > 0 ? nonTax : enriched;
         bal += e.debit_paise - e.credit_paise;
         dr += e.debit_paise; cr += e.credit_paise;
         rows.push({
           date: v.voucher_date,
-          particulars: partyNames.length ? partyNames.join(", ") : "—",
+          particulars: chosen.length ? chosen.map((x) => x.name).join(", ") : "—",
           vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
           vchNo: v.voucher_number,
           narration: narrationOf(e, v),
