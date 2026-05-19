@@ -654,9 +654,10 @@ export const assistantChat = createServerFn({ method: "POST" })
     }
 
     let companyName = "(no company selected)";
+    let role: "admin" | "accountant" | "viewer" = "viewer";
     if (data.companyId) {
       try {
-        await ensureMember(supabase as DB, data.companyId, userId);
+        role = await ensureMember(supabase as DB, data.companyId, userId);
         const { data: c } = await supabase
           .from("companies")
           .select("name")
@@ -670,6 +671,7 @@ export const assistantChat = createServerFn({ method: "POST" })
         };
       }
     }
+    const canWrite = role === "admin" || role === "accountant";
 
     const tools = data.companyId
       ? buildTools(supabase as DB, data.companyId)
