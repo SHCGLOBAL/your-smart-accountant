@@ -66,6 +66,21 @@ export interface PostingOptions {
   itcClass?: ItcClass;
   /** When false (or itcClass = 'ineligible'), GST is capitalised into the debit ledger and no Input GST is posted. */
   itcEligible?: boolean;
+  /**
+   * Item lines for capital_goods purchases. When provided (and itcClass = 'capital_goods'),
+   * each line is posted to its own fixed-asset ledger named after the item, instead of
+   * a single pooled "Capital Goods A/c". This makes the Balance Sheet list the actual
+   * asset (e.g. "AC Machine") rather than a generic head.
+   */
+  capitalItems?: CapitalItemLine[];
+}
+
+export interface CapitalItemLine {
+  name: string;
+  taxable_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
 }
 
 export interface PostingEntry {
