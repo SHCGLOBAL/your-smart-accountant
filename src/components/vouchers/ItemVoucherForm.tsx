@@ -344,6 +344,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
           snap.partyId,
           snap.totals,
+          { itcClass: snap.itcClass as "inputs" | "capital_goods" | "input_services" | "ineligible" | "na", itcEligible: snap.itcEligible },
         );
         const entryRows = postings.map((p) => ({
           voucher_id: vData.id,
