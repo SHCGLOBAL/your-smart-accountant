@@ -426,6 +426,20 @@ function VoucherEditPage() {
         </CardContent>
       </Card>
 
+      {hasPooledCapital && (
+        <Alert variant="default" className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+          <AlertTriangle className="h-4 w-4 !text-amber-600" />
+          <AlertTitle>Legacy pooled posting detected</AlertTitle>
+          <AlertDescription>
+            This capital-goods voucher is currently posted to the pooled <strong>Capital Goods A/c</strong> ledger.
+            Saving will <strong>delete and rebuild</strong> the ledger entries, routing the asset value to
+            <strong> per-item fixed-asset ledgers</strong> (one per item, e.g. "AC Machine"). The Balance Sheet
+            will then list the actual asset names instead of the pooled account.
+          </AlertDescription>
+        </Alert>
+      )}
+
+
       {isItemKind && (
         <Card>
           <CardContent className="p-0">
