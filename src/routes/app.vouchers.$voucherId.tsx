@@ -232,6 +232,10 @@ function VoucherEditPage() {
             voucher.voucher_type as ItemKind,
             voucher.party_ledger_id,
             totals,
+            {
+              itcClass: (voucher as { itc_class?: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na" }).itc_class,
+              itcEligible: (voucher as { itc_eligible?: boolean }).itc_eligible,
+            },
           );
           const entryRows = postings.map((p) => ({
             voucher_id: voucher.id,
