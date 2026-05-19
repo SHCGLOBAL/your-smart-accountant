@@ -90,6 +90,7 @@ function VoucherEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ewbOpen, setEwbOpen] = useState(false);
+  const [hasPooledCapital, setHasPooledCapital] = useState(false);
 
   const isItemKind = useMemo(
     () => ["sales", "purchase", "credit_note", "debit_note"].includes(voucher?.voucher_type ?? ""),
