@@ -194,11 +194,13 @@ function LedgerStatement() {
       setSiblings(map);
       const { data: names } = await supabase
         .from("ledgers")
-        .select("id, name")
+        .select("id, name, type")
         .in("id", Array.from(ledgerIds));
       if (cancelled) return;
-      const nameMap = new Map<string, string>();
-      for (const n of (names || []) as { id: string; name: string }[]) nameMap.set(n.id, n.name);
+      const nameMap = new Map<string, { name: string; type: string }>();
+      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+        nameMap.set(n.id, { name: n.name, type: n.type });
+      }
       setSiblingNames(nameMap);
     })();
     return () => {
