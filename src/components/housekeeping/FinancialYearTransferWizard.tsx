@@ -339,7 +339,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
     if (ledgerRows.length) {
       // chunk insert to avoid payload limits
       for (let i = 0; i < ledgerRows.length; i += 200) {
-        const { error } = await supabase.from("ledgers").insert(ledgerRows.slice(i, i + 200));
+        const { error } = await supabase.from("ledgers").insert(ledgerRows.slice(i, i + 200) as never);
         if (error) throw error;
       }
     }
