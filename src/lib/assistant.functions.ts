@@ -538,14 +538,70 @@ function buildTools(supabase: DB, companyId: string) {
       },
     }),
 
+    // ---------- ITEM MASTER ----------
+    create_item: tool({
+      description:
+        "Create a new inventory item master. Use this when the user mentions an item that doesn't exist yet. Tax-free items use gst_rate=0. ALWAYS call confirm=false first to preview, then confirm=true after the user says yes.",
+      inputSchema: z.object({
+        name: z.string().min(1).max(120),
+        unit: z.string().min(1).max(10).default("NOS"),
+        gst_rate: z.number().min(0).max(28).default(0),
+        hsn_code: z.string().max(10).optional(),
+        purchase_price_rupees: z.number().nonnegative().optional(),
+        sale_price_rupees: z.number().nonnegative().optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        const { data: dup } = await supabase
+          .from("items")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .ilike("name", input.name)
+          .maybeSingle();
+        if (dup) return { ok: true, existing: dup, note: `Item "${dup.name}" already exists.` };
+        const preview = {
+          action: "create_item" as const,
+          name: input.name,
+          unit: input.unit,
+          gst_rate: input.gst_rate,
+          hsn_code: input.hsn_code ?? null,
+          purchase_price_rupees: input.purchase_price_rupees ?? null,
+          sale_price_rupees: input.sale_price_rupees ?? null,
+        };
+        if (!input.confirm) return { preview, requires_confirmation: true };
+        const { data, error } = await supabase
+          .from("items")
+          .insert({
+            company_id: companyId,
+            name: input.name,
+            unit: input.unit,
+            gst_rate: input.gst_rate,
+            hsn_code: input.hsn_code ?? null,
+            purchase_price_paise: input.purchase_price_rupees != null ? Math.round(input.purchase_price_rupees * 100) : 0,
+            sale_price_paise: input.sale_price_rupees != null ? Math.round(input.sale_price_rupees * 100) : 0,
+          })
+          .select("id, name")
+          .single();
+        if (error) return { error: error.message };
+        return { ok: true, created: data };
+      },
+    }),
+
     // ---------- ITEM VOUCHERS (sales / purchase / credit_note / debit_note) ----------
     create_item_voucher: tool({
       description:
-        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. The tool resolves the party ledger and item names by fuzzy match, computes CGST/SGST (intra-state) or IGST (inter-state) from each item's GST rate, posts the standard double-entry (party A/c vs Sales/Purchase A/c + GST), and updates inventory. ALWAYS call confirm=false first to preview; only call confirm=true after the user explicitly says yes.",
+        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. Resolves the party ledger and items by fuzzy match. If the party doesn't exist, pass party_type so it's auto-created. If an item doesn't exist, pass unit/gst_rate/hsn_code on that line so it's auto-created in the same step. Computes CGST/SGST (intra-state) or IGST (inter-state) from each item's GST rate, posts the standard double-entry and updates inventory. ALWAYS call confirm=false first to preview; only call confirm=true after the user explicitly says yes.",
       inputSchema: z.object({
         voucher_type: z.enum(["sales", "purchase", "credit_note", "debit_note"]),
         date: z.string().describe("ISO YYYY-MM-DD"),
         party_name: z.string().describe("Customer / supplier ledger name"),
+        party_type: z
+          .enum(["sundry_debtor", "sundry_creditor"])
+          .optional()
+          .describe("If provided and the party doesn't exist, auto-create it with this type."),
+        party_state: z.string().optional(),
+        party_state_code: z.string().optional(),
+        party_gstin: z.string().optional(),
         reference_no: z.string().max(60).optional(),
         narration: z.string().max(500).optional(),
         items: z
@@ -556,6 +612,10 @@ function buildTools(supabase: DB, companyId: string) {
               rate_rupees: z.number().nonnegative(),
               discount_rupees: z.number().nonnegative().optional().default(0),
               gst_rate_override: z.number().min(0).max(28).optional(),
+              // Auto-create fields (used only if the item doesn't already exist)
+              unit: z.string().max(10).optional(),
+              hsn_code: z.string().max(10).optional(),
+              gst_rate: z.number().min(0).max(28).optional(),
             }),
           )
           .min(1)
@@ -665,6 +725,10 @@ async function createItemVoucher(
     voucher_type: "sales" | "purchase" | "credit_note" | "debit_note";
     date: string;
     party_name: string;
+    party_type?: "sundry_debtor" | "sundry_creditor";
+    party_state?: string;
+    party_state_code?: string;
+    party_gstin?: string;
     reference_no?: string;
     narration?: string;
     items: Array<{
@@ -673,13 +737,40 @@ async function createItemVoucher(
       rate_rupees: number;
       discount_rupees?: number;
       gst_rate_override?: number;
+      unit?: string;
+      hsn_code?: string;
+      gst_rate?: number;
     }>;
     confirm: boolean;
   },
 ) {
-  // Resolve party + company state for interstate detection
-  const party = await resolveLedger(supabase, companyId, input.party_name);
-  if ("error" in party) return { error: party.error };
+  // Resolve party + company state for interstate detection. Auto-create the
+  // party ledger if missing and the caller provided a party_type hint.
+  let party: { id: string; name: string };
+  const partyResolved = await resolveLedger(supabase, companyId, input.party_name);
+  if ("error" in partyResolved) {
+    const defaultType: "sundry_debtor" | "sundry_creditor" =
+      input.party_type ??
+      (input.voucher_type === "sales" || input.voucher_type === "credit_note"
+        ? "sundry_debtor"
+        : "sundry_creditor");
+    const { data: newParty, error: pErr } = await supabase
+      .from("ledgers")
+      .insert({
+        company_id: companyId,
+        name: input.party_name,
+        type: defaultType as Database["public"]["Enums"]["ledger_type"],
+        state: input.party_state ?? null,
+        state_code: input.party_state_code ?? null,
+        gstin: input.party_gstin ?? null,
+      })
+      .select("id, name")
+      .single();
+    if (pErr || !newParty) return { error: `Could not create party "${input.party_name}": ${pErr?.message ?? "unknown"}` };
+    party = newParty;
+  } else {
+    party = partyResolved;
+  }
   const { data: partyRow } = await supabase
     .from("ledgers")
     .select("state_code, state")
@@ -710,8 +801,41 @@ async function createItemVoucher(
     total_paise: number;
   }> = [];
   for (const ln of input.items) {
-    const it = await resolveItem(supabase, companyId, ln.item_name);
-    if ("error" in it) return { error: it.error };
+    let it:
+      | { id: string; name: string; unit: string; gst_rate: number; sale_price_paise: number; purchase_price_paise: number }
+      | { error: string } = await resolveItem(supabase, companyId, ln.item_name);
+    if ("error" in it) {
+      // Auto-create the item when the caller provided enough master info.
+      if (ln.unit || ln.hsn_code || ln.gst_rate != null) {
+        const { data: created, error: cErr } = await supabase
+          .from("items")
+          .insert({
+            company_id: companyId,
+            name: ln.item_name,
+            unit: ln.unit ?? "NOS",
+            gst_rate: ln.gst_rate ?? 0,
+            hsn_code: ln.hsn_code ?? null,
+            purchase_price_paise:
+              input.voucher_type === "purchase" || input.voucher_type === "debit_note"
+                ? Math.round(ln.rate_rupees * 100)
+                : 0,
+            sale_price_paise:
+              input.voucher_type === "sales" || input.voucher_type === "credit_note"
+                ? Math.round(ln.rate_rupees * 100)
+                : 0,
+          })
+          .select("id, name, unit, gst_rate, sale_price_paise, purchase_price_paise")
+          .single();
+        if (cErr || !created) return { error: `Could not auto-create item "${ln.item_name}": ${cErr?.message ?? "unknown"}` };
+        it = created;
+      } else {
+        return {
+          error:
+            it.error +
+            ` Provide unit, gst_rate and (optionally) hsn_code on the line to auto-create it.`,
+        };
+      }
+    }
     const rate_paise = Math.round(ln.rate_rupees * 100);
     const qty = ln.qty;
     const discount_paise = Math.round((ln.discount_rupees ?? 0) * 100);
@@ -1231,6 +1355,7 @@ READ rules:
 
 TRANSACTION TOOLKIT (use the most specific tool for what the user asked):
 - create_ledger — new party / expense / income / bank / cash ledger
+- create_item — new inventory item master
 - create_contra_voucher — money transfer between two cash/bank accounts
 - create_payment_voucher — money paid OUT (cash/bank → party or expense)
 - create_receipt_voucher — money received IN (party or income → cash/bank)
@@ -1238,10 +1363,16 @@ TRANSACTION TOOLKIT (use the most specific tool for what the user asked):
 - create_item_voucher — Sales, Purchase, Credit Note, Debit Note with items, qty, rate, GST
 - create_manufacturing_voucher — raw-material consumption + finished-goods production
 
+MISSING MASTERS — auto-create in the same step, do NOT punt back to the user:
+- If the party doesn't exist, pass party_type on create_item_voucher (sundry_creditor for purchase/debit_note, sundry_debtor for sales/credit_note). Also pass party_state / party_state_code / party_gstin if the user mentioned them.
+- If an item doesn't exist, pass unit, gst_rate and hsn_code (if known) on that line of create_item_voucher — the tool will create the item master automatically. Tax-free = gst_rate 0.
+- Only fall back to a separate create_item / create_ledger call (with the confirm-first preview flow) when the user is creating masters in isolation, not as part of a voucher.
+- NEVER tell the user to "open Items" or "go to Ledgers" first — you are accountable for completing the transaction end-to-end.
+
 MANDATORY WORKFLOW for every transaction request:
 1. Pick the single most appropriate tool. Never use a journal when a specific tool exists.
 2. Fill in missing fields with sensible defaults: date = today, narration = a one-line purpose, interstate auto-detected from the party's state.
-3. If a referenced ledger or item is missing, FIRST propose create_ledger (confirm=false) for ledgers, or ask the user to add the item from Items master, then proceed once the master exists.
+3. If a referenced party or item is missing, auto-create it inline via the voucher tool's party_type / line.unit+gst_rate+hsn_code fields. Do NOT ask the user to open masters. Only fall back to a standalone create_ledger/create_item call when the user is explicitly managing masters.
 4. Call the chosen create_* tool with confirm=false. It returns a structured preview.
 5. Render the preview to the user as a clean markdown table (Date, Party, Lines with Dr/Cr or qty×rate, GST split, Total, Narration) and ask them to reply **"yes"** to post or **"no"** to cancel.
 6. ONLY after the user replies with an unambiguous yes / confirm / post / go-ahead, call the SAME tool again with confirm=true and otherwise IDENTICAL arguments.
