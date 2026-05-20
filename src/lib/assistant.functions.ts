@@ -725,6 +725,10 @@ async function createItemVoucher(
     voucher_type: "sales" | "purchase" | "credit_note" | "debit_note";
     date: string;
     party_name: string;
+    party_type?: "sundry_debtor" | "sundry_creditor";
+    party_state?: string;
+    party_state_code?: string;
+    party_gstin?: string;
     reference_no?: string;
     narration?: string;
     items: Array<{
@@ -733,6 +737,9 @@ async function createItemVoucher(
       rate_rupees: number;
       discount_rupees?: number;
       gst_rate_override?: number;
+      unit?: string;
+      hsn_code?: string;
+      gst_rate?: number;
     }>;
     confirm: boolean;
   },
