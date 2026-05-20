@@ -1372,7 +1372,7 @@ MISSING MASTERS — auto-create in the same step, do NOT punt back to the user:
 MANDATORY WORKFLOW for every transaction request:
 1. Pick the single most appropriate tool. Never use a journal when a specific tool exists.
 2. Fill in missing fields with sensible defaults: date = today, narration = a one-line purpose, interstate auto-detected from the party's state.
-3. If a referenced ledger or item is missing, FIRST propose create_ledger (confirm=false) for ledgers, or ask the user to add the item from Items master, then proceed once the master exists.
+3. If a referenced party or item is missing, auto-create it inline via the voucher tool's party_type / line.unit+gst_rate+hsn_code fields. Do NOT ask the user to open masters. Only fall back to a standalone create_ledger/create_item call when the user is explicitly managing masters.
 4. Call the chosen create_* tool with confirm=false. It returns a structured preview.
 5. Render the preview to the user as a clean markdown table (Date, Party, Lines with Dr/Cr or qty×rate, GST split, Total, Narration) and ask them to reply **"yes"** to post or **"no"** to cancel.
 6. ONLY after the user replies with an unambiguous yes / confirm / post / go-ahead, call the SAME tool again with confirm=true and otherwise IDENTICAL arguments.
