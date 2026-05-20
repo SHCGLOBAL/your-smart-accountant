@@ -87,8 +87,20 @@ function ItemRowImpl({
     }
   };
 
+  const gstTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleGstKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter") return;
+    const expanded = e.currentTarget.getAttribute("aria-expanded") === "true";
+    if (expanded) return; // let Radix handle selection
+    if (!row.gst_rate) return; // no value yet — let Radix open
+    e.preventDefault();
+    e.stopPropagation();
+    onAdvanceToNextRow?.(idx);
+  };
+
   return (
-    <TableRow onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
+    <TableRow data-voucher-row data-row-idx={idx} onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
       <TableCell>
         <div className="flex gap-1">
           <Combo
