@@ -590,7 +590,7 @@ function buildTools(supabase: DB, companyId: string) {
     // ---------- ITEM VOUCHERS (sales / purchase / credit_note / debit_note) ----------
     create_item_voucher: tool({
       description:
-        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. Resolves the party ledger and items by fuzzy match. If the party doesn't exist, pass party_type so it's auto-created. If an item doesn't exist, pass unit/gst_rate/hsn_code on that line so it's auto-created in the same step. Computes CGST/SGST (intra-state) or IGST (inter-state) from each item's GST rate, posts the standard double-entry and updates inventory. ALWAYS call confirm=false first to preview; only call confirm=true after the user explicitly says yes.",
+        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. Resolves the party ledger and items by fuzzy match. Auto-creates the party (pass party_type) and items (pass unit/gst_rate/hsn_code on the line). Computes CGST/SGST (intra-state) or IGST (inter-state). Use posting_account_name + posting_account_type to override the default Sales/Purchase A/c — e.g. 'Computers'/fixed_asset for capital-goods purchase, 'Sales - Exempt'/income_direct for exempt sales, 'Sales - Exports'/income_direct for zero-rated exports. ALWAYS call confirm=false first; only call confirm=true after the user explicitly says yes.",
       inputSchema: z.object({
         voucher_type: z.enum(["sales", "purchase", "credit_note", "debit_note"]),
         date: z.string().describe("ISO YYYY-MM-DD"),
@@ -604,6 +604,23 @@ function buildTools(supabase: DB, companyId: string) {
         party_gstin: z.string().optional(),
         reference_no: z.string().max(60).optional(),
         narration: z.string().max(500).optional(),
+        posting_account_name: z
+          .string()
+          .optional()
+          .describe(
+            "Override the default Sales A/c / Purchase A/c. Use for capital goods (e.g. 'Computers'), exempt or export sales.",
+          ),
+        posting_account_type: z
+          .enum([
+            "fixed_asset",
+            "current_asset",
+            "income_direct",
+            "income_indirect",
+            "expense_direct",
+            "expense_indirect",
+          ])
+          .optional()
+          .describe("Group for the override posting account."),
         items: z
           .array(
             z.object({
@@ -612,7 +629,6 @@ function buildTools(supabase: DB, companyId: string) {
               rate_rupees: z.number().nonnegative(),
               discount_rupees: z.number().nonnegative().optional().default(0),
               gst_rate_override: z.number().min(0).max(28).optional(),
-              // Auto-create fields (used only if the item doesn't already exist)
               unit: z.string().max(10).optional(),
               hsn_code: z.string().max(10).optional(),
               gst_rate: z.number().min(0).max(28).optional(),
@@ -624,6 +640,35 @@ function buildTools(supabase: DB, companyId: string) {
       }),
       execute: async (input) => {
         return await createItemVoucher(supabase, companyId, input);
+      },
+    }),
+
+    // ---------- GST EXPENSE / CAPITAL-GOODS (no inventory) ----------
+    create_expense_voucher: tool({
+      description:
+        "Create a GST expense or capital-goods voucher WITHOUT inventory (rent, telephone, professional fees, audit fees, a laptop bought from a non-stocked supplier, etc.). Auto-creates the expense/asset ledger and the Input CGST/SGST/IGST ledgers. Posts: Dr Expense/Asset (taxable) + Dr Input CGST+SGST or Input IGST, Cr Cash/Bank (cash/bank mode) OR Cr Party (credit mode). ledger_type=fixed_asset for capital goods, expense_indirect for overheads, expense_direct for direct costs. ALWAYS call confirm=false first.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        expense_ledger_name: z.string().describe("e.g. 'Rent A/c', 'Telephone Expenses', 'Computers'"),
+        ledger_type: z.enum([
+          "expense_direct",
+          "expense_indirect",
+          "fixed_asset",
+          "current_asset",
+        ]),
+        amount_rupees: z.number().positive().describe("Taxable amount BEFORE GST."),
+        gst_rate: z.number().min(0).max(28).default(0),
+        payment_mode: z.enum(["cash", "bank", "credit"]),
+        cash_or_bank_ledger_name: z.string().optional().describe("Required for cash/bank mode."),
+        party_name: z.string().optional().describe("Supplier ledger; required for credit mode."),
+        party_state_code: z.string().optional(),
+        party_gstin: z.string().optional(),
+        reference_no: z.string().max(60).optional(),
+        narration: z.string().max(500).optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createExpenseVoucher(supabase, companyId, input);
       },
     }),
 
