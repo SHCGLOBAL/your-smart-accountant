@@ -511,7 +511,524 @@ function buildTools(supabase: DB, companyId: string) {
         });
       },
     }),
+
+    // ---------- CONTRA (bank/cash transfer) ----------
+    create_contra_voucher: tool({
+      description:
+        "Create a Contra voucher — money moved between two cash/bank accounts (e.g. cash deposit to bank, bank-to-bank transfer). ALWAYS call confirm=false first to preview, then confirm=true after the user explicitly says yes.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        from_account_name: z.string().describe("Source cash/bank ledger (credited)"),
+        to_account_name: z.string().describe("Destination cash/bank ledger (debited)"),
+        amount_rupees: z.number().positive(),
+        narration: z.string().max(500).optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createGenericVoucher(supabase, companyId, {
+          voucher_type: "contra",
+          date: input.date,
+          narration: input.narration,
+          lines: [
+            { ledger_name: input.to_account_name, debit_rupees: input.amount_rupees, credit_rupees: 0 },
+            { ledger_name: input.from_account_name, debit_rupees: 0, credit_rupees: input.amount_rupees },
+          ],
+          confirm: input.confirm,
+        });
+      },
+    }),
+
+    // ---------- ITEM VOUCHERS (sales / purchase / credit_note / debit_note) ----------
+    create_item_voucher: tool({
+      description:
+        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. The tool resolves the party ledger and item names by fuzzy match, computes CGST/SGST (intra-state) or IGST (inter-state) from each item's GST rate, posts the standard double-entry (party A/c vs Sales/Purchase A/c + GST), and updates inventory. ALWAYS call confirm=false first to preview; only call confirm=true after the user explicitly says yes.",
+      inputSchema: z.object({
+        voucher_type: z.enum(["sales", "purchase", "credit_note", "debit_note"]),
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        party_name: z.string().describe("Customer / supplier ledger name"),
+        reference_no: z.string().max(60).optional(),
+        narration: z.string().max(500).optional(),
+        items: z
+          .array(
+            z.object({
+              item_name: z.string(),
+              qty: z.number().positive(),
+              rate_rupees: z.number().nonnegative(),
+              discount_rupees: z.number().nonnegative().optional().default(0),
+              gst_rate_override: z.number().min(0).max(28).optional(),
+            }),
+          )
+          .min(1)
+          .max(50),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createItemVoucher(supabase, companyId, input);
+      },
+    }),
+
+    // ---------- MANUFACTURING JOURNAL ----------
+    create_manufacturing_voucher: tool({
+      description:
+        "Create a Manufacturing Journal — consumes one or more raw-material items and produces one or more finished-goods items. Stock of consumed items is reduced; stock of produced items is increased at the total consumption value (split pro-rata by output qty). Posts Dr Finished Goods / Cr Raw Materials in the ledger. ALWAYS confirm=false first.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        narration: z.string().max(500).optional(),
+        consumption: z
+          .array(z.object({ item_name: z.string(), qty: z.number().positive(), rate_rupees: z.number().nonnegative() }))
+          .min(1)
+          .max(50),
+        finished: z
+          .array(z.object({ item_name: z.string(), qty: z.number().positive() }))
+          .min(1)
+          .max(20),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createManufacturingVoucher(supabase, companyId, input);
+      },
+    }),
   };
+}
+
+// ---------- Server-side posting helpers (mirror src/lib/voucher-postings.ts) ----------
+async function getOrCreateSysLedger(
+  supabase: DB,
+  companyId: string,
+  name: string,
+  type: Database["public"]["Enums"]["ledger_type"],
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from("ledgers")
+    .select("id")
+    .eq("company_id", companyId)
+    .ilike("name", name)
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) return existing.id;
+  const { data, error } = await supabase
+    .from("ledgers")
+    .insert({ company_id: companyId, name, type })
+    .select("id")
+    .single();
+  if (error) throw new Error(`Could not create ledger "${name}": ${error.message}`);
+  return data.id;
+}
+
+async function resolveLedger(
+  supabase: DB,
+  companyId: string,
+  name: string,
+): Promise<{ id: string; name: string } | { error: string }> {
+  const { data: matches } = await supabase
+    .from("ledgers")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .ilike("name", `%${name}%`)
+    .limit(5);
+  if (!matches || matches.length === 0)
+    return { error: `No ledger matching "${name}". Create it first via create_ledger.` };
+  const exact = matches.find((m) => m.name.toLowerCase() === name.toLowerCase());
+  if (exact) return exact;
+  if (matches.length === 1) return matches[0];
+  return {
+    error: `Multiple ledgers match "${name}": ${matches.map((m) => m.name).join(", ")}. Use the exact name.`,
+  };
+}
+
+async function resolveItem(
+  supabase: DB,
+  companyId: string,
+  name: string,
+): Promise<
+  | { id: string; name: string; unit: string; gst_rate: number; sale_price_paise: number; purchase_price_paise: number }
+  | { error: string }
+> {
+  const { data: matches } = await supabase
+    .from("items")
+    .select("id, name, unit, gst_rate, sale_price_paise, purchase_price_paise")
+    .eq("company_id", companyId)
+    .ilike("name", `%${name}%`)
+    .limit(5);
+  if (!matches || matches.length === 0)
+    return { error: `No item matching "${name}". Create it from Items master first.` };
+  const exact = matches.find((m) => m.name.toLowerCase() === name.toLowerCase());
+  if (exact) return exact;
+  if (matches.length === 1) return matches[0];
+  return { error: `Multiple items match "${name}": ${matches.map((m) => m.name).join(", ")}. Use the exact name.` };
+}
+
+async function createItemVoucher(
+  supabase: DB,
+  companyId: string,
+  input: {
+    voucher_type: "sales" | "purchase" | "credit_note" | "debit_note";
+    date: string;
+    party_name: string;
+    reference_no?: string;
+    narration?: string;
+    items: Array<{
+      item_name: string;
+      qty: number;
+      rate_rupees: number;
+      discount_rupees?: number;
+      gst_rate_override?: number;
+    }>;
+    confirm: boolean;
+  },
+) {
+  // Resolve party + company state for interstate detection
+  const party = await resolveLedger(supabase, companyId, input.party_name);
+  if ("error" in party) return { error: party.error };
+  const { data: partyRow } = await supabase
+    .from("ledgers")
+    .select("state_code, state")
+    .eq("id", party.id)
+    .maybeSingle();
+  const { data: companyRow } = await supabase
+    .from("companies")
+    .select("state_code, gst_registered")
+    .eq("id", companyId)
+    .maybeSingle();
+  const interstate =
+    !!partyRow?.state_code && !!companyRow?.state_code && partyRow.state_code !== companyRow.state_code;
+  const gstApplies = companyRow?.gst_registered === true;
+
+  // Resolve items + compute line totals
+  const lines: Array<{
+    item_id: string;
+    item_name: string;
+    qty: number;
+    rate_paise: number;
+    discount_paise: number;
+    amount_paise: number;
+    taxable_paise: number;
+    gst_rate: number;
+    cgst_paise: number;
+    sgst_paise: number;
+    igst_paise: number;
+    total_paise: number;
+  }> = [];
+  for (const ln of input.items) {
+    const it = await resolveItem(supabase, companyId, ln.item_name);
+    if ("error" in it) return { error: it.error };
+    const rate_paise = Math.round(ln.rate_rupees * 100);
+    const qty = ln.qty;
+    const discount_paise = Math.round((ln.discount_rupees ?? 0) * 100);
+    const amount_paise = Math.round(qty * rate_paise);
+    const taxable_paise = Math.max(0, amount_paise - discount_paise);
+    const gst_rate = gstApplies ? (ln.gst_rate_override ?? it.gst_rate ?? 0) : 0;
+    const gstTotal = Math.round((taxable_paise * gst_rate) / 100);
+    const cgst_paise = !interstate && gst_rate > 0 ? Math.round(gstTotal / 2) : 0;
+    const sgst_paise = !interstate && gst_rate > 0 ? gstTotal - cgst_paise : 0;
+    const igst_paise = interstate && gst_rate > 0 ? gstTotal : 0;
+    const total_paise = taxable_paise + cgst_paise + sgst_paise + igst_paise;
+    lines.push({
+      item_id: it.id,
+      item_name: it.name,
+      qty,
+      rate_paise,
+      discount_paise,
+      amount_paise,
+      taxable_paise,
+      gst_rate,
+      cgst_paise,
+      sgst_paise,
+      igst_paise,
+      total_paise,
+    });
+  }
+
+  const subtotal_paise = lines.reduce((s, l) => s + l.taxable_paise, 0);
+  const cgst_paise = lines.reduce((s, l) => s + l.cgst_paise, 0);
+  const sgst_paise = lines.reduce((s, l) => s + l.sgst_paise, 0);
+  const igst_paise = lines.reduce((s, l) => s + l.igst_paise, 0);
+  const total_paise = subtotal_paise + cgst_paise + sgst_paise + igst_paise;
+
+  const preview = {
+    action: "create_item_voucher" as const,
+    voucher_type: input.voucher_type,
+    date: input.date,
+    party: party.name,
+    interstate,
+    reference_no: input.reference_no ?? null,
+    narration: input.narration ?? null,
+    lines: lines.map((l) => ({
+      item: l.item_name,
+      qty: l.qty,
+      rate: rupees(l.rate_paise),
+      taxable: rupees(l.taxable_paise),
+      gst_rate: `${l.gst_rate}%`,
+      tax: rupees(l.cgst_paise + l.sgst_paise + l.igst_paise),
+      line_total: rupees(l.total_paise),
+    })),
+    subtotal_rupees: rupees(subtotal_paise),
+    cgst_rupees: rupees(cgst_paise),
+    sgst_rupees: rupees(sgst_paise),
+    igst_rupees: rupees(igst_paise),
+    total_rupees: rupees(total_paise),
+  };
+  if (!input.confirm) return { preview, requires_confirmation: true };
+
+  // Insert voucher
+  const { data: vno, error: rpcErr } = await supabase.rpc("next_voucher_number", {
+    _company_id: companyId,
+    _type: input.voucher_type as Database["public"]["Enums"]["voucher_type"],
+  });
+  if (rpcErr || !vno) return { error: rpcErr?.message ?? "Could not generate voucher number" };
+  const { data: auth } = await supabase.auth.getUser();
+  const created_by = auth.user?.id;
+  if (!created_by) return { error: "Not authenticated" };
+
+  const { data: v, error: vErr } = await supabase
+    .from("vouchers")
+    .insert({
+      company_id: companyId,
+      created_by,
+      voucher_type: input.voucher_type as Database["public"]["Enums"]["voucher_type"],
+      voucher_number: vno as string,
+      voucher_date: input.date,
+      party_ledger_id: party.id,
+      reference_no: input.reference_no ?? null,
+      narration: input.narration ?? null,
+      is_interstate: interstate,
+      subtotal_paise,
+      cgst_paise,
+      sgst_paise,
+      igst_paise,
+      total_paise,
+    })
+    .select("id, voucher_number")
+    .single();
+  if (vErr || !v) return { error: vErr?.message ?? "Failed to create voucher" };
+
+  const { error: iErr } = await supabase.from("voucher_items").insert(
+    lines.map((l, i) => ({
+      voucher_id: v.id,
+      item_id: l.item_id,
+      line_no: i + 1,
+      qty: l.qty,
+      rate_paise: l.rate_paise,
+      discount_paise: l.discount_paise,
+      amount_paise: l.amount_paise,
+      taxable_paise: l.taxable_paise,
+      gst_rate: l.gst_rate,
+      cgst_paise: l.cgst_paise,
+      sgst_paise: l.sgst_paise,
+      igst_paise: l.igst_paise,
+    })),
+  );
+  if (iErr) {
+    await supabase.from("vouchers").delete().eq("id", v.id);
+    return { error: `Item insert failed: ${iErr.message}` };
+  }
+
+  // Build double-entry postings
+  const isSalesSide = input.voucher_type === "sales" || input.voucher_type === "credit_note";
+  const baseName =
+    input.voucher_type === "sales"
+      ? "Sales A/c"
+      : input.voucher_type === "purchase"
+        ? "Purchase A/c"
+        : input.voucher_type === "credit_note"
+          ? "Sales Return A/c"
+          : "Purchase Return A/c";
+  const baseType: Database["public"]["Enums"]["ledger_type"] = isSalesSide ? "income_direct" : "expense_direct";
+  const baseId = await getOrCreateSysLedger(supabase, companyId, baseName, baseType);
+  const cgstId =
+    cgst_paise > 0
+      ? await getOrCreateSysLedger(
+          supabase,
+          companyId,
+          isSalesSide ? "Output CGST" : "Input CGST",
+          "duties_taxes",
+        )
+      : null;
+  const sgstId =
+    sgst_paise > 0
+      ? await getOrCreateSysLedger(
+          supabase,
+          companyId,
+          isSalesSide ? "Output SGST" : "Input SGST",
+          "duties_taxes",
+        )
+      : null;
+  const igstId =
+    igst_paise > 0
+      ? await getOrCreateSysLedger(
+          supabase,
+          companyId,
+          isSalesSide ? "Output IGST" : "Input IGST",
+          "duties_taxes",
+        )
+      : null;
+
+  const entries: Array<{ ledger_id: string; debit_paise: number; credit_paise: number; line_no: number }> = [];
+  let lineNo = 1;
+  if (input.voucher_type === "sales") {
+    entries.push({ ledger_id: party.id, debit_paise: total_paise, credit_paise: 0, line_no: lineNo++ });
+    entries.push({ ledger_id: baseId, debit_paise: 0, credit_paise: subtotal_paise, line_no: lineNo++ });
+    if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: 0, credit_paise: cgst_paise, line_no: lineNo++ });
+    if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: 0, credit_paise: sgst_paise, line_no: lineNo++ });
+    if (igstId) entries.push({ ledger_id: igstId, debit_paise: 0, credit_paise: igst_paise, line_no: lineNo++ });
+  } else if (input.voucher_type === "purchase") {
+    entries.push({ ledger_id: baseId, debit_paise: subtotal_paise, credit_paise: 0, line_no: lineNo++ });
+    if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: cgst_paise, credit_paise: 0, line_no: lineNo++ });
+    if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: sgst_paise, credit_paise: 0, line_no: lineNo++ });
+    if (igstId) entries.push({ ledger_id: igstId, debit_paise: igst_paise, credit_paise: 0, line_no: lineNo++ });
+    entries.push({ ledger_id: party.id, debit_paise: 0, credit_paise: total_paise, line_no: lineNo++ });
+  } else if (input.voucher_type === "credit_note") {
+    entries.push({ ledger_id: baseId, debit_paise: subtotal_paise, credit_paise: 0, line_no: lineNo++ });
+    if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: cgst_paise, credit_paise: 0, line_no: lineNo++ });
+    if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: sgst_paise, credit_paise: 0, line_no: lineNo++ });
+    if (igstId) entries.push({ ledger_id: igstId, debit_paise: igst_paise, credit_paise: 0, line_no: lineNo++ });
+    entries.push({ ledger_id: party.id, debit_paise: 0, credit_paise: total_paise, line_no: lineNo++ });
+  } else {
+    entries.push({ ledger_id: party.id, debit_paise: total_paise, credit_paise: 0, line_no: lineNo++ });
+    entries.push({ ledger_id: baseId, debit_paise: 0, credit_paise: subtotal_paise, line_no: lineNo++ });
+    if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: 0, credit_paise: cgst_paise, line_no: lineNo++ });
+    if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: 0, credit_paise: sgst_paise, line_no: lineNo++ });
+    if (igstId) entries.push({ ledger_id: igstId, debit_paise: 0, credit_paise: igst_paise, line_no: lineNo++ });
+  }
+  const { error: eErr } = await supabase.from("voucher_entries").insert(
+    entries.map((e) => ({ ...e, voucher_id: v.id })),
+  );
+  if (eErr) {
+    await supabase.from("vouchers").delete().eq("id", v.id);
+    return { error: `Posting failed: ${eErr.message}` };
+  }
+
+  return { ok: true, voucher_number: v.voucher_number, voucher_id: v.id, total_rupees: rupees(total_paise) };
+}
+
+async function createManufacturingVoucher(
+  supabase: DB,
+  companyId: string,
+  input: {
+    date: string;
+    narration?: string;
+    consumption: Array<{ item_name: string; qty: number; rate_rupees: number }>;
+    finished: Array<{ item_name: string; qty: number }>;
+    confirm: boolean;
+  },
+) {
+  const consumed: Array<{ item_id: string; name: string; qty: number; rate_paise: number; value_paise: number }> = [];
+  for (const c of input.consumption) {
+    const it = await resolveItem(supabase, companyId, c.item_name);
+    if ("error" in it) return { error: it.error };
+    const rate_paise = Math.round(c.rate_rupees * 100);
+    consumed.push({
+      item_id: it.id,
+      name: it.name,
+      qty: c.qty,
+      rate_paise,
+      value_paise: Math.round(c.qty * rate_paise),
+    });
+  }
+  const totalConsumption = consumed.reduce((s, c) => s + c.value_paise, 0);
+  const totalFinishedQty = input.finished.reduce((s, f) => s + f.qty, 0);
+  if (totalFinishedQty <= 0) return { error: "Finished goods total qty must be > 0" };
+
+  const finished: Array<{ item_id: string; name: string; qty: number; rate_paise: number; value_paise: number }> = [];
+  for (const f of input.finished) {
+    const it = await resolveItem(supabase, companyId, f.item_name);
+    if ("error" in it) return { error: it.error };
+    const value_paise = Math.round((f.qty / totalFinishedQty) * totalConsumption);
+    finished.push({
+      item_id: it.id,
+      name: it.name,
+      qty: f.qty,
+      rate_paise: f.qty > 0 ? Math.round(value_paise / f.qty) : 0,
+      value_paise,
+    });
+  }
+
+  const preview = {
+    action: "create_manufacturing_voucher" as const,
+    date: input.date,
+    narration: input.narration ?? null,
+    consumption: consumed.map((c) => ({
+      item: c.name,
+      qty: c.qty,
+      rate: rupees(c.rate_paise),
+      value: rupees(c.value_paise),
+    })),
+    finished: finished.map((f) => ({
+      item: f.name,
+      qty: f.qty,
+      effective_rate: rupees(f.rate_paise),
+      value: rupees(f.value_paise),
+    })),
+    total_consumption_rupees: rupees(totalConsumption),
+  };
+  if (!input.confirm) return { preview, requires_confirmation: true };
+
+  const { data: vno, error: rpcErr } = await supabase.rpc("next_voucher_number", {
+    _company_id: companyId,
+    _type: "manufacturing" as Database["public"]["Enums"]["voucher_type"],
+  });
+  if (rpcErr || !vno) return { error: rpcErr?.message ?? "Could not generate voucher number" };
+  const { data: auth } = await supabase.auth.getUser();
+  const created_by = auth.user?.id;
+  if (!created_by) return { error: "Not authenticated" };
+
+  const { data: v, error: vErr } = await supabase
+    .from("vouchers")
+    .insert({
+      company_id: companyId,
+      created_by,
+      voucher_type: "manufacturing" as Database["public"]["Enums"]["voucher_type"],
+      voucher_number: vno as string,
+      voucher_date: input.date,
+      narration: input.narration ?? null,
+      subtotal_paise: totalConsumption,
+      total_paise: totalConsumption,
+    })
+    .select("id, voucher_number")
+    .single();
+  if (vErr || !v) return { error: vErr?.message ?? "Failed to create voucher" };
+
+  // Consumption rows are negative qty, finished are positive — mirror ManufacturingVoucherForm convention.
+  const itemRows = [
+    ...consumed.map((c, i) => ({
+      voucher_id: v.id,
+      item_id: c.item_id,
+      line_no: i + 1,
+      qty: -c.qty,
+      rate_paise: c.rate_paise,
+      amount_paise: -c.value_paise,
+      taxable_paise: -c.value_paise,
+      gst_rate: 0,
+    })),
+    ...finished.map((f, i) => ({
+      voucher_id: v.id,
+      item_id: f.item_id,
+      line_no: consumed.length + i + 1,
+      qty: f.qty,
+      rate_paise: f.rate_paise,
+      amount_paise: f.value_paise,
+      taxable_paise: f.value_paise,
+      gst_rate: 0,
+    })),
+  ];
+  const { error: iErr } = await supabase.from("voucher_items").insert(itemRows);
+  if (iErr) {
+    await supabase.from("vouchers").delete().eq("id", v.id);
+    return { error: `Item insert failed: ${iErr.message}` };
+  }
+
+  // Ledger: Dr Finished Goods / Cr Raw Materials (both under STOCK_IN_HAND)
+  const fgId = await getOrCreateSysLedger(supabase, companyId, "Finished Goods", "stock_in_hand");
+  const rmId = await getOrCreateSysLedger(supabase, companyId, "Raw Materials", "stock_in_hand");
+  const { error: eErr } = await supabase.from("voucher_entries").insert([
+    { voucher_id: v.id, ledger_id: fgId, debit_paise: totalConsumption, credit_paise: 0, line_no: 1 },
+    { voucher_id: v.id, ledger_id: rmId, debit_paise: 0, credit_paise: totalConsumption, line_no: 2 },
+  ]);
+  if (eErr) {
+    await supabase.from("vouchers").delete().eq("id", v.id);
+    return { error: `Posting failed: ${eErr.message}` };
+  }
+  return { ok: true, voucher_number: v.voucher_number, voucher_id: v.id, total_rupees: rupees(totalConsumption) };
 }
 
 // Shared helper: resolve ledgers by fuzzy name and either preview or insert the voucher.
@@ -519,7 +1036,7 @@ async function createGenericVoucher(
   supabase: DB,
   companyId: string,
   args: {
-    voucher_type: "journal" | "payment" | "receipt";
+    voucher_type: "journal" | "payment" | "receipt" | "contra";
     date: string;
     narration?: string;
     lines: Array<{ ledger_name: string; debit_rupees?: number; credit_rupees?: number }>;
@@ -699,32 +1216,48 @@ export const assistantChat = createServerFn({ method: "POST" })
         };
 
     const today = todayISO();
-    const system = `You are Mate, an in-app accounting assistant for an Indian GST accounting application.
+    const system = `You are Mate, an in-app accounting assistant for an Indian GST accounting application. You are FULLY ACCOUNTABLE for turning the user's plain-language transaction requests into correctly posted vouchers.
 
 Active company: ${companyName} (id: ${data.companyId ?? "none"})
 Today's date: ${today}
 Your role here: ${role}${canWrite ? " (you may PROPOSE write actions)" : " (READ-ONLY — do NOT call any create_* tool)"}
 
-Guidelines:
+READ rules:
 - For READ questions, always call a tool — never make up numbers.
 - Present money in Indian rupees with "₹" and Dr/Cr where applicable.
 - If a date isn't given, use today (${today}) for "as of" balances, or the current FY for period reports.
 - For "how do I…" / settings questions, use search_help and quote it briefly.
 - If no company is active, ask the user to pick one before any data action.
 
-WRITE / POSTING tools (create_ledger, create_journal_voucher, create_payment_voucher, create_receipt_voucher):
-- ALWAYS call the tool first with confirm=false. The tool returns a preview.
-- Show the preview to the user in a clean markdown table (Date, Dr/Cr lines, totals, narration) and ask them to confirm with **"yes"** or **"no"**.
-- ONLY after the user replies with an unambiguous yes/confirm/go-ahead, call the SAME tool again with confirm=true and IDENTICAL arguments.
-- Never invent ledger names — if a ledger isn't found, propose creating it via create_ledger (confirm=false first).
-- A journal must balance (sum of Dr = sum of Cr). Round amounts to two decimals.
+TRANSACTION TOOLKIT (use the most specific tool for what the user asked):
+- create_ledger — new party / expense / income / bank / cash ledger
+- create_contra_voucher — money transfer between two cash/bank accounts
+- create_payment_voucher — money paid OUT (cash/bank → party or expense)
+- create_receipt_voucher — money received IN (party or income → cash/bank)
+- create_journal_voucher — any other manual double-entry adjustment
+- create_item_voucher — Sales, Purchase, Credit Note, Debit Note with items, qty, rate, GST
+- create_manufacturing_voucher — raw-material consumption + finished-goods production
+
+MANDATORY WORKFLOW for every transaction request:
+1. Pick the single most appropriate tool. Never use a journal when a specific tool exists.
+2. Fill in missing fields with sensible defaults: date = today, narration = a one-line purpose, interstate auto-detected from the party's state.
+3. If a referenced ledger or item is missing, FIRST propose create_ledger (confirm=false) for ledgers, or ask the user to add the item from Items master, then proceed once the master exists.
+4. Call the chosen create_* tool with confirm=false. It returns a structured preview.
+5. Render the preview to the user as a clean markdown table (Date, Party, Lines with Dr/Cr or qty×rate, GST split, Total, Narration) and ask them to reply **"yes"** to post or **"no"** to cancel.
+6. ONLY after the user replies with an unambiguous yes / confirm / post / go-ahead, call the SAME tool again with confirm=true and otherwise IDENTICAL arguments.
+7. After posting, reply with the voucher number, total, and a one-line confirmation. Do NOT post twice.
+
+Quality rules:
+- A journal must balance (Dr = Cr) to the paise.
+- For item vouchers, GST is computed automatically — do NOT add it to the rate.
+- For manufacturing, finished-goods value is auto-split pro-rata by output qty across the total consumption value; do not pass rates for finished goods.
+- If a tool returns { error }, surface it in plain language and suggest the precise next step (create the missing ledger, fix the date, use exact name, etc.). Never silently retry with made-up data.
 - If a period is locked, surface the database error verbatim and suggest a Credit/Debit Note in the current period.
 - Keep narrations short (party name or one-line purpose).
 
 Other:
 - Use markdown (bullets, **bold**, short tables) for readability.
-- Never reveal raw IDs unless explicitly asked. Never expose other users' data.
-- If a tool returns an error, explain it in plain language and suggest the next step.`;
+- Never reveal raw IDs unless explicitly asked. Never expose other users' data.`;
 
     const provider = createLovableAiGatewayProvider(key);
     const model = provider("google/gemini-3-flash-preview");
