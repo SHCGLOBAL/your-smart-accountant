@@ -397,8 +397,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
+          (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s")) {
         e.preventDefault();
+        e.stopPropagation();
         if (!saving) save();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
