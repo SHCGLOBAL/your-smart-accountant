@@ -44,6 +44,7 @@ import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceIm
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
+import { FinancialYearTransferWizard } from "@/components/housekeeping/FinancialYearTransferWizard";
 import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
@@ -151,6 +152,9 @@ function HousekeepingPage() {
           <TabsTrigger value="closure">
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
           </TabsTrigger>
+          <TabsTrigger value="fy_transfer">
+            <CalendarCheck className="mr-1 h-3.5 w-3.5" /> FY Transfer
+          </TabsTrigger>
           <TabsTrigger value="self_test">
             <Activity className="mr-1 h-3.5 w-3.5" /> Self-test
           </TabsTrigger>
@@ -211,6 +215,16 @@ function HousekeepingPage() {
         </TabsContent>
         <TabsContent value="closure">
           <YearEndClosure
+            companyId={activeCompanyId}
+            disabled={!isAdmin}
+            fyStartHint={
+              (activeMembership?.companies as { financial_year_start?: string | null } | undefined)
+                ?.financial_year_start ?? null
+            }
+          />
+        </TabsContent>
+        <TabsContent value="fy_transfer">
+          <FinancialYearTransferWizard
             companyId={activeCompanyId}
             disabled={!isAdmin}
             fyStartHint={
