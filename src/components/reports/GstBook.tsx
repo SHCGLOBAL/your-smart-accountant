@@ -44,17 +44,37 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("vouchers")
-      .select(
-        "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code)",
-      )
-      .eq("company_id", activeCompanyId)
-      .in("voucher_type", types)
-      .gte("voucher_date", from)
-      .lte("voucher_date", to)
-      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as Row[])));
+    (async () => {
+      const { data } = await supabase
+        .from("vouchers")
+        .select(
+          "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id)",
+        )
+        .eq("company_id", activeCompanyId)
+        .in("voucher_type", types)
+        .gte("voucher_date", from)
+        .lte("voucher_date", to)
+        .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+      // GST Sales/Purchase Book = goods only (trading stock).
+      // Per GST law & accounting principles: capital goods (fixed_asset) and
+      // GST-bearing expenses (expense_indirect) are tracked separately and
+      // surface only in GSTR-3B / GSTR-9 ITC tables — never in the books here.
+      const goodsTypes = kind === "sales"
+        ? new Set(["income_direct"])
+        : new Set(["expense_direct", "stock_in_hand"]);
+      type Row2 = Row & {
+        voucher_entries?: { ledgers: { type: string } | null }[];
+        voucher_items?: { id: string }[];
+      };
+      const filtered = ((data || []) as unknown as Row2[]).filter((v) => {
+        // Must have at least one inventory line (goods).
+        if (!v.voucher_items || v.voucher_items.length === 0) return false;
+        // At least one posting must hit a goods account (Sales/Purchase A/c
+        // or stock); pure capital-goods / expense vouchers are excluded.
+        return (v.voucher_entries || []).some((e) => e.ledgers && goodsTypes.has(e.ledgers.type));
+      });
+      setRows(sortVouchersAsc(filtered as Row[]));
+    })();
   }, [activeCompanyId, from, to, kind]);
 
   const totals = useMemo(
