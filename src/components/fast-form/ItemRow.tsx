@@ -168,9 +168,13 @@ function ItemRowImpl({
       <TableCell>
         <Select
           value={row.gst_rate}
-          onValueChange={(v) => onCommit(idx, { gst_rate: v })}
+          onValueChange={(v) => {
+            onCommit(idx, { gst_rate: v });
+            // After picking a GST rate, advance to next row (or append a new one).
+            requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
+          }}
         >
-          <SelectTrigger className="h-9">
+          <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
