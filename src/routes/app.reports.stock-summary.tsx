@@ -65,27 +65,34 @@ function StockSummary() {
       .then(({ data }) => setMoves((data || []) as unknown as ItemMove[]));
   }, [activeCompanyId, to]);
 
-  // Inward = purchase + credit_note (sales return); Outward = sales + debit_note (purchase return)
+  // Inward = purchase + credit_note (sales return) + manufacturing output (qty > 0)
+  // Outward = sales + debit_note (purchase return) + manufacturing consumption (qty < 0)
   const isInward = (t: string) => t === "purchase" || t === "credit_note";
   const isOutward = (t: string) => t === "sales" || t === "debit_note";
+  const isMfg = (t: string) => t === "manufacturing";
 
   const rows = useMemo(() => {
     return items.map((it) => {
       const itemMoves = moves.filter((m) => m.item_id === it.id);
+      const mfgIn = (m: typeof itemMoves[number]) =>
+        m.vouchers && isMfg(m.vouchers.voucher_type) && Number(m.qty) > 0;
+      const mfgOut = (m: typeof itemMoves[number]) =>
+        m.vouchers && isMfg(m.vouchers.voucher_type) && Number(m.qty) < 0;
+
       const inBefore = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && isInward(m.vouchers.voucher_type))
-        .reduce((s, m) => s + Number(m.qty), 0);
+        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && (isInward(m.vouchers.voucher_type) || mfgIn(m)))
+        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
       const outBefore = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && isOutward(m.vouchers.voucher_type))
-        .reduce((s, m) => s + Number(m.qty), 0);
+        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && (isOutward(m.vouchers.voucher_type) || mfgOut(m)))
+        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
       const opening = Number(it.opening_stock_qty) + inBefore - outBefore;
 
       const inWindow = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isInward(m.vouchers.voucher_type))
-        .reduce((s, m) => s + Number(m.qty), 0);
+        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isInward(m.vouchers.voucher_type) || mfgIn(m)))
+        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
       const outWindow = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isOutward(m.vouchers.voucher_type))
-        .reduce((s, m) => s + Number(m.qty), 0);
+        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || mfgOut(m)))
+        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
 
       const closing = opening + inWindow - outWindow;
       const valuationRate = it.opening_stock_rate_paise; // simplification: use opening rate as standard cost

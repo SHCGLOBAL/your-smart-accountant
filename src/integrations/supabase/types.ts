@@ -282,6 +282,80 @@ export type Database = {
           },
         ]
       }
+      bom_template_lines: {
+        Row: {
+          created_at: string
+          id: string
+          input_item_id: string
+          line_no: number
+          qty_per_output: number
+          specs: Json | null
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          input_item_id: string
+          line_no?: number
+          qty_per_output?: number
+          specs?: Json | null
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          input_item_id?: string
+          line_no?: number
+          qty_per_output?: number
+          specs?: Json | null
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_template_lines_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "bom_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bom_templates: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          output_item_id: string
+          output_qty: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          output_item_id: string
+          output_qty?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          output_item_id?: string
+          output_qty?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       closing_runs: {
         Row: {
           capital_voucher_id: string | null
@@ -1692,6 +1766,7 @@ export type Database = {
           qty: number
           rate_paise: number
           sgst_paise: number
+          specs: Json | null
           taxable_paise: number
           voucher_id: string
         }
@@ -1709,6 +1784,7 @@ export type Database = {
           qty?: number
           rate_paise?: number
           sgst_paise?: number
+          specs?: Json | null
           taxable_paise?: number
           voucher_id: string
         }
@@ -1726,6 +1802,7 @@ export type Database = {
           qty?: number
           rate_paise?: number
           sgst_paise?: number
+          specs?: Json | null
           taxable_paise?: number
           voucher_id?: string
         }
@@ -2087,6 +2164,7 @@ export type Database = {
         | "quotation"
         | "sales_order"
         | "delivery_note"
+        | "manufacturing"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2280,6 +2358,7 @@ export const Constants = {
         "quotation",
         "sales_order",
         "delivery_note",
+        "manufacturing",
       ],
     },
   },

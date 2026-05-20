@@ -1,78 +1,135 @@
 
-## Context — what already works today
+## Goal
 
-Most of what you're asking for is already wired up in the codebase. Before adding anything, here's the honest state of play so we only build the missing pieces:
+Add a **Manufacturing Journal** (a.k.a. Production / Stock Journal) module that consumes raw materials and produces finished goods, with optional **Bill of Materials (BOM)** templates that auto-populate the consumption table when a final product is picked. Keyboard behaviour matches the existing voucher screens (DDMM date auto-advance, Enter-as-Tab, infinite item-grid loop, Ctrl+S / Alt+S save).
 
-| Requirement | Status | Where it lives |
-|---|---|---|
-| DDMM → auto-fill FY year, advance focus | ✅ Done | `FyDatePicker.handleChange` (4/6/8-digit detection, FY year auto-picked Apr–Mar) |
-| Dropdown select → lock + advance to next field | ✅ Done | `Combo.handleSelect` (calls `advanceFocus` after select) |
-| Enter = Tab across the whole form | ✅ Done | `useEnterAsTab` wrapping the form in `ItemVoucherForm` |
-| Ctrl+S = Save/Accept | ✅ Done | `ItemVoucherForm` global keydown |
-| Enter does not submit the form | ✅ Done | `useEnterAsTab` calls `preventDefault` |
-| F3 / Shift+F3 / F4 / Shift+F4 / Ctrl+D / Ctrl+R | ✅ Done | Same global keydown |
+## Design decisions worth flagging
 
-So we are **not rebuilding** the navigation — we're filling 4 specific gaps.
+1. **Accounting posture** — In Tally/Busy a Stock Journal is **inventory-only**: it moves stock value from raw-material items into finished items, with no GL ledger entries. We'll do the same — insert `voucher_items` rows with **negative qty** for consumption and **positive qty** for output, and write **zero `voucher_entries`**. This keeps the Trial Balance untouched (stock value just moves between items) and matches what manufacturing users expect. If you'd rather also debit a "Finished Goods" ledger and credit a "Raw Materials" ledger, say so and I'll add that.
+2. **Cost of finished goods** = sum(consumption qty × rate) ÷ total output qty. Each output row's `rate_paise` is auto-set to this; user may override.
+3. **Department / Godown** — there's no godown master yet. For v1 we'll reuse `vouchers.reference_no` as a free-text "Department / Section" field (label changed on this screen only). Building a real godown master is a separate ask.
+4. **Spec columns (GSM, Dimensions, Weight/unit)** — these are row-level metadata, not item-master attributes. We'll add a single nullable `specs jsonb` column on `voucher_items` so the row can carry `{ gsm, length_cm, height_cm, weight_per_unit_g }` without polluting the item master.
+5. **Stock report** — `src/routes/app.reports.stock-summary.tsx` currently only treats `purchase`/`credit_note` as inward and `sales`/`debit_note` as outward. We'll extend it to include `manufacturing` rows: positive qty = inward, negative qty = outward. Same for any other stock-aware view.
 
-## What's actually missing
+## Database changes (one migration)
 
-1. **Infinite item-grid loop** — Enter inside `Item → Description → Qty → Rate → Disc → GST` currently advances via the generic Enter-as-Tab, but:
-   - The **GST column is a Radix `<Select>`**, so Enter opens the dropdown instead of moving to the next cell.
-   - On the **last row, last column**, Enter falls through to the "Add line" button / Narration textarea instead of appending a new line and focusing the new row's Item picker.
-2. **Alt+S** is not bound (only Ctrl+S / Cmd+S is).
-3. **Backspace guard on date auto-advance** — `FyDatePicker.handleChange` fires the 4-digit auto-commit even when the user reached length 4 by *deleting* a character. That can yank focus away while they're correcting.
-4. **Date field's "next" target** — today, Date → Party (because Party is the next focusable). Your spec says Date → Reference/Bill No. Decide: keep current order, or visually reorder so Reference No sits right after Date.
+```text
+-- 1. Extend enum
+ALTER TYPE public.voucher_type ADD VALUE 'manufacturing';
 
-## Plan
+-- 2. Row-level specs (used by manufacturing rows; null for everything else)
+ALTER TABLE public.voucher_items ADD COLUMN specs jsonb;
 
-### 1. Infinite item-grid loop (`src/components/fast-form/ItemRow.tsx` + small hook in `ItemVoucherForm.tsx`)
+-- 3. BOM templates (one per output item)
+CREATE TABLE public.bom_templates (
+  id uuid PK,
+  company_id uuid NOT NULL,
+  output_item_id uuid NOT NULL,
+  output_qty numeric NOT NULL DEFAULT 1,   -- recipe yields this much
+  notes text,
+  is_active boolean DEFAULT true,
+  created_at, updated_at, created_by
+);
+CREATE UNIQUE INDEX ON bom_templates (company_id, output_item_id) WHERE is_active;
 
-- Add a new prop `isLastRow: boolean` and `onAdvanceToNewRow: () => void` to `ItemRow`.
-- Wrap every editable cell (`Description`, `Qty`, `Rate`, `Discount`) with a shared `onKeyDown` that:
-  - On `Enter`: prevents default, commits the current value, then focuses the next cell in the row using a per-row `useRef` map (`item-combo → desc → qty → rate → disc → gst`).
-  - On the **GST** column: replace the Radix `<Select>` Enter behaviour by handling Enter at the `SelectTrigger` level — if a value is already chosen and the popover is closed, treat Enter as "advance"; otherwise let Radix open the popover as normal. After selection via `onValueChange`, programmatically advance.
-  - When Enter is pressed on the **last editable cell (GST) of the last row**, call `onAdvanceToNewRow`, which in `ItemVoucherForm` runs `addLine()` and then on next paint focuses the freshly appended row's Item Combo (look up by row `id` via a `Map<string, HTMLElement>` of registered triggers).
-- The Item picker (`Combo`) already auto-advances after pick via existing `Combo.handleSelect` — no change needed there.
+-- 4. BOM lines
+CREATE TABLE public.bom_template_lines (
+  id uuid PK,
+  template_id uuid NOT NULL REFERENCES bom_templates ON DELETE CASCADE,
+  input_item_id uuid NOT NULL,
+  qty_per_output numeric NOT NULL,         -- raw qty to produce one `output_qty`
+  specs jsonb,                             -- default specs to copy into the voucher row
+  line_no int NOT NULL DEFAULT 1
+);
 
-### 2. Alt+S as a Save alias
-
-In the existing global `keydown` handler in `ItemVoucherForm.tsx`, extend the Ctrl+S branch:
-
+-- 5. RLS on both new tables — mirror items table (is_company_member for SELECT,
+--    can_write_company for INSERT/UPDATE, admin for DELETE).
 ```
-if ((e.ctrlKey || e.metaKey || e.altKey) && e.key.toLowerCase() === "s") { … }
+
+No changes to `vouchers`, `voucher_entries`, `next_voucher_number`, period-lock triggers, or RLS on existing tables — the new voucher_type flows through them as-is.
+
+## Frontend pieces
+
+### New route
+- `src/routes/app.vouchers.new.manufacturing.tsx` → renders the new `ManufacturingVoucherForm`.
+- Sidebar entry under **Transactions** between Journal and All Vouchers.
+
+### New component `src/components/vouchers/ManufacturingVoucherForm.tsx`
+Mirrors `ItemVoucherForm` patterns:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ Date  | Mfg No. (auto)  | Department  | Final Product | Qty   │
+│  ↑ FyDatePicker (DDMM auto-advance, backspace guard already done)
+├─────────────────────────────────────────────────────────────────┤
+│ Raw Material Consumption          │ Finished Goods Output       │
+│ Item·GSM·LxH·Unit·Qty·Rate·Amt    │ Item·LxH·Wt/u·Qty·Cost·Amt  │
+│ [ItemRowMfg rows…] + Add line     │ [OutputRow rows…] + Add line│
+├─────────────────────────────────────────────────────────────────┤
+│ Total consumption: ₹X      Cost per unit (auto): ₹Y             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-Same behaviour for both — `preventDefault` + `save()`. Note Alt+S may conflict with browser menu access keys; we'll add `e.stopPropagation()` to keep it predictable.
+- Header uses existing `FyDatePicker`, plain `Input` for Mfg No (read-only after save), plain `Input` for Department, `Combo` for Final Product (from items master), numeric `Input` for Qty.
+- Both grids reuse the keyboard pattern from the existing `ItemRow` (per-cell Enter, GST-style "Enter on last cell of last row → addLine + focus first cell of new row"). New `ItemRowMfg` and `OutputRow` components live under `src/components/fast-form/`.
+- When Final Product or Qty changes, an effect loads the active BOM (`bom_templates` + lines), scales `qty_per_output * (qtyToProduce / output_qty)`, and replaces the consumption grid (only if user hasn't manually edited; we track a `dirty` flag).
+- The output table is seeded with one row for the selected Final Product. User can add more output rows (co-products / by-products); cost is split by qty by default.
+- `Ctrl+S` / `Alt+S` triggers save (same handler shape as `ItemVoucherForm`).
 
-### 3. Backspace guard on date auto-advance (`src/components/ui/fy-date-picker.tsx`)
+### Save logic (`src/lib/manufacturing-postings.ts`, new)
+```text
+- Validate: at least 1 consumption row + 1 output row, every row has item_id + qty>0.
+- Compute totalConsumptionPaise = Σ(qty * rate_paise).
+- For each output row, default rate_paise = round(totalConsumptionPaise / totalOutputQty).
+- Insert into vouchers (voucher_type='manufacturing', totals all zero except a memo).
+- Insert voucher_items:
+    consumption rows  → qty = -input_qty, rate_paise = input_rate_paise, specs=jsonb
+    output rows       → qty = +output_qty, rate_paise = computed_or_overridden, specs=jsonb
+- No voucher_entries rows. (Skip the postings step the same way sales_order/delivery_note already do in ItemVoucherForm.)
+- Bump masters cache so updated item rates reflect immediately.
+```
 
-- Track the previous input length in a `useRef<number>`.
-- In `handleChange(v)`, if `v.length < prevLen.current`, **skip** the auto-commit/advance path — only update the visible text. Always update `prevLen.current = v.length` at the end.
-- Result: typing `2`, `0`, `0`, `5` → commits + advances. Typing `20055` then backspacing to `2005` → no auto-advance; user can keep editing.
+### Reports update
+- `src/routes/app.reports.stock-summary.tsx`: add `manufacturing` to both inward and outward classifiers, using qty sign:
+  - `inward += sum(qty where voucher_type='manufacturing' AND qty > 0)`
+  - `outward += sum(-qty where voucher_type='manufacturing' AND qty < 0)`
+- `src/lib/voucher-type-label.ts`: add `manufacturing: "Manufacturing Journal"`.
+- `src/lib/voucher-sort.ts` / All Vouchers list: add to the type filter dropdown.
 
-### 4. Date → Reference No ordering (optional, needs your call)
+### BOM management (light v1)
+- A "Manage BOM" button inside the new form opens a dialog (`BomTemplateDialog.tsx`) bound to the currently selected Final Product: edit `output_qty`, add/edit/delete input lines with default specs. Saved via Supabase upsert.
+- Future enhancement (out of scope): standalone BOM library screen.
 
-Two options — pick one:
-- **A. Keep order as Date → Party → RefNo.** No code change; auto-advance lands on Party, which matches Tally/Busy convention (party is usually the very next field after date).
-- **B. Reorder the header grid** in `ItemVoucherForm.tsx` to Date → Reference No → Party → Place of Supply, so Date's auto-advance lands on Reference No exactly as your spec says.
+## Keyboard rules (reused verbatim)
 
-I'll wait for your call on this one before touching the layout.
+- DDMM auto-advance with backspace guard → already in `FyDatePicker`.
+- Enter-as-Tab globally via `useEnterAsTab` wrapping the form.
+- Per-cell Enter inside both grids + "Enter on last cell of last row → spawn new row + focus first cell" → same pattern as the recent `ItemRow` change.
+- Combo (Final Product, item pickers) auto-advances on select → existing `Combo` behaviour.
+- `Ctrl+S` / `Cmd+S` / `Alt+S` → save; `preventDefault` on Enter so no accidental submit.
+- Backspace on a row's first cell does not auto-jump backward (we only forward-advance on Enter, never on backspace).
 
-## Technical notes (for reference)
+## Files touched / added
 
-- All focus moves use `requestAnimationFrame` after state updates so React has committed the new row to the DOM before we call `.focus()`.
-- Row-level refs are keyed by the line's stable `crypto.randomUUID()` id (already present on `Line.id`), so re-renders don't lose the focus target.
-- We do **not** introduce a new global focus manager — `useFocusManager` exists but is unused here; the existing `useEnterAsTab` + targeted per-cell handlers are enough and keep the diff small.
-- The GST `<Select>` will get an `onKeyDown` on its `SelectTrigger` that inspects `aria-expanded`; if `"false"` and a value is set, we preventDefault and call the row's `advanceToNextCell("gst")`.
-- No backend / Supabase / schema changes. Pure frontend.
+**New**
+- `supabase/migrations/<ts>_manufacturing_voucher.sql`
+- `src/routes/app.vouchers.new.manufacturing.tsx`
+- `src/components/vouchers/ManufacturingVoucherForm.tsx`
+- `src/components/vouchers/BomTemplateDialog.tsx`
+- `src/components/fast-form/ItemRowMfg.tsx`
+- `src/components/fast-form/OutputRow.tsx`
+- `src/lib/manufacturing-postings.ts`
+- `src/lib/bom.ts` (load/save BOM helpers)
 
-## Files touched
+**Edited**
+- `src/components/AppSidebar.tsx` (new menu entry)
+- `src/lib/voucher-type-label.ts` (label)
+- `src/lib/voucher-sort.ts` (sort/group)
+- `src/routes/app.reports.stock-summary.tsx` (treat manufacturing rows by qty sign)
+- `src/components/vouchers/RecentVouchersPanel.tsx` (if it filters by type)
 
-- `src/components/fast-form/ItemRow.tsx` — per-cell Enter handlers, GST-trigger Enter handling, last-cell hook-out
-- `src/components/vouchers/ItemVoucherForm.tsx` — Alt+S alias, `onAdvanceToNewRow` callback that appends a row and focuses its Item picker, registry of row Item-Combo refs
-- `src/components/ui/fy-date-picker.tsx` — backspace guard via `prevLen` ref
-- (Optional, if you pick option B above) header grid reorder in `ItemVoucherForm.tsx`
+## Questions before I build
 
-## One question before I build
-
-For point 4 above — do you want me to **reorder the header to Date → Reference No → Party** (matches your spec literally), or **keep Date → Party → Reference No** (current Tally-like order)?
+1. **GL postings**: keep this as a pure inventory move (Tally Stock-Journal style), or **also** post a Dr Finished Goods / Cr Raw Materials journal entry to a "Stock in Hand" ledger? Default = pure inventory move.
+2. **Department / Godown**: free-text field on the voucher for now (reusing `reference_no`), or do you want a proper Godown master with its own CRUD screen?
+3. **Specs columns**: are `GSM`, `Length`, `Height`, `Weight per unit` the full set, or do you want a generic "Specifications" free-text column too?
