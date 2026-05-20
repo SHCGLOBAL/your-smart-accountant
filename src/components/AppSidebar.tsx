@@ -145,6 +145,8 @@ const GST_URLS = new Set([
   "/app/einvoice",
   "/app/reports/gst-sales-book",
   "/app/reports/gst-purchase-book",
+  "/app/reports/itc-item-wise",
+  "/app/reports/itc-party-wise",
 ]);
 
 const INVENTORY_URLS = new Set([
