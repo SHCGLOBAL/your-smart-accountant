@@ -113,7 +113,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       const [{ count: unrecon }, ledgersRes, entriesRes, itemsRes, movesRes] = await Promise.all([
         supabase
           .from("bank_statement_lines")
-          .select("id", { head: true, count: "exact" })
+          .select("id", { count: "exact", head: true })
           .eq("company_id", companyId)
           .neq("match_status", "matched"),
         supabase
