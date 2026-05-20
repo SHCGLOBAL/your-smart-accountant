@@ -118,6 +118,7 @@ const SECTIONS: NavSection[] = [
       { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
       { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList, i18nKey: "nav.outstanding" },
       { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
+      { title: "HSN Summary", url: "/app/reports/hsn-summary", icon: Boxes },
       { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
       { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
       { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
