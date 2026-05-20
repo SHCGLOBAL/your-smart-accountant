@@ -100,6 +100,7 @@ const SECTIONS: NavSection[] = [
       { title: "Receipt", url: "/app/vouchers/new/receipt", icon: ArrowLeftRight, i18nKey: "nav.receipt" },
       { title: "Payment", url: "/app/vouchers/new/payment", icon: Banknote, i18nKey: "nav.payment" },
       { title: "Journal", url: "/app/vouchers/new/journal", icon: BookOpen, i18nKey: "nav.journal" },
+      { title: "Manufacturing Journal", url: "/app/vouchers/new/manufacturing", icon: Boxes, i18nKey: "nav.manufacturing" },
     ],
   },
   {

@@ -16,6 +16,7 @@ const ENGLISH: Record<string, string> = {
   sales_order: "Sales Order",
   purchase_order: "Purchase Order",
   quotation: "Quotation",
+  manufacturing: "Manufacturing Journal",
 };
 
 export function voucherTypeLabel(type: string, lang: LangCode = getStoredLang()): string {

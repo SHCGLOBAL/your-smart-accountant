@@ -65,9 +65,11 @@ function StockSummary() {
       .then(({ data }) => setMoves((data || []) as unknown as ItemMove[]));
   }, [activeCompanyId, to]);
 
-  // Inward = purchase + credit_note (sales return); Outward = sales + debit_note (purchase return)
+  // Inward = purchase + credit_note (sales return) + manufacturing output (qty > 0)
+  // Outward = sales + debit_note (purchase return) + manufacturing consumption (qty < 0)
   const isInward = (t: string) => t === "purchase" || t === "credit_note";
   const isOutward = (t: string) => t === "sales" || t === "debit_note";
+  const isMfg = (t: string) => t === "manufacturing";
 
   const rows = useMemo(() => {
     return items.map((it) => {
