@@ -537,7 +537,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setStep((s) => Math.max(1, (s - 1) as Step))}
+              onClick={() => setStep((s) => (Math.max(1, s - 1) as Step))}
               disabled={step === 1 || step === 4 || posting}
             >
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
