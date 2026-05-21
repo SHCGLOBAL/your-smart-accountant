@@ -300,14 +300,28 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [ledgers, cfg.partyTypes],
   );
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
-  const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
+  // Place of supply is derived strictly from the party's GSTIN (first 2 digits = state code)
+  // or, if GSTIN is missing, from the party's state code. No manual override — the party
+  // ledger is the single source of truth for IGST vs CGST+SGST routing.
+  const placeOfSupply = useMemo(() => {
+    const fromGstin = partyLedger?.gstin?.slice(0, 2);
+    if (fromGstin && /^\d{2}$/.test(fromGstin)) return fromGstin;
+    return partyLedger?.state_code ?? "";
+  }, [partyLedger]);
+  const interstate = isInterstate(companyStateCode, placeOfSupply);
 
-  // Place of supply auto-derives from party state code; user may override (e.g. for an
-  // out-of-Gujarat supplier where the GSTIN isn't captured — toggle PoS to force IGST).
+  // Supplier GST treatment drives ITC eligibility for purchases:
+  //   composition / unregistered / consumer → no ITC (flows to GSTR-3B 4(D), GSTR-9 ineligible)
+  // GSTR-1 / GSTR-3B / GSTR-9 classification (B2B / B2CL / CBW / EXP) is computed in
+  // `src/lib/gst-returns.ts` from the same `ledgers.gst_treatment` value.
   useEffect(() => {
-    if (posOverridden) return;
-    setPlaceOfSupply(partyLedger?.state_code ?? "");
-  }, [partyLedger, posOverridden]);
+    if (!isPurchaseSide) return;
+    const t = partyLedger?.gst_treatment;
+    if (t === "composition" || t === "unregistered" || t === "consumer") {
+      setItcClass("ineligible");
+      setItcEligible(false);
+    }
+  }, [partyLedger, isPurchaseSide]);
 
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
