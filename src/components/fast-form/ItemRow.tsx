@@ -208,7 +208,7 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={rateRef}
-          className="h-9 min-w-28 text-right font-mono text-foreground"
+          className="h-9 w-20 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
