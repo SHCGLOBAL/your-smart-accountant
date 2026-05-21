@@ -253,7 +253,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     partyId,
     refNo,
     narration,
-    placeOfSupply,
     roundOff,
     itcClass,
     itcEligible,
