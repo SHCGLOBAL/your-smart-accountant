@@ -197,6 +197,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   <TableHead>Number</TableHead>
                   <TableHead>Party</TableHead>
                   <TableHead>GSTIN</TableHead>
+                  {showQtyUnit && <TableHead>Qty / Unit</TableHead>}
                   <TableHead className="text-right">Taxable</TableHead>
                   <TableHead className="text-right">CGST</TableHead>
                   <TableHead className="text-right">SGST</TableHead>
@@ -216,6 +217,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                     <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
                     <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
+                    {showQtyUnit && <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>}
                     <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
@@ -224,7 +226,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={4} className="text-right font-semibold">TOTAL</TableCell>
+                  <TableCell colSpan={showQtyUnit ? 5 : 4} className="text-right font-semibold">TOTAL</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
