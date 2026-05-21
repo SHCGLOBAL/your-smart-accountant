@@ -171,7 +171,8 @@ export async function extractTextFromFile(
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
   if (isPdf) {
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pdfjs = await getPdfjs();
+    const pdf = await pdfjs.getDocument({ data: buf }).promise;
     const pages: string[] = [];
     let needOcr = false;
     for (let p = 1; p <= pdf.numPages; p++) {
