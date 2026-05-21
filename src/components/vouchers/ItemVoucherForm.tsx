@@ -240,6 +240,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             itcClass,
             itcEligible,
             lines,
+            miscPreGst,
+            miscPostGst,
           }),
         );
       } catch {
@@ -258,6 +260,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     itcClass,
     itcEligible,
     lines,
+    miscPreGst,
+    miscPostGst,
   ]);
   void draftRestored;
 
