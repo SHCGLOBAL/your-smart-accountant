@@ -1,6 +1,6 @@
 import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Building2,
   IndianRupee,
@@ -13,16 +13,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
 } from "lucide-react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  CartesianGrid,
-} from "recharts";
+const SalesPurchaseChart = lazy(() => import("@/components/dashboard/SalesPurchaseChart"));
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -230,19 +221,12 @@ function Dashboard() {
             <CardTitle className="text-base">Sales vs Purchase — last 6 months</CardTitle>
           </CardHeader>
           <CardContent className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-                <XAxis dataKey="month" fontSize={11} />
-                <YAxis fontSize={11} tickFormatter={(v) => v >= 100000 ? `${(v / 100000).toFixed(1)}L` : `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => `₹ ${Number(v).toLocaleString("en-IN")}`} />
-                <Legend />
-                <Bar dataKey="sales" name="Sales" fill="oklch(0.55 0.18 265)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="purchase" name="Purchase" fill="oklch(0.7 0.16 60)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-full w-full animate-pulse rounded bg-muted/30" />}>
+              <SalesPurchaseChart monthly={monthly} />
+            </Suspense>
           </CardContent>
         </Card>
+
 
         <div className="space-y-4">
           <Card>
