@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,6 +104,53 @@ function CompaniesPage() {
   const [form, setForm] = useState<FormState>(empty);
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [fyLocks, setFyLocks] = useState<Record<string, boolean>>({});
+
+  // Pull FY lock status (return_type = 'fy_close') for every company the user
+  // is a member of, in a single query, so each card can render a
+  // "Provisional" / "Audited & Locked" badge next to the FY label.
+  useEffect(() => {
+    if (memberships.length === 0) {
+      setFyLocks({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const ids = memberships.map((m) => m.company_id);
+      const { data } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (s: string) => {
+            in: (col: string, vals: string[]) => {
+              eq: (col: string, val: unknown) => {
+                eq: (col: string, val: unknown) => Promise<{
+                  data: { company_id: string; period_start: string }[] | null;
+                }>;
+              };
+            };
+          };
+        };
+      })
+        .from("period_locks")
+        .select("company_id, period_start")
+        .in("company_id", ids)
+        .eq("return_type", "fy_close")
+        .eq("is_active", true);
+      if (cancelled) return;
+      const map: Record<string, boolean> = {};
+      for (const m of memberships) {
+        const fyStart = m.companies.financial_year_start;
+        if (!fyStart) continue;
+        const match = (data ?? []).find(
+          (r) => r.company_id === m.company_id && r.period_start === fyStart,
+        );
+        if (match) map[m.company_id] = true;
+      }
+      setFyLocks(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberships]);
 
   // Auto-open the "Create company" dialog when the URL carries ?new=1
   // (used by the sidebar Company flyout's "+ New company" button).
