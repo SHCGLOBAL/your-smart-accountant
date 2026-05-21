@@ -285,6 +285,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         name: l.name,
         type: l.type,
         state_code: l.state_code,
+        gstin: l.gstin,
+        gst_treatment: l.gst_treatment,
       })),
     );
     setItems(
