@@ -272,7 +272,7 @@ export function AssistantChat() {
       text,
     };
     setMessages((m) => [...m, userMsg]);
-    setInput("");
+    if (inputRef.current) inputRef.current.value = "";
 
     void (async () => {
       // 1) If the user pasted enough details, show a PREVIEW + confirmation
