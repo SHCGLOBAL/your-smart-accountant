@@ -508,28 +508,42 @@ export function AssistantChat() {
         )}
 
         <form
-          className="flex gap-2 border-t border-border p-3"
+          className="flex items-end gap-2 border-t border-border p-3"
           onSubmit={(e) => {
             e.preventDefault();
-            ask(input);
+            ask(inputRef.current?.value ?? "");
           }}
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+          <Textarea
+            ref={inputRef}
+            defaultValue=""
+            rows={2}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 240) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                ask(inputRef.current?.value ?? "");
+                if (inputRef.current) inputRef.current.style.height = "auto";
+              }
+            }}
             placeholder={
               hasCompany
-                ? "Ask anything about the software…"
-                : "Type: create company name: ABC Traders, GSTIN: …"
+                ? "Ask anything… Enter to send, Shift+Enter for new line. Paste multi-line details freely."
+                : "Type or paste: Name: ABC Traders\nGSTIN: 27ABCDE1234F1Z5\nPhone: 9876543210"
             }
             autoFocus
             disabled={creating || thinking}
+            className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
           <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
-
             <Send className="h-4 w-4" />
           </Button>
         </form>
+
       </Card>
 
       {/* Browse topics column */}
