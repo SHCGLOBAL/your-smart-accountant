@@ -218,6 +218,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                     <TableHead>{billDateLabel}</TableHead>
                     <TableHead>{partyLabel}</TableHead>
                     <TableHead>GSTIN</TableHead>
+                    {showQtyUnit && <TableHead>Qty / Unit</TableHead>}
                     <TableHead>POS</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Taxable</TableHead>
@@ -246,6 +247,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                         </TableCell>
                         <TableCell>{x.ledgers?.name || "—"}</TableCell>
                         <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
+                        {showQtyUnit && <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>}
                         <TableCell className="text-xs">{x.place_of_supply_code || x.ledgers?.state_code || "—"}</TableCell>
                         <TableCell className="text-xs">{x.is_interstate ? "Inter" : "Intra"}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatINR(x.subtotal_paise)}</TableCell>
@@ -260,7 +262,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 {rows.length > 0 && (
                   <tfoot>
                     <TableRow className="font-semibold border-t-2">
-                      <TableCell colSpan={7} className="text-right">Totals</TableCell>
+                      <TableCell colSpan={showQtyUnit ? 8 : 7} className="text-right">Totals</TableCell>
                       <TableCell className="text-right tabular-nums">{formatINR(totals.taxable)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatINR(totals.cgst)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatINR(totals.sgst)}</TableCell>
