@@ -707,6 +707,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       name: lg.name,
       type: lg.type,
       state_code: lg.state_code,
+      gstin: lg.gstin,
+      gst_treatment: lg.gst_treatment,
       is_active: true,
     });
     if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
