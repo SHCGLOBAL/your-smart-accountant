@@ -133,6 +133,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [date, setDate] = useState(defaultDate);
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
+  const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
+  const [originalInvoices, setOriginalInvoices] = useState<
+    { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
+  >([]);
+  const isNote = voucherType === "credit_note" || voucherType === "debit_note";
   const [narration, setNarration] = useState("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
   const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
