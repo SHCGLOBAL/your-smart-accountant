@@ -129,6 +129,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     billDateLabel,
     partyLabel,
     "GSTIN",
+    ...(showQtyUnit ? ["Qty / Unit"] : []),
     "POS",
     "Type",
     "Taxable",
@@ -164,6 +165,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     { id: "billDate", header: billDateLabel, type: "date", width: 110, accessor: (x) => kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date), cell: (x) => fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)) },
     { id: "party", header: partyLabel, type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
     { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
+    ...(showQtyUnit ? [{ id: "qty", header: "Qty / Unit", type: "text" as const, width: 130, accessor: qtyUnitText }] : []),
     { id: "pos", header: "POS", type: "text", width: 80, accessor: (x) => x.place_of_supply_code || x.ledgers?.state_code || "", groupable: true },
     { id: "type", header: "Type", type: "enum", width: 80, accessor: (x) => x.is_interstate ? "Inter" : "Intra", groupable: true },
     { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
@@ -171,7 +173,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "total", header: "Invoice Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-  ], [kind, billLabel, billDateLabel, partyLabel]);
+  ], [kind, billLabel, billDateLabel, partyLabel, showQtyUnit]);
 
   return (
     <div className="space-y-3">
