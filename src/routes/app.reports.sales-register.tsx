@@ -30,7 +30,7 @@ interface VRow {
   igst_paise: number;
   total_paise: number;
   ledgers: { name: string; gstin: string | null } | null;
-  voucher_items: { qty: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; gst_rate: number; items: { hsn_code: string | null; name: string } | null }[];
+  voucher_items: { qty: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; gst_rate: number; items: { hsn_code: string | null; name: string; unit: string | null } | null }[];
 }
 
 export function Register({ kind }: { kind: "sales" | "purchase" }) {
@@ -45,7 +45,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
     if (!activeCompanyId) return;
     supabase
       .from("vouchers")
-      .select("id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name))")
+      .select("id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))")
       .eq("company_id", activeCompanyId)
       .eq("voucher_type", kind)
       .gte("voucher_date", from)
@@ -84,20 +84,30 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
 
   const title = kind === "sales" ? "Sales Register" : "Purchase Register";
   const slug = kind === "sales" ? "sales-register" : "purchase-register";
+  const showQtyUnit = kind === "purchase";
+  const qtyUnitText = (x: VRow) => {
+    const byUnit = new Map<string, number>();
+    for (const line of x.voucher_items || []) {
+      const unit = line.items?.unit || "Qty";
+      byUnit.set(unit, (byUnit.get(unit) || 0) + Number(line.qty || 0));
+    }
+    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty:g} ${unit}`.replace(":g", "")).join(", ") || "—";
+  };
 
   const gridColumns: DGColumn<VRow>[] = useMemo(() => [
     { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
     { id: "number", header: "Number", type: "text", width: 130, accessor: (x) => x.voucher_number },
     { id: "party", header: "Party", type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
     { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
+    ...(showQtyUnit ? [{ id: "qty", header: "Qty / Unit", type: "text" as const, width: 130, accessor: qtyUnitText }] : []),
     { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "total", header: "Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-  ], []);
+  ], [showQtyUnit]);
 
-  const head = ["Date", "Number", "Party", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total"];
+  const head = ["Date", "Number", "Party", "GSTIN", ...(showQtyUnit ? ["Qty / Unit"] : []), "Taxable", "CGST", "SGST", "IGST", "Total"];
   const body = (): (string | number)[][] => [
     head,
     ...rows.map((x) => [
