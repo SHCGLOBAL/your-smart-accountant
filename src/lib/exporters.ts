@@ -8,6 +8,7 @@
 // app bundle stays small. This file is statically imported by many report
 // routes; keep the top-level imports type-only.
 import type jsPDFType from "jspdf";
+import type autoTableType from "jspdf-autotable";
 import type * as XLSXType from "xlsx";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
@@ -16,17 +17,22 @@ import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
 import { promoteRows } from "@/lib/export-format";
 
-async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: (doc: jsPDFType, opts: unknown) => void }> {
+// Re-export the XLSX namespace as a type alias usable both as type and namespace.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+type XLSX = typeof XLSXType;
+
+async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof autoTableType }> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
   ]);
-  return { jsPDF, autoTable: autoTable as unknown as (doc: jsPDFType, opts: unknown) => void };
+  return { jsPDF, autoTable };
 }
 
 async function loadXlsx(): Promise<typeof XLSXType> {
   return await import("xlsx");
 }
+
 
 
 
