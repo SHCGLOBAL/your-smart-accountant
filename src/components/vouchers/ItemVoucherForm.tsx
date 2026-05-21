@@ -140,6 +140,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   >(isPurchaseSide ? "inputs" : "na");
   const [itcEligible, setItcEligible] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
+  const [miscPreGst, setMiscPreGst] = useState<string>("0");
+  const [miscPostGst, setMiscPostGst] = useState<string>("0");
+  const [posOverridden, setPosOverridden] = useState<boolean>(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
