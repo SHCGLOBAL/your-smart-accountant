@@ -98,6 +98,10 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
     }
   };
 
+  const enterTab = useEnterAsTab(() => {
+    if (!saving) submit();
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -111,7 +115,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
         <DialogHeader>
           <DialogTitle>{editId ? "Edit Item" : "Quick Create Item"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="grid gap-3">
           <div className="space-y-1">
             <Label>Name *</Label>
             <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
