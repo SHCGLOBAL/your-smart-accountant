@@ -830,6 +830,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     }}
                     onAdvanceToNextRow={onAdvanceToNextRow}
                     showDescription={showLineDescription}
+                    showGstColumn={showGstColumn}
                   />
                 ))}
               </TableBody>
