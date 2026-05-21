@@ -7,6 +7,7 @@
 // They are loaded dynamically inside the export functions so the initial
 // app bundle stays small. This file is statically imported by many report
 // routes; keep the top-level imports type-only.
+import type jsPDFType from "jspdf";
 import type * as XLSXType from "xlsx";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
@@ -14,6 +15,19 @@ import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
 import { promoteRows } from "@/lib/export-format";
+
+async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: (doc: jsPDFType, opts: unknown) => void }> {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable: autoTable as unknown as (doc: jsPDFType, opts: unknown) => void };
+}
+
+async function loadXlsx(): Promise<typeof XLSXType> {
+  return await import("xlsx");
+}
+
 
 
 function localizeExportText(text: string, lang = getStoredLang()): string {
