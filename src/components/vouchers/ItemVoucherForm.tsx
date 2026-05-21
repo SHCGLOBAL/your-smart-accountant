@@ -133,6 +133,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [date, setDate] = useState(defaultDate);
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
+  const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
+  const [originalInvoices, setOriginalInvoices] = useState<
+    { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
+  >([]);
+  const isNote = voucherType === "credit_note" || voucherType === "debit_note";
   const [narration, setNarration] = useState("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
   const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
@@ -294,6 +299,37 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       })),
     );
   }, [mastersVersion, activeCompanyId]);
+
+  // For credit/debit notes, load the party's original invoices so the user can pick
+  // the bill being adjusted (drives original_voucher_id + reference_no).
+  useEffect(() => {
+    if (!isNote || !activeCompanyId || !partyId) {
+      setOriginalInvoices([]);
+      return;
+    }
+    const originalType = voucherType === "credit_note" ? "sales" : "purchase";
+    let cancelled = false;
+    supabase
+      .from("vouchers")
+      .select("id, voucher_number, voucher_date, total_paise")
+      .eq("company_id", activeCompanyId)
+      .eq("party_ledger_id", partyId)
+      .eq("voucher_type", originalType)
+      .order("voucher_date", { ascending: false })
+      .limit(200)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setOriginalInvoices(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNote, voucherType, activeCompanyId, partyId]);
+
+  // Clear the original-invoice link whenever the party changes
+  useEffect(() => {
+    setOriginalVoucherId(null);
+  }, [partyId]);
 
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
@@ -503,6 +539,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
+      originalVoucherId: isNote ? originalVoucherId : null,
       totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
@@ -512,6 +549,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     // Reset form INSTANTLY
     setPartyId("");
     setRefNo("");
+    setOriginalVoucherId(null);
     setNarration("");
     setLines([blankLine()]);
     setMiscPreGst("0");
@@ -556,6 +594,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           place_of_supply_code: snap.placeOfSupply || null,
           itc_class: snap.itcClass,
           itc_eligible: snap.itcEligible,
+          original_voucher_id: snap.originalVoucherId,
         })
         .select("id")
         .single();
@@ -856,12 +895,42 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 )}
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
-                <Input
-                  value={refNo}
-                  onChange={(e) => setRefNo(e.target.value)}
-                  placeholder="PO / Bill no."
-                />
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {isNote
+                    ? voucherType === "credit_note"
+                      ? "Against Sales Invoice"
+                      : "Against Purchase Bill"
+                    : "Reference No."}
+                </Label>
+                {isNote ? (
+                  <Combo
+                    value={originalVoucherId ?? ""}
+                    onChange={(id) => {
+                      setOriginalVoucherId(id || null);
+                      const inv = originalInvoices.find((x) => x.id === id);
+                      setRefNo(inv?.voucher_number ?? "");
+                    }}
+                    options={originalInvoices.map((v) => ({
+                      value: v.id,
+                      label: v.voucher_number,
+                      hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                    }))}
+                    placeholder={
+                      partyId
+                        ? originalInvoices.length === 0
+                          ? "No invoices for this party"
+                          : "Select original bill"
+                        : "Select party first"
+                    }
+                    emptyText="No matching invoice"
+                  />
+                ) : (
+                  <Input
+                    value={refNo}
+                    onChange={(e) => setRefNo(e.target.value)}
+                    placeholder="PO / Bill no."
+                  />
+                )}
               </div>
               <div className="md:pb-0.5">
                 <NextVoucherNumberCard
