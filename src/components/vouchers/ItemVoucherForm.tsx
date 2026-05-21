@@ -482,7 +482,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
-      totals: { ...totals, round_off_paise: roundOffPaise },
+      totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
@@ -493,6 +493,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setRefNo("");
     setNarration("");
     setLines([blankLine()]);
+    setMiscPreGst("0");
+    setMiscPostGst("0");
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
