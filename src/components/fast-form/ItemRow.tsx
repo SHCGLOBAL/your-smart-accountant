@@ -44,12 +44,14 @@ interface Props {
   onAddItemDlg: (idx: number) => void;
   onEditItemDlg: (idx: number, itemId: string) => void;
   onAdvanceToNextRow?: (idx: number) => void;
+  showDescription?: boolean;
 }
 
 function ItemRowImpl({
   idx, row, amountPaise, items, canDelete,
   onPickItem, onCommit, onFocusRow, onDelete, onAddItemDlg, onEditItemDlg,
   onAdvanceToNextRow,
+  showDescription = true,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
@@ -70,6 +72,12 @@ function ItemRowImpl({
   const rateRef = useRef<HTMLInputElement | null>(null);
   const discRef = useRef<HTMLInputElement | null>(null);
   const descRef = useRef<HTMLInputElement | null>(null);
+  const selectedItem = items.find((it) => it.id === row.item_id);
+  const cleanDecimal = (value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, "");
+    const [first, ...rest] = cleaned.split(".");
+    return rest.length ? `${first}.${rest.join("")}` : first;
+  };
 
   // Reset uncontrolled inputs when the row id changes (e.g. after voucher accept).
   useEffect(() => {
@@ -123,51 +131,58 @@ function ItemRowImpl({
           )}
         </div>
       </TableCell>
+      {showDescription && (
+        <TableCell>
+          <Input
+            ref={descRef}
+            className="h-9"
+            defaultValue={row.description}
+            onBlur={(e) => onCommit(idx, { description: e.target.value })}
+            onKeyDown={(e) => commitOnEnter(e, "description")}
+          />
+        </TableCell>
+      )}
       <TableCell>
-        <Input
-          ref={descRef}
-          className="h-9"
-          defaultValue={row.description}
-          onBlur={(e) => onCommit(idx, { description: e.target.value })}
-          onKeyDown={(e) => commitOnEnter(e, "description")}
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          ref={qtyRef}
-          className="h-9 text-right"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          defaultValue={row.qty}
-          onFocus={(e) => e.currentTarget.select()}
-          onBlur={(e) => onCommit(idx, { qty: e.target.value })}
-          onKeyDown={(e) => commitOnEnter(e, "qty")}
-        />
+        <div className="flex items-center gap-1">
+          <Input
+            ref={qtyRef}
+            className="h-9 min-w-20 text-right font-mono text-foreground"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            value={row.qty}
+            onChange={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => commitOnEnter(e, "qty")}
+          />
+          <span className="min-w-10 truncate text-xs text-muted-foreground" title={selectedItem?.unit || undefined}>
+            {selectedItem?.unit || "—"}
+          </span>
+        </div>
       </TableCell>
       <TableCell>
         <Input
           ref={rateRef}
-          className="h-9 text-right"
+          className="h-9 min-w-24 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
-          defaultValue={row.rate}
+          value={row.rate}
+          onChange={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
           onFocus={(e) => e.currentTarget.select()}
-          onBlur={(e) => onCommit(idx, { rate: e.target.value })}
           onKeyDown={(e) => commitOnEnter(e, "rate")}
         />
       </TableCell>
       <TableCell>
         <Input
           ref={discRef}
-          className="h-9 text-right"
+          className="h-9 min-w-20 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
-          defaultValue={row.discount}
+          value={row.discount}
+          onChange={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
           onFocus={(e) => e.currentTarget.select()}
-          onBlur={(e) => onCommit(idx, { discount: e.target.value })}
           onKeyDown={(e) => commitOnEnter(e, "discount")}
         />
       </TableCell>
@@ -210,6 +225,7 @@ export const ItemRow = memo(ItemRowImpl, (prev, next) => {
     prev.row === next.row &&
     prev.amountPaise === next.amountPaise &&
     prev.items === next.items &&
-    prev.canDelete === next.canDelete
+    prev.canDelete === next.canDelete &&
+    prev.showDescription === next.showDescription
   );
 });
