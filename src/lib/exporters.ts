@@ -182,43 +182,47 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
   })();
 }
 
-export type XlsxCell = string | number | XLSX.CellObject;
+export type XlsxCell = string | number | XLSXType.CellObject;
 export interface XlsxSheet {
   name: string;
   rows: XlsxCell[][]; // first row may be header
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
-  const lang = getStoredLang();
-  const wb = XLSX.utils.book_new();
-  for (const s of sheets) {
-    // Localise string cells while preserving any pre-built cell objects
-    const localized: XlsxCell[][] = s.rows.map((row) =>
-      row.map((cell) =>
-        typeof cell === "string" ? (localizeExportText(cell, lang) as XlsxCell) : cell,
-      ),
-    );
-    // Auto-promote money/date strings to typed numeric/date cells
-    const promoted = promoteRows(localized as unknown[][]) as XlsxCell[][];
-    const sheetName = localizeExportText(s.name, lang);
-    const ws = XLSX.utils.aoa_to_sheet(promoted);
-    // Compute reasonable column widths from header lengths
-    const header = promoted[0] ?? [];
-    ws["!cols"] = header.map((cell) => {
-      const text = typeof cell === "string" ? cell : (cell as XLSX.CellObject)?.v ?? "";
-      const len = String(text).length;
-      return { wch: Math.max(10, Math.min(40, len + 4)) };
+  void (async () => {
+    const lang = getStoredLang();
+    const XLSX = await loadXlsx();
+    const wb = XLSX.utils.book_new();
+    for (const s of sheets) {
+      // Localise string cells while preserving any pre-built cell objects
+      const localized: XlsxCell[][] = s.rows.map((row) =>
+        row.map((cell) =>
+          typeof cell === "string" ? (localizeExportText(cell, lang) as XlsxCell) : cell,
+        ),
+      );
+      // Auto-promote money/date strings to typed numeric/date cells
+      const promoted = promoteRows(localized as unknown[][]) as XlsxCell[][];
+      const sheetName = localizeExportText(s.name, lang);
+      const ws = XLSX.utils.aoa_to_sheet(promoted);
+      // Compute reasonable column widths from header lengths
+      const header = promoted[0] ?? [];
+      ws["!cols"] = header.map((cell) => {
+        const text = typeof cell === "string" ? cell : (cell as XLSXType.CellObject)?.v ?? "";
+        const len = String(text).length;
+        return { wch: Math.max(10, Math.min(40, len + 4)) };
+      });
+      XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+    }
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    await saveExport({
+      subFolder,
+      fileName,
+      contents: buf,
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-  }
-  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
-  void saveExport({
-    subFolder,
-    fileName,
-    contents: buf,
-    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
+  })();
 }
+
 
 // Convenience: paise → rupees number for sheets
 export const r = (paise: number): number => Number((paise / 100).toFixed(2));
