@@ -300,6 +300,37 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     );
   }, [mastersVersion, activeCompanyId]);
 
+  // For credit/debit notes, load the party's original invoices so the user can pick
+  // the bill being adjusted (drives original_voucher_id + reference_no).
+  useEffect(() => {
+    if (!isNote || !activeCompanyId || !partyId) {
+      setOriginalInvoices([]);
+      return;
+    }
+    const originalType = voucherType === "credit_note" ? "sales" : "purchase";
+    let cancelled = false;
+    supabase
+      .from("vouchers")
+      .select("id, voucher_number, voucher_date, total_paise")
+      .eq("company_id", activeCompanyId)
+      .eq("party_ledger_id", partyId)
+      .eq("voucher_type", originalType)
+      .order("voucher_date", { ascending: false })
+      .limit(200)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setOriginalInvoices(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNote, voucherType, activeCompanyId, partyId]);
+
+  // Clear the original-invoice link whenever the party changes
+  useEffect(() => {
+    setOriginalVoucherId(null);
+  }, [partyId]);
+
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
     [ledgers, cfg.partyTypes],
