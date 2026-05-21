@@ -835,6 +835,21 @@ function CompaniesPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase tracking-wide">FY</span>
                         <span className="font-mono font-medium text-foreground">{fyLabel}</span>
+                        {fyLocks[m.company_id] ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            title="Audited & Locked"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Locked
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+                            title="Provisional"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                          </span>
+                        )}
                       </div>
                     </div>
 
