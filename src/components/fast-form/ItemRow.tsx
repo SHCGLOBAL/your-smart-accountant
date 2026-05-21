@@ -150,23 +150,23 @@ function ItemRowImpl({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-9 shrink-0 gap-1"
+            size="icon"
+            className="h-9 w-9 shrink-0"
             title="New item (F4)"
             onClick={() => onAddItemDlg(idx)}
           >
-            <PackagePlus className="h-4 w-4" /> Add
+            <PackagePlus className="h-4 w-4" />
           </Button>
           {row.item_id && (
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-9 shrink-0 gap-1"
+              size="icon"
+              className="h-9 w-9 shrink-0"
               title="Edit item (Shift+F4)"
               onClick={() => onEditItemDlg(idx, row.item_id)}
             >
-              <Pencil className="h-4 w-4" /> Edit
+              <Pencil className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -187,7 +187,7 @@ function ItemRowImpl({
           <Input
             ref={qtyRef}
             data-voucher-qty
-            className="h-9 min-w-28 text-right font-mono text-foreground"
+            className="h-9 w-20 text-right font-mono text-foreground"
             type="text"
             inputMode="decimal"
             autoComplete="off"
@@ -208,7 +208,7 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={rateRef}
-          className="h-9 min-w-28 text-right font-mono text-foreground"
+          className="h-9 w-20 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
@@ -222,7 +222,7 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={discRef}
-          className="h-9 min-w-24 text-right font-mono text-foreground"
+          className="h-9 w-16 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
