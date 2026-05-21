@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -380,7 +381,7 @@ export function EwayBillPrepDialog({
                 <Field label="Transporter Name"><Input value={transporterName} onChange={(e) => setTransporterName(e.target.value)} /></Field>
                 <Field label="Transporter ID (GSTIN/TRANSIN)"><Input value={transporterId} onChange={(e) => setTransporterId(e.target.value.toUpperCase())} /></Field>
                 <Field label="LR / Doc No."><Input value={transDocNo} onChange={(e) => setTransDocNo(e.target.value)} /></Field>
-                <Field label="LR Date"><Input type="date" value={transDocDate} onChange={(e) => setTransDocDate(e.target.value)} /></Field>
+                <Field label="LR Date"><FyDatePicker value={transDocDate} onChange={setTransDocDate} /></Field>
               </div>
             </div>
 

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -567,7 +568,7 @@ function CompaniesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Financial Year Start</Label>
-                  <Input type="date" value={form.financial_year_start} onChange={(e) => setForm({ ...form, financial_year_start: e.target.value })} />
+                  <FyDatePicker value={form.financial_year_start} onChange={(v: string) => setForm({ ...form, financial_year_start: v })} unrestricted />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Phone</Label>

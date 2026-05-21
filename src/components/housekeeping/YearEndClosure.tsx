@@ -4,6 +4,7 @@ import { CalendarCheck, Loader2, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -515,11 +516,11 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
             <Label>FY start</Label>
-            <Input type="date" value={fyStart} onChange={(e) => setFyStart(e.target.value)} />
+            <FyDatePicker value={fyStart} onChange={setFyStart} unrestricted />
           </div>
           <div className="space-y-1">
             <Label>FY end</Label>
-            <Input type="date" value={fyEnd} onChange={(e) => setFyEnd(e.target.value)} />
+            <FyDatePicker value={fyEnd} onChange={setFyEnd} unrestricted />
           </div>
           <div className="space-y-1">
             <Label>Closing stock value (₹)</Label>

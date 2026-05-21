@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -889,7 +890,7 @@ function PurchaseExpenseLedger({
                   return (
                     <TableRow key={r.id} className={rowCls}>
                       <TableCell className="space-y-1">
-                        <Input type="date" className="h-7 text-xs" value={r.date} onChange={(e) => update(r.id, { date: e.target.value })} />
+                        <FyDatePicker value={r.date} onChange={(v: string) => update(r.id, { date: v })} unrestricted className="text-xs" />
                         <Input className="h-7 text-xs" placeholder="Invoice #" value={r.invoice_no} onChange={(e) => update(r.id, { invoice_no: e.target.value })} />
                       </TableCell>
                       <TableCell>
