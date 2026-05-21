@@ -295,10 +295,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
   const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
 
-  // Place of supply is always derived from the party's GSTIN/state — no manual override.
+  // Place of supply auto-derives from party state code; user may override (e.g. for an
+  // out-of-Gujarat supplier where the GSTIN isn't captured — toggle PoS to force IGST).
   useEffect(() => {
+    if (posOverridden) return;
     setPlaceOfSupply(partyLedger?.state_code ?? "");
-  }, [partyLedger]);
+  }, [partyLedger, posOverridden]);
 
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
