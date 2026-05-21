@@ -1,13 +1,23 @@
 // A4 GST Tax Invoice PDF generator using jsPDF + autotable.
 // Pulls company, party, items and totals from Supabase.
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// jspdf / jspdf-autotable are loaded dynamically (heavy bundle, only used on Print).
+import type jsPDFType from "jspdf";
+import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
 import { exportCurrencySymbol } from "@/lib/export-format";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
+
+async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof autoTableType }> {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+  return { jsPDF, autoTable };
+}
+
 
 interface CompanyRow {
   name: string;
