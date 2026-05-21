@@ -132,6 +132,12 @@ function ItemRowImpl({
             onChange={(v) => {
               onFocusRow(idx);
               onPickItem(idx, v);
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  qtyRef.current?.focus();
+                  qtyRef.current?.select();
+                });
+              });
             }}
             options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
             placeholder="Select item"
