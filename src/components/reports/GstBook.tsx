@@ -31,6 +31,7 @@ interface Row {
   round_off_paise: number;
   total_paise: number;
   ledgers: { name: string; gstin: string | null; state: string | null; state_code: string | null } | null;
+  voucher_items?: { qty: number; items: { unit: string | null } | null }[];
 }
 
 export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
@@ -48,7 +49,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
       const { data } = await supabase
         .from("vouchers")
         .select(
-          "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id)",
+          "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id, qty, items:item_id(unit))",
         )
         .eq("company_id", activeCompanyId)
         .in("voucher_type", types)
@@ -64,7 +65,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
         : new Set(["expense_direct", "stock_in_hand"]);
       type Row2 = Row & {
         voucher_entries?: { ledgers: { type: string } | null }[];
-        voucher_items?: { id: string }[];
+        voucher_items?: { id: string; qty: number; items: { unit: string | null } | null }[];
       };
       const filtered = ((data || []) as unknown as Row2[]).filter((v) => {
         // Must have at least one inventory line (goods).
@@ -96,6 +97,15 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const partyLabel = kind === "sales" ? "Customer" : "Supplier";
   const billLabel = kind === "sales" ? "Invoice No." : "Bill No.";
   const billDateLabel = kind === "sales" ? "Invoice Date" : "Bill Date";
+  const showQtyUnit = kind === "purchase";
+  const qtyUnitText = (x: Row) => {
+    const byUnit = new Map<string, number>();
+    for (const line of x.voucher_items || []) {
+      const unit = line.items?.unit || "Qty";
+      byUnit.set(unit, (byUnit.get(unit) || 0) + Number(line.qty || 0));
+    }
+    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty} ${unit}`).join(", ") || "—";
+  };
 
   const tableRows = rows.map((x) => [
     fmtIndianDate(x.voucher_date),
@@ -103,6 +113,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)),
     x.ledgers?.name || "—",
     x.ledgers?.gstin || "—",
+    ...(showQtyUnit ? [qtyUnitText(x)] : []),
     x.place_of_supply_code || x.ledgers?.state_code || "—",
     x.is_interstate ? "Inter" : "Intra",
     r(x.subtotal_paise),
