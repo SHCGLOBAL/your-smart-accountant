@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,6 +104,53 @@ function CompaniesPage() {
   const [form, setForm] = useState<FormState>(empty);
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [fyLocks, setFyLocks] = useState<Record<string, boolean>>({});
+
+  // Pull FY lock status (return_type = 'fy_close') for every company the user
+  // is a member of, in a single query, so each card can render a
+  // "Provisional" / "Audited & Locked" badge next to the FY label.
+  useEffect(() => {
+    if (memberships.length === 0) {
+      setFyLocks({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const ids = memberships.map((m) => m.company_id);
+      const { data } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (s: string) => {
+            in: (col: string, vals: string[]) => {
+              eq: (col: string, val: unknown) => {
+                eq: (col: string, val: unknown) => Promise<{
+                  data: { company_id: string; period_start: string }[] | null;
+                }>;
+              };
+            };
+          };
+        };
+      })
+        .from("period_locks")
+        .select("company_id, period_start")
+        .in("company_id", ids)
+        .eq("return_type", "fy_close")
+        .eq("is_active", true);
+      if (cancelled) return;
+      const map: Record<string, boolean> = {};
+      for (const m of memberships) {
+        const fyStart = m.companies.financial_year_start;
+        if (!fyStart) continue;
+        const match = (data ?? []).find(
+          (r) => r.company_id === m.company_id && r.period_start === fyStart,
+        );
+        if (match) map[m.company_id] = true;
+      }
+      setFyLocks(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberships]);
 
   // Auto-open the "Create company" dialog when the URL carries ?new=1
   // (used by the sidebar Company flyout's "+ New company" button).
@@ -694,10 +741,25 @@ function CompaniesPage() {
 
                     {/* Bottom Section: FY + Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
-                      <div className="flex flex-1 items-center justify-center rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
-                        <span className="text-muted-foreground mr-1">&lt;</span>
+                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
+                        <span className="text-muted-foreground">&lt;</span>
                         {fyLabel}
-                        <span className="text-muted-foreground ml-1">&gt;</span>
+                        <span className="text-muted-foreground">&gt;</span>
+                        {fyLocks[m.company_id] ? (
+                          <span
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            title="Audited & Locked — no edits allowed"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Locked
+                          </span>
+                        ) : (
+                          <span
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+                            title="Provisional — year is open for edits"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                          </span>
+                        )}
                       </div>
                       {isActive ? (
                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
@@ -773,6 +835,21 @@ function CompaniesPage() {
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase tracking-wide">FY</span>
                         <span className="font-mono font-medium text-foreground">{fyLabel}</span>
+                        {fyLocks[m.company_id] ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            title="Audited & Locked"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Locked
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+                            title="Provisional"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                          </span>
+                        )}
                       </div>
                     </div>
 
