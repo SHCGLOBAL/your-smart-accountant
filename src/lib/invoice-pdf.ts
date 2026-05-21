@@ -156,7 +156,9 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   };
   const party = v.ledgers;
 
+  const { jsPDF, autoTable } = await loadJsPdf();
   const doc = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
+
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const M = 32;
