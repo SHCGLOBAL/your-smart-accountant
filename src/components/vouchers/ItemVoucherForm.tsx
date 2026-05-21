@@ -172,7 +172,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     } | null;
   }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
-  const showLineDescription = voucherType !== "purchase";
+  const showLineDescription = false;
+  const showGstColumn = false;
 
   // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
   const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
