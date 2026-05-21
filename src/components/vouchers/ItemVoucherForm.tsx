@@ -196,6 +196,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         itcClass: typeof itcClass;
         itcEligible: boolean;
         lines: Line[];
+        miscPreGst: string;
+        miscPostGst: string;
       }>;
       if (d.date) setDate(d.date);
       if (d.partyId) setPartyId(d.partyId);
@@ -206,6 +208,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
       if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+      if (typeof d.miscPreGst === "string") setMiscPreGst(d.miscPreGst);
+      if (typeof d.miscPostGst === "string") setMiscPostGst(d.miscPostGst);
     } catch {
       /* ignore corrupt draft */
     }
