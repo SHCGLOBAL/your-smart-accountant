@@ -826,29 +826,34 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
-                <div className="flex items-center gap-1.5 pt-0.5">
-                  <span className="text-[11px] text-muted-foreground">PoS</span>
-                  <Input
-                    value={placeOfSupply}
-                    onChange={(e) => {
-                      setPosOverridden(true);
-                      setPlaceOfSupply(e.target.value.replace(/\D/g, "").slice(0, 2));
-                    }}
-                    onBlur={(e) => {
-                      if (!e.target.value && partyLedger?.state_code) {
-                        setPosOverridden(false);
-                      }
-                    }}
-                    placeholder="--"
-                    maxLength={2}
-                    className="h-6 w-12 px-1.5 text-center text-xs font-mono"
-                    title="State code (2 digits). Different from company state → IGST."
-                  />
-                  <span className="text-[11px] text-muted-foreground">
-                    {interstate ? "→ IGST (interstate)" : "→ CGST+SGST"}
-                    {posOverridden && " · overridden"}
-                  </span>
-                </div>
+                {partyLedger && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
+                    {(() => {
+                      const t = partyLedger.gst_treatment ?? "regular";
+                      const labels: Record<string, string> = {
+                        regular: "Regular",
+                        composition: "Composition",
+                        unregistered: "Unregistered",
+                        consumer: "Consumer",
+                        sez: "SEZ",
+                        overseas: "Overseas",
+                      };
+                      return (
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground/80">
+                          {labels[t] ?? t}
+                        </span>
+                      );
+                    })()}
+                    <span>
+                      PoS {placeOfSupply || "—"} · {interstate ? "IGST (interstate)" : "CGST + SGST"}
+                    </span>
+                    {isPurchaseSide && !itcEligible && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                        ITC ineligible
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
