@@ -549,6 +549,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     // Reset form INSTANTLY
     setPartyId("");
     setRefNo("");
+    setOriginalVoucherId(null);
     setNarration("");
     setLines([blankLine()]);
     setMiscPreGst("0");
