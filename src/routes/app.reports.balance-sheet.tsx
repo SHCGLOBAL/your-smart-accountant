@@ -209,6 +209,7 @@ function BalanceSheet() {
         rightTotal={formatINR(grandA)}
       />
       )}
+      {taxView && <TaxAuditPanel mode="bs" fyStart={from} fyEnd={to} />}
     </div>
   );
 }
