@@ -21,6 +21,9 @@ import { useAccountGroups } from "@/lib/account-groups-runtime";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Scale } from "lucide-react";
+import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
