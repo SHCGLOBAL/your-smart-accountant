@@ -38,6 +38,7 @@ function ProfitLoss() {
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const { view, setView } = useReportView("profit-loss");
+  const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
