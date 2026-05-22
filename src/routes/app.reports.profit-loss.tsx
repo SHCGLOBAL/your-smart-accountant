@@ -181,6 +181,7 @@ function ProfitLoss() {
         rightTotal={formatINR(grandRight)}
       />
       )}
+      {taxView && <TaxAuditPanel mode="pl" fyStart={from} fyEnd={to} />}
     </div>
   );
 }
