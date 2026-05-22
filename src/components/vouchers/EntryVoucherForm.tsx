@@ -445,7 +445,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button onClick={save} disabled={saving || !canWrite || !balanced || locked}>
+          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
