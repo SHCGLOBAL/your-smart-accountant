@@ -48,6 +48,7 @@ function BalanceSheet() {
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const { view, setView } = useReportView("balance-sheet");
+  const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
