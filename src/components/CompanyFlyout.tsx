@@ -60,7 +60,7 @@ function CompanyMiniCard({
           </div>
         </div>
         <div
-          className={`flex items-center justify-between rounded-md border px-1.5 py-1 ${
+          className={`inline-flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 ${
             isActive
               ? "border-primary bg-primary text-primary-foreground"
               : "border-border bg-muted/40 text-foreground"
@@ -74,9 +74,9 @@ function CompanyMiniCard({
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
             aria-label={t("company.prevYear")}
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="h-3 w-3" />
           </button>
-          <span className="font-mono text-xs font-semibold">{t("common.fy")} {fy}</span>
+          <span className="font-mono text-xs font-semibold tabular-nums">{t("common.fy")} {fy}</span>
           <button
             type="button"
             className={`rounded p-0.5 transition-colors ${
@@ -85,7 +85,7 @@ function CompanyMiniCard({
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
             aria-label={t("company.nextYear")}
           >
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-3 w-3" />
           </button>
         </div>
       </CardContent>
