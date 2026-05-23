@@ -25,20 +25,8 @@ export interface MultiCompanyBackup {
   companies: CompanyBackup[];
 }
 
-// ---------- Electron bridge (optional) ----------
-interface ElectronAPI {
-  saveCompanyFile: (
-    company: string,
-    subFolder: string,
-    fileName: string,
-    contents: string,
-  ) => Promise<{ ok: boolean; path?: string; error?: string }>;
-}
-function electron(): ElectronAPI | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { yourMehtaji?: ElectronAPI };
-  return w.yourMehtaji ?? null;
-}
+// ---------- Native desktop bridge (Electron or Tauri) ----------
+import { isDesktopRuntime, saveCompanyFileNative } from "./native-bridge";
 
 // ---------- Helpers ----------
 function safeName(s: string | null | undefined): string {
