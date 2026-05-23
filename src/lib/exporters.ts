@@ -324,6 +324,14 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         didParseCell: (data) => {
           data.cell.styles.font = FONT;
         },
+        didDrawCell: (data) => {
+          if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
+            doc.setLineWidth(1.6);
+            doc.setDrawColor(0, 0, 0);
+            doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+            doc.setLineWidth(0.5);
+          }
+        },
         didDrawPage: (data) => {
           if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
             drawPageHeader();
