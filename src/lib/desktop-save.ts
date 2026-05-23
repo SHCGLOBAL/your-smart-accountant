@@ -69,8 +69,7 @@ export interface SaveExportOptions {
  * In browser mode it triggers a normal download.
  */
 export async function saveExport(opts: SaveExportOptions): Promise<void> {
-  const b = bridge();
-  if (!b) {
+  if (!isDesktopRuntime()) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
     const downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",
@@ -83,7 +82,7 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
     return;
   }
   const company = activeCompanyName();
-  const res = await b.saveCompanyFile(company, opts.subFolder, opts.fileName, opts.contents);
+  const res = await saveCompanyFileNative(company, opts.subFolder, opts.fileName, opts.contents);
   if (!res.ok || !res.path) {
     toast.error("Could not save file", {
       description: res.error || "Unknown error",
@@ -99,7 +98,7 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
     action: {
       label: "Show in folder",
       onClick: () => {
-        void b.showInFolder(savedPath);
+        void showInFolderNative(savedPath);
       },
     },
     cancel: {
