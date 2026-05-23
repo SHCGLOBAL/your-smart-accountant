@@ -21,6 +21,7 @@ interface ElectronBridge {
   ) => Promise<{ ok: boolean; path?: string; error?: string }>;
   showInFolder: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   openPath: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
+  closeApp?: () => Promise<{ ok: boolean; error?: string }>;
 }
 
 function electronBridge(): ElectronBridge | null {
@@ -31,7 +32,8 @@ function electronBridge(): ElectronBridge | null {
 
 function hasTauri(): boolean {
   if (typeof window === "undefined") return false;
-  return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+  const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
 }
 
 export function getNativeRuntime(): NativeRuntime {
@@ -119,6 +121,26 @@ export async function openPathNative(filePath: string): Promise<SaveNativeResult
     try {
       const { open } = await import("@tauri-apps/plugin-shell");
       await open(filePath);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  return { ok: false, error: "No native runtime" };
+}
+
+export async function closeNativeApp(): Promise<SaveNativeResult> {
+  const eb = electronBridge();
+  if (eb?.closeApp) return eb.closeApp();
+  if (hasTauri()) {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const currentWindow = getCurrentWindow();
+      if (typeof currentWindow.destroy === "function") {
+        await currentWindow.destroy();
+      } else {
+        await currentWindow.close();
+      }
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
