@@ -13,7 +13,7 @@ function fyLabel(fyStart: string, offset: number) {
   return `${y}-${String(yy).padStart(2, "0")}`;
 }
 
-function CompanyMiniCard({
+function CompanyRow({
   m,
   isActive,
   onPick,
@@ -28,68 +28,47 @@ function CompanyMiniCard({
   const [offset, setOffset] = useState(0);
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
   return (
-    <Card
-      className={`group relative cursor-pointer transition-colors ${
-        isActive
-          ? "border-primary bg-primary/5 ring-2 ring-primary/40"
-          : "hover:border-primary/60"
+    <div
+      className={`group cursor-pointer rounded-md px-2 py-1.5 transition-colors ${
+        isActive ? "bg-primary/10 text-primary" : "hover:bg-accent hover:text-accent-foreground"
       }`}
       onClick={() => onPick(m.company_id)}
     >
-      <CardContent className="space-y-2 p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold leading-tight">{m.companies.name}</div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {m.companies.gst_registered ? t("company.gst") : t("company.unreg")} • {m.role}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {isActive && <Check className="h-4 w-4 text-primary" />}
-            {m.role === "admin" && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onEdit(m.company_id); }}
-                className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label={t("company.editAria")}
-                title={t("company.editAria")}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-        <div
-          className={`inline-flex w-fit items-center gap-1 rounded-md border px-1.5 py-0.5 ${
-            isActive
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-muted/40 text-foreground"
-          }`}
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">{m.companies.name}</div>
+        {isActive && <Check className="h-3.5 w-3.5 shrink-0" />}
+        {m.role === "admin" && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEdit(m.company_id); }}
+            className="rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover:opacity-100"
+            aria-label={t("company.editAria")}
+            title={t("company.editAria")}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+        <button
+          type="button"
+          className="rounded p-0.5 hover:bg-accent hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
+          aria-label={t("company.prevYear")}
         >
-          <button
-            type="button"
-            className={`rounded p-0.5 transition-colors ${
-              isActive ? "hover:bg-primary-foreground/20" : "hover:bg-background"
-            }`}
-            onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
-            aria-label={t("company.prevYear")}
-          >
-            <ChevronLeft className="h-3 w-3" />
-          </button>
-          <span className="font-mono text-xs font-semibold tabular-nums">{t("common.fy")} {fy}</span>
-          <button
-            type="button"
-            className={`rounded p-0.5 transition-colors ${
-              isActive ? "hover:bg-primary-foreground/20" : "hover:bg-background"
-            }`}
-            onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
-            aria-label={t("company.nextYear")}
-          >
-            <ChevronRight className="h-3 w-3" />
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+          <ChevronLeft className="h-3 w-3" />
+        </button>
+        <span className="font-mono tabular-nums">{fy}</span>
+        <button
+          type="button"
+          className="rounded p-0.5 hover:bg-accent hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
+          aria-label={t("company.nextYear")}
+        >
+          <ChevronRight className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
   );
 }
 
