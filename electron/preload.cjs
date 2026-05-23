@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld('yourMehtaji', {
   },
   showInFolder: (filePath) => ipcRenderer.invoke('show-in-folder', filePath),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
+  closeApp: () => ipcRenderer.invoke('close-app'),
 });
