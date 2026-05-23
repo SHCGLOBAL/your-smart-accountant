@@ -23,6 +23,7 @@ import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
 import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
 import { useCompany } from "@/lib/company-context";
+import { closeNativeApp } from "@/lib/native-bridge";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -183,18 +184,8 @@ function StartScreen() {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                // Tauri desktop: close the native window via Tauri API
-                try {
-                  const w = window as unknown as { __TAURI_INTERNALS__?: unknown; __TAURI__?: unknown };
-                  if (w.__TAURI_INTERNALS__ || w.__TAURI__) {
-                    const mod = await import(/* @vite-ignore */ "@tauri-apps/api/window");
-                    await mod.getCurrentWindow().close();
-                    return;
-                  }
-                } catch {
-                  /* fall through to browser close */
-                }
-                // Browser fallback
+                const closed = await closeNativeApp();
+                if (closed.ok) return;
                 window.open("", "_self");
                 window.close();
               }}
