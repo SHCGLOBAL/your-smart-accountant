@@ -716,6 +716,30 @@ function LedgerStatement() {
         <div style="font-size:10pt">${esc(periodLine)}</div>
       </div>`;
     const sectionsHtml = data.map((s, idx) => {
+      if (view === "horizontal") {
+        const { dr, cr, total } = buildTSides(s);
+        const len = Math.max(dr.length, cr.length);
+        const headCols = `<th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th><th>Chq/Ref</th><th class="num">Amount</th>`;
+        const head = `<thead>
+            <tr><th colspan="6" style="text-align:center">Dr.</th><th colspan="6" style="text-align:center">Cr.</th></tr>
+            <tr>${headCols}${headCols}</tr>
+          </thead>`;
+        const body = Array.from({ length: len }).map((_, i) => {
+          const l = dr[i]; const r2 = cr[i];
+          const sideCells = (x?: { date: string; particulars: string; vchType: string; vchNo: string; chqRef: string; amount: number }) =>
+            x ? `<td>${esc(x.date)}</td><td>${esc(x.particulars)}</td><td>${esc(x.vchType)}</td><td>${esc(x.vchNo)}</td><td>${esc(x.chqRef)}</td><td class="num">${fmtMoney(x.amount)}</td>`
+              : `<td></td><td></td><td></td><td></td><td></td><td class="num"></td>`;
+          return `<tr>${sideCells(l)}${sideCells(r2)}</tr>`;
+        }).join("");
+        const foot = `<tr class="row-bold">
+            <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
+            <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
+          </tr>`;
+        return `<div class="${idx > 0 ? "page-break" : ""}">
+            <h2 class="ledger-heading">Ledger A/c — ${esc(s.ledger.name)}</h2>
+            <table>${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table>
+          </div>`;
+      }
       const showNarr = s.rows.some((row) => (row.narration || "").trim().length > 0);
       const head = `<thead><tr>
           <th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th>
