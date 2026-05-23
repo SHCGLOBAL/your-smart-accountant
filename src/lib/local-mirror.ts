@@ -6,21 +6,7 @@
 // In a browser tab the user gets a manual download.
 
 import { buildCompanyBackup } from "./backup";
-
-interface ElectronAPI {
-  isDesktop: true;
-  saveCompanyFile: (
-    company: string,
-    subFolder: string,
-    fileName: string,
-    contents: string | ArrayBuffer | Uint8Array,
-  ) => Promise<{ ok: boolean; path?: string; error?: string }>;
-}
-function electron(): ElectronAPI | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { yourMehtaji?: ElectronAPI };
-  return w.yourMehtaji?.isDesktop ? w.yourMehtaji : null;
-}
+import { isDesktopRuntime, saveCompanyFileNative } from "./native-bridge";
 
 function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
@@ -80,11 +66,10 @@ export async function writeLocalMirror(
 
   const jsonStr = JSON.stringify(backup, null, 2);
 
-  const api = electron();
-  if (api) {
+  if (isDesktopRuntime()) {
     const [j1, j2] = await Promise.all([
-      api.saveCompanyFile(companyName, "backups", jsonFile, jsonStr),
-      api.saveCompanyFile(companyName, "latest", latestJson, jsonStr),
+      saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
+      saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
     ]);
     if (!j1.ok || !j2.ok) {
       const err = j1.error || j2.error || "Unknown error";
