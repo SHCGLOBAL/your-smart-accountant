@@ -181,11 +181,25 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Button onClick={doExport} disabled={exporting || disabled}>
-            {exporting
-              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
-              : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={doExport} disabled={exporting || disabled}>
+              {exporting
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
+                : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
+            </Button>
+            {isDesktopRuntime() && (
+              <Button
+                variant="outline"
+                onClick={doExportAs}
+                disabled={exportingAs || disabled}
+                title="Choose where to save the backup file (USB / external drive / any folder)"
+              >
+                {exportingAs
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+                  : <><FolderOpen className="mr-2 h-4 w-4" />Save as… (choose folder)</>}
+              </Button>
+            )}
+          </div>
           <div>
             <Button
               variant="outline"
