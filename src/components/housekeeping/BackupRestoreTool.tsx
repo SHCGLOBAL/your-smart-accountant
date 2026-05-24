@@ -9,12 +9,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
+  buildCompanyBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { wrapBackup } from "@/lib/backup-policy";
+import { saveWithPickerNative, isDesktopRuntime } from "@/lib/native-bridge";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 
