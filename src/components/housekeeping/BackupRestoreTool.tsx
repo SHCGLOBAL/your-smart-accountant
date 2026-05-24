@@ -52,6 +52,34 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     }
   }
 
+  async function doExportAs() {
+    if (!companyId) return;
+    setExportingAs(true);
+    try {
+      const payload = await buildCompanyBackup(companyId);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const safe = companyName.replace(/[^a-zA-Z0-9_\-. ]+/g, "_").slice(0, 80) || "Company";
+      const fileName = `${safe}_backup_${stamp}.json`;
+      const envelope = await wrapBackup(payload);
+      const contents = JSON.stringify(envelope, null, 2);
+      const r = await saveWithPickerNative(fileName, contents, [
+        { name: "JSON Backup", extensions: ["json"] },
+      ]);
+      if (r.ok) {
+        toast.success(`Backup saved to: ${r.path}`);
+        try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
+      } else if (r.error === "cancelled") {
+        // user cancelled — silent
+      } else {
+        toast.error(r.error || "Save failed");
+      }
+    } catch (e) {
+      toast.error((e as Error).message || "Export failed");
+    } finally {
+      setExportingAs(false);
+    }
+  }
+
   async function doMirror() {
     if (!companyId) return;
     setMirroring(true);
