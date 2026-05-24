@@ -98,6 +98,12 @@ function AppLayout() {
     let cancelled = false;
     (async () => {
       try {
+        // Silent on-launch data migration (desktop only). Idempotent —
+        // ensures %LOCALAPPDATA% folders exist and moves any legacy
+        // Documents\YourMehtaji\Exports data forward without prompting.
+        if (isDesktopRuntime()) {
+          void runAppDataMigrationsOnce().catch(() => undefined);
+        }
         await ensureTechSession();
       } finally {
         if (!cancelled) setBootstrapping(false);
