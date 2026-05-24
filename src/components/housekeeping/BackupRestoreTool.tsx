@@ -1,5 +1,5 @@
 // Housekeeping tab: export full company backup to JSON; restore from JSON file.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
@@ -17,7 +17,8 @@ import {
   type RestoreSummary,
 } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
-import { saveWithPickerNative, isDesktopRuntime } from "@/lib/native-bridge";
+import { saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative } from "@/lib/native-bridge";
+import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 
@@ -36,7 +37,20 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [dataRoot, setDataRoot] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Resolve the OS-standard local data folder so the user can see where
+  // their backups physically live (and confirm it sits outside Program Files).
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let cancelled = false;
+    (async () => {
+      const paths = await getAppPaths();
+      if (!cancelled && paths) setDataRoot(paths.root);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function doExport() {
     if (!companyId) return;
@@ -176,13 +190,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
           </CardTitle>
           <CardDescription>
             Saves the entire company state (ledgers, items, vouchers, postings, allocations, recurring
-            invoices) into a single JSON file. On the desktop app it's saved under
-            Documents/YourMehtaji/Exports/&lt;Company&gt;/backups/.
+            invoices) into a single JSON file. On the desktop app it's saved under your per-user
+            local data folder — see the path below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={doExport} disabled={exporting || disabled}>
               {exporting
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
                 : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
