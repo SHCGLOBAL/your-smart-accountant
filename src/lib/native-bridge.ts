@@ -22,6 +22,7 @@ interface ElectronBridge {
   showInFolder: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   openPath: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   closeApp?: () => Promise<{ ok: boolean; error?: string }>;
+  getDataRoot?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
 }
 
 function electronBridge(): ElectronBridge | null {

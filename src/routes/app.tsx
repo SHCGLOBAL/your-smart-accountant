@@ -24,6 +24,8 @@ import {
   lockWorkspace,
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
+import { runAppDataMigrationsOnce } from "@/lib/app-data-migrations";
+import { isDesktopRuntime } from "@/lib/native-bridge";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
