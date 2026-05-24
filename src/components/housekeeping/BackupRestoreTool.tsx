@@ -30,6 +30,7 @@ interface Props {
 
 export function BackupRestoreTool({ companyId, companyName, partyCode, disabled }: Props) {
   const [exporting, setExporting] = useState(false);
+  const [exportingAs, setExportingAs] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [mirroring, setMirroring] = useState(false);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
